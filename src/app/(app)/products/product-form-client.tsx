@@ -109,11 +109,13 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
   const defaultValues: ProductFormData = existingProduct ? {
       basicInfo: {
         ...existingProduct.basicInfo,
+        gtin: existingProduct.basicInfo.gtin || '', // Ensure empty string
         launchDate: existingProduct.basicInfo.launchDate ? parseISO(existingProduct.basicInfo.launchDate) : undefined,
         endDate: existingProduct.basicInfo.endDate ? parseISO(existingProduct.basicInfo.endDate) : undefined,
       },
       attributesAndSpecs: {
         ...existingProduct.attributesAndSpecs,
+        countryOfOrigin: existingProduct.attributesAndSpecs.countryOfOrigin || '', // Ensure empty string
         categories: existingProduct.attributesAndSpecs.categories || [],
         properties: existingProduct.attributesAndSpecs.properties || [],
         technicalSpecs: existingProduct.attributesAndSpecs.technicalSpecs || [],
@@ -130,6 +132,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     basicInfo: {
       name: { ...defaultMultilingualString },
       sku: '',
+      gtin: '', // Initialize as empty string
       descriptionShort: { ...defaultMultilingualString },
       descriptionLong: { ...defaultMultilingualString },
       brand: '',
@@ -139,6 +142,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       categories: [],
       properties: [],
       technicalSpecs: [],
+      countryOfOrigin: '', // Initialize as empty string
     },
     media: {
       images: [],
