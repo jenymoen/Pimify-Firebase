@@ -1,23 +1,42 @@
 
 'use client';
 
-import { useState, useRef, ChangeEvent } from 'react';
+import { useState, useRef, ChangeEvent, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useProductStore } from '@/lib/product-store';
 import type { Product } from '@/types/product';
 import { useToast } from '@/hooks/use-toast';
-import { UploadCloud, DownloadCloud, FileJson, AlertTriangle, ShoppingCart, ExternalLink } from 'lucide-react';
+import { UploadCloud, DownloadCloud, FileJson, AlertTriangle, ShoppingCart, Save, Settings } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useShopifyConfigStore } from '@/lib/shopify-config-store';
 
 export default function ImportExportPage() {
-  const { products, importProducts, setProducts } = useProductStore();
+  const { products, setProducts: setStoreProducts } = useProductStore();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+
+  const { 
+    storeUrl, 
+    apiKey, 
+    setStoreUrl, 
+    setApiKey,
+    isConfigured 
+  } = useShopifyConfigStore();
+
+  // Local state for input fields to allow editing before saving to store
+  const [localStoreUrl, setLocalStoreUrl] = useState('');
+  const [localApiKey, setLocalApiKey] = useState('');
+
+  useEffect(() => {
+    setLocalStoreUrl(storeUrl);
+    setLocalApiKey(apiKey);
+  }, [storeUrl, apiKey]);
 
   const handleExport = () => {
     const jsonString = JSON.stringify(products, null, 2);
@@ -34,7 +53,7 @@ export default function ImportExportPage() {
   };
 
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    setError(null);
+    setImportError(null);
     setFileName(null);
     const file = event.target.files?.[0];
     if (!file) return;
@@ -50,12 +69,12 @@ export default function ImportExportPage() {
         throw new Error("Invalid JSON format. Expected an array of products.");
       }
       
-      setProducts(importedData as Product[]);
+      setStoreProducts(importedData as Product[]);
       toast({ title: 'Import Successful', description: `${importedData.length} products imported and replaced existing data.` });
 
     } catch (err: any) {
       console.error('Import error:', err);
-      setError(`Failed to import: ${err.message || 'Invalid JSON file.'}`);
+      setImportError(`Failed to import: ${err.message || 'Invalid JSON file.'}`);
       toast({ title: 'Import Failed', description: err.message || 'Please check the file format and try again.', variant: 'destructive' });
     } finally {
       setIsImporting(false);
@@ -64,6 +83,14 @@ export default function ImportExportPage() {
       }
     }
   };
+
+  const handleSaveShopifyConfig = () => {
+    setStoreUrl(localStoreUrl);
+    setApiKey(localApiKey);
+    toast({ title: 'Shopify Configuration Saved', description: 'Your Shopify API settings have been saved locally.' });
+  };
+
+  const shopifyReady = isConfigured();
 
   return (
     <div className="container mx-auto py-8">
@@ -92,11 +119,11 @@ export default function ImportExportPage() {
               <FileJson className="mr-2 h-5 w-5" /> {isImporting ? 'Importing...' : 'Choose JSON File'}
             </Button>
             {fileName && <p className="text-sm text-muted-foreground">Selected file: {fileName}</p>}
-            {error && (
+            {importError && (
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertTitle>Import Error</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
+                <AlertDescription>{importError}</AlertDescription>
               </Alert>
             )}
             <p className="text-xs text-muted-foreground">
@@ -135,35 +162,65 @@ export default function ImportExportPage() {
             <ShoppingCart className="h-6 w-6 text-primary" /> Shopify Sync
           </CardTitle>
           <CardDescription>
-            Connect to your Shopify store to import or export products directly. Requires API key configuration.
+            Connect to your Shopify store to import or export products directly. API key and store URL are required.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <h3 className="font-medium text-foreground">API Configuration</h3>
-            <p className="text-sm text-muted-foreground">
-              To use Shopify integration, you need to configure your Shopify API Key and Store URL in the settings (not yet implemented).
-            </p>
-            {/* Placeholder for API Key inputs or status */}
-            <Alert variant="default" className="bg-accent/10 border-accent/30">
-              <ExternalLink className="h-4 w-4 text-accent" />
-              <AlertTitle>Coming Soon!</AlertTitle>
-              <AlertDescription>
-                Shopify API configuration and synchronization features are currently under development.
-              </AlertDescription>
-            </Alert>
+          <div className="space-y-4 p-4 border rounded-md bg-muted/20">
+            <h3 className="font-medium text-foreground flex items-center gap-2">
+              <Settings className="h-5 w-5" /> API Configuration
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="shopify-store-url" className="text-sm font-medium">Shopify Store URL</Label>
+                <Input 
+                  id="shopify-store-url" 
+                  type="text" 
+                  placeholder="e.g., your-store-name.myshopify.com" 
+                  value={localStoreUrl}
+                  onChange={(e) => setLocalStoreUrl(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="shopify-api-key" className="text-sm font-medium">Shopify Admin API Access Token</Label>
+                <Input 
+                  id="shopify-api-key" 
+                  type="password" 
+                  placeholder="Enter your Shopify Admin API Access Token" 
+                  value={localApiKey}
+                  onChange={(e) => setLocalApiKey(e.target.value)}
+                  className="mt-1"
+                />
+                 <p className="text-xs text-muted-foreground mt-1">
+                  This is typically an Admin API access token (starting with "shpat_"). Stored locally in your browser.
+                </p>
+              </div>
+              <Button onClick={handleSaveShopifyConfig}>
+                <Save className="mr-2 h-4 w-4" /> Save Configuration
+              </Button>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t">
-            <Button variant="outline" disabled>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t mt-6">
+            <Button variant="outline" disabled={!shopifyReady}>
               <DownloadCloud className="mr-2 h-5 w-5" /> Import from Shopify
             </Button>
-            <Button variant="outline" disabled>
+            <Button variant="outline" disabled={!shopifyReady}>
               <UploadCloud className="mr-2 h-5 w-5" /> Export to Shopify
             </Button>
           </div>
+          {!shopifyReady && (
+             <Alert variant="default" className="bg-accent/10 border-accent/30 text-accent-foreground">
+                <Settings className="h-4 w-4 text-accent" />
+                <AlertTitle>Configuration Required</AlertTitle>
+                <AlertDescription>
+                 Please enter and save your Shopify Store URL and API Access Token to enable Shopify integration.
+                </AlertDescription>
+              </Alert>
+          )}
           <p className="text-xs text-muted-foreground text-center">
-            Ensure your product data structure is compatible with Shopify's requirements before exporting.
+            Shopify import/export functionality is a future enhancement. Configuration can be saved locally for now.
           </p>
         </CardContent>
       </Card>
