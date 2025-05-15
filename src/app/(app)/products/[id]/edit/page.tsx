@@ -1,3 +1,4 @@
+// src/app/(app)/products/[id]/edit/page.tsx
 'use client';
 
 import { ProductFormClient } from '@/app/(app)/products/product-form-client';
@@ -6,6 +7,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type { Product } from '@/types/product';
 import { Skeleton } from '@/components/ui/skeleton'; // Assuming you have a Skeleton component
+import { Button } from '@/components/ui/button'; // Added import
 
 export default function EditProductPage() {
   const router = useRouter();
