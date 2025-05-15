@@ -4,22 +4,22 @@ import type { Product } from '@/types/product';
 import { initialProductData, defaultMultilingualString } from '@/types/product'; // For dummy data
 import { v4 as uuidv4 } from 'uuid'; // For dummy data
 
-// IMPORTANT SECURITY NOTE:
-// In a production environment, the Shopify API Key (apiKey) should NOT be passed from the client.
-// It should be stored securely as an environment variable on the server and accessed here directly.
-// The storeUrl could also be an environment variable if it's fixed, or configured securely.
-
 export async function POST(request: NextRequest) {
   try {
-    const { storeUrl, apiKey } = await request.json();
+    const { storeUrl } = await request.json(); // API Key is no longer sent from client
+    const apiKey = process.env.SHOPIFY_API_KEY; // Read API Key from server environment variable
 
-    if (!storeUrl || !apiKey) {
-      return NextResponse.json({ error: 'Shopify store URL and API key are required.' }, { status: 400 });
+    if (!storeUrl) {
+      return NextResponse.json({ error: 'Shopify store URL is required.' }, { status: 400 });
+    }
+    if (!apiKey) {
+      console.error('Shopify Import API Error: SHOPIFY_API_KEY environment variable is not set on the server.');
+      return NextResponse.json({ error: 'Shopify API Key is not configured on the server. Please contact support.' }, { status: 500 });
     }
 
     // --- Actual Shopify API Call Would Go Here (Simulated for now) ---
     const shopifyApiUrl = `https://${storeUrl.replace(/^https?:\/\//, '')}/admin/api/2024-04/products.json`;
-    console.log(`Backend: Simulating Shopify import from ${shopifyApiUrl} with key: ${apiKey.substring(0, 5)}...`);
+    console.log(`Backend: Simulating Shopify import from ${shopifyApiUrl} with server-configured key: ${apiKey.substring(0, 5)}...`);
 
     // Example:
     // const shopifyResponse = await fetch(shopifyApiUrl, {
