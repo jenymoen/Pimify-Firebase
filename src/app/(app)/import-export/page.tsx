@@ -24,7 +24,7 @@ export default function ImportExportPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `produkthjelp_export_${new Date().toISOString().split('T')[0]}.json`;
+    link.download = `pimify_export_${new Date().toISOString().split('T')[0]}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

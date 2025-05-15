@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'ProduktHjelp',
+  title: 'Pimify',
   description: 'Product Information Management System',
 };
 

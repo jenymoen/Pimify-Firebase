@@ -11,7 +11,7 @@ export default function HomePage() {
   // useEffect(() => {
   //   router.replace('/products');
   // }, [router]);
-  // return <div className="flex flex-1 items-center justify-center"><p>Loading ProduktHjelp...</p></div>;
+  // return <div className="flex flex-1 items-center justify-center"><p>Loading Pimify...</p></div>;
 
   // Option 2: Show a welcome page
   return (
@@ -22,7 +22,7 @@ export default function HomePage() {
           </svg>
       </div>
       <h1 className="text-5xl font-bold text-primary mb-4">
-        Welcome to ProduktHjelp
+        Welcome to Pimify
       </h1>
       <p className="text-xl text-foreground/80 mb-8 max-w-2xl">
         Your intuitive Product Information Management (PIM) system designed to streamline your product data and enhance your workflow.
