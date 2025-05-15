@@ -1,12 +1,13 @@
+
 'use client';
 
-import * as React from 'react'; // Added React import
-import type { MediaEntry, MultilingualString, Product } from '@/types/product';
+import * as React from 'react';
+import type { MediaEntry, MultilingualString } from '@/types/product';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MultilingualInput } from '@/components/shared/multilingual-input';
-import { PlusCircle, Trash2, Image as ImageIcon, Video, Box, FileText, Award } from 'lucide-react';
+import { PlusCircle, Trash2, Image as ImageIconLucide, Video, Box, FileText, Award, AlertTriangle } from 'lucide-react'; // Added AlertTriangle
 import { v4 as uuidv4 } from 'uuid';
 import Image from 'next/image';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -19,11 +20,17 @@ interface MediaEditorProps {
 }
 
 const typeIcons: Record<MediaEntry['type'], React.ElementType> = {
-  image: ImageIcon,
+  image: ImageIconLucide,
   video: Video,
   '3d_model': Box,
   manual: FileText,
   certificate: Award,
+};
+
+// Helper to check if a string looks like a valid URL for next/image
+const isValidImageUrl = (url: string): boolean => {
+  if (!url) return false;
+  return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/');
 };
 
 export function MediaEditor({ label, entries, onChange, allowedTypes }: MediaEditorProps) {
@@ -56,16 +63,30 @@ export function MediaEditor({ label, entries, onChange, allowedTypes }: MediaEdi
               <Label htmlFor={`media-url-${entry.id}`} className="text-xs text-muted-foreground">URL</Label>
               <Input
                 id={`media-url-${entry.id}`}
+                type="url" // Changed to type="url"
                 value={entry.url}
                 onChange={(e) => updateEntry(index, 'url', e.target.value)}
-                placeholder="https://example.com/image.png"
+                placeholder="https://example.com/image.png or /relative/path.jpg"
               />
             </div>
-            {entry.url && entry.type === 'image' && (
-              <div className="ml-2">
-                <Image src={entry.url} alt={entry.altText?.en || 'Preview'} width={40} height={40} className="rounded object-cover" data-ai-hint="product image" />
-              </div>
-            )}
+            {entry.type === 'image' && entry.url ? (
+              isValidImageUrl(entry.url) ? (
+                <div className="ml-2">
+                  <Image 
+                    src={entry.url} 
+                    alt={entry.altText?.en || 'Preview'} 
+                    width={40} 
+                    height={40} 
+                    className="rounded object-cover" 
+                    data-ai-hint="product image"
+                  />
+                </div>
+              ) : (
+                <div className="ml-2 flex items-center justify-center h-[40px] w-[40px] bg-destructive/10 rounded" title="Invalid image URL">
+                  <AlertTriangle className="h-5 w-5 text-destructive" />
+                </div>
+              )
+            ) : null}
              <Button type="button" variant="ghost" size="icon" onClick={() => removeEntry(index)} aria-label="Remove media" className="text-destructive hover:text-destructive self-end">
               <Trash2 className="h-4 w-4" />
             </Button>
