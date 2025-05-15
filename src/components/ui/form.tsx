@@ -136,7 +136,8 @@ const FormDescription = React.forwardRef<
       ref={ref}
       id={formDescriptionId}
       className={cn("text-sm text-muted-foreground", className)}
-      {...props}
+      {...props} // Spread incoming props first
+      suppressHydrationWarning={true} // Ensure this warning is suppressed
     />
   )
 })
