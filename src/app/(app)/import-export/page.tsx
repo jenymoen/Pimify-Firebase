@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useRef, ChangeEvent } from 'react';
@@ -7,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { useProductStore } from '@/lib/product-store';
 import type { Product } from '@/types/product';
 import { useToast } from '@/hooks/use-toast';
-import { UploadCloud, DownloadCloud, FileJson, AlertTriangle } from 'lucide-react';
+import { UploadCloud, DownloadCloud, FileJson, AlertTriangle, ShoppingCart, ExternalLink } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function ImportExportPage() {
@@ -24,7 +25,7 @@ export default function ImportExportPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `pimify_export_${new Date().toISOString().split('T')[0]}.json`;
+    link.download = `Pimify_export_${new Date().toISOString().split('T')[0]}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -45,18 +46,12 @@ export default function ImportExportPage() {
       const fileContent = await file.text();
       const importedData = JSON.parse(fileContent);
       
-      // Basic validation: check if it's an array of objects with at least an 'id' or 'basicInfo.sku'
       if (!Array.isArray(importedData) || !importedData.every(item => typeof item === 'object' && (item.id || (item.basicInfo && item.basicInfo.sku)))) {
         throw new Error("Invalid JSON format. Expected an array of products.");
       }
       
-      // Option 1: Replace all products
       setProducts(importedData as Product[]);
       toast({ title: 'Import Successful', description: `${importedData.length} products imported and replaced existing data.` });
-
-      // Option 2: Merge products (more complex, using the store's importProducts for merging)
-      // importProducts(importedData as Product[]);
-      // toast({ title: 'Import Successful', description: `${importedData.length} products processed.` });
 
     } catch (err: any) {
       console.error('Import error:', err);
@@ -64,7 +59,6 @@ export default function ImportExportPage() {
       toast({ title: 'Import Failed', description: err.message || 'Please check the file format and try again.', variant: 'destructive' });
     } finally {
       setIsImporting(false);
-      // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -75,11 +69,11 @@ export default function ImportExportPage() {
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-bold text-primary mb-8">Import / Export Products</h1>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-xl">
-              <UploadCloud className="h-6 w-6 text-primary" /> Import Products
+              <UploadCloud className="h-6 w-6 text-primary" /> Import Products (JSON)
             </CardTitle>
             <CardDescription>
               Import products from a JSON file. This will replace all existing product data.
@@ -114,7 +108,7 @@ export default function ImportExportPage() {
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-xl">
-              <DownloadCloud className="h-6 w-6 text-primary" /> Export Products
+              <DownloadCloud className="h-6 w-6 text-primary" /> Export Products (JSON)
             </CardTitle>
             <CardDescription>
               Export all current product data to a JSON file.
@@ -132,6 +126,48 @@ export default function ImportExportPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Shopify Integration Section */}
+      <h2 className="text-2xl font-semibold text-primary mb-6 pt-4 border-t">Shopify Integration</h2>
+      <Card className="shadow-lg col-span-1 md:col-span-2">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <ShoppingCart className="h-6 w-6 text-primary" /> Shopify Sync
+          </CardTitle>
+          <CardDescription>
+            Connect to your Shopify store to import or export products directly. Requires API key configuration.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <h3 className="font-medium text-foreground">API Configuration</h3>
+            <p className="text-sm text-muted-foreground">
+              To use Shopify integration, you need to configure your Shopify API Key and Store URL in the settings (not yet implemented).
+            </p>
+            {/* Placeholder for API Key inputs or status */}
+            <Alert variant="default" className="bg-accent/10 border-accent/30">
+              <ExternalLink className="h-4 w-4 text-accent" />
+              <AlertTitle>Coming Soon!</AlertTitle>
+              <AlertDescription>
+                Shopify API configuration and synchronization features are currently under development.
+              </AlertDescription>
+            </Alert>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t">
+            <Button variant="outline" disabled>
+              <DownloadCloud className="mr-2 h-5 w-5" /> Import from Shopify
+            </Button>
+            <Button variant="outline" disabled>
+              <UploadCloud className="mr-2 h-5 w-5" /> Export to Shopify
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground text-center">
+            Ensure your product data structure is compatible with Shopify's requirements before exporting.
+          </p>
+        </CardContent>
+      </Card>
+
     </div>
   );
 }
