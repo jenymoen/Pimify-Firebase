@@ -12,22 +12,20 @@ import { useToast } from '@/hooks/use-toast';
 import { UploadCloud, DownloadCloud, FileJson, AlertTriangle, ShoppingCart, Save, Settings, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useShopifyConfigStore } from '@/lib/shopify-config-store';
-import { initialProductData, defaultMultilingualString } from '@/types/product'; // For dummy data
-import { v4 as uuidv4 } from 'uuid'; // For dummy data
 
 export default function ImportExportPage() {
-  const { products, setProducts: setStoreProducts, importProducts: storeImportProducts } = useProductStore();
+  const { products, importProducts: storeImportProducts } = useProductStore();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isImporting, setIsImporting] = useState(false);
+  const [isImportingJson, setIsImportingJson] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
 
   const { 
     storeUrl, 
     apiKey, 
-    setStoreUrl: setShopifyStoreUrl, // Renamed to avoid conflict
-    setApiKey: setShopifyApiKey,     // Renamed to avoid conflict
+    setStoreUrl: setShopifyStoreUrl,
+    setApiKey: setShopifyApiKey,
     isConfigured 
   } = useShopifyConfigStore();
 
@@ -42,7 +40,7 @@ export default function ImportExportPage() {
     setLocalApiKey(apiKey);
   }, [storeUrl, apiKey]);
 
-  const handleExport = () => {
+  const handleExportJson = () => {
     const jsonString = JSON.stringify(products, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -53,7 +51,7 @@ export default function ImportExportPage() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    toast({ title: 'Export Successful', description: 'Product data has been exported.' });
+    toast({ title: 'Export Successful', description: 'Product data has been exported to JSON.' });
   };
 
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -63,7 +61,7 @@ export default function ImportExportPage() {
     if (!file) return;
 
     setFileName(file.name);
-    setIsImporting(true);
+    setIsImportingJson(true);
 
     try {
       const fileContent = await file.text();
@@ -73,15 +71,15 @@ export default function ImportExportPage() {
         throw new Error("Invalid JSON format. Expected an array of products.");
       }
       
-      storeImportProducts(importedData as Product[]); // Use store's import function
-      toast({ title: 'Import Successful', description: `${importedData.length} products imported.` });
+      storeImportProducts(importedData as Product[]);
+      toast({ title: 'JSON Import Successful', description: `${importedData.length} products imported.` });
 
     } catch (err: any) {
-      console.error('Import error:', err);
+      console.error('JSON Import error:', err);
       setImportError(`Failed to import: ${err.message || 'Invalid JSON file.'}`);
-      toast({ title: 'Import Failed', description: err.message || 'Please check the file format and try again.', variant: 'destructive' });
+      toast({ title: 'JSON Import Failed', description: err.message || 'Please check the file format and try again.', variant: 'destructive' });
     } finally {
-      setIsImporting(false);
+      setIsImportingJson(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -103,49 +101,20 @@ export default function ImportExportPage() {
     }
     setIsImportingFromShopify(true);
     try {
-      const apiUrl = `https://${storeUrl}/admin/api/2024-04/products.json`; // Example API version
-      console.log(`Simulating fetch from: ${apiUrl} with key: ${apiKey.substring(0, 5)}...`);
+      const response = await fetch('/api/shopify/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storeUrl, apiKey }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || `API request failed: ${response.statusText}`);
+      }
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Simulate received data (this would come from Shopify)
-      const dummyShopifyProducts: Product[] = [
-        {
-          ...initialProductData,
-          id: 'SHOPIFY-SKU-001',
-          basicInfo: {
-            name: { en: 'Shopify Imported T-Shirt', no: 'Shopify Importert T-skjorte' },
-            sku: 'SHOPIFY-SKU-001',
-            descriptionShort: { en: 'A cool t-shirt from Shopify.', no: 'En kul t-skjorte fra Shopify.' },
-            descriptionLong: { en: 'Detailed description for the Shopify t-shirt.', no: 'Detaljert beskrivelse for Shopify t-skjorten.' },
-            brand: 'ShopifyBrand',
-            status: 'active',
-          },
-          media: { images: [{ id: uuidv4(), url: 'https://placehold.co/300x300.png?text=Shopify+T-Shirt', type: 'image', altText: defaultMultilingualString }]},
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-         {
-          ...initialProductData,
-          id: 'SHOPIFY-SKU-002',
-          basicInfo: {
-            name: { en: 'Shopify Imported Mug', no: 'Shopify Importert Krus' },
-            sku: 'SHOPIFY-SKU-002',
-            descriptionShort: { en: 'A nice mug from Shopify.', no: 'Et fint krus fra Shopify.' },
-            descriptionLong: { en: 'Detailed description for the Shopify mug.', no: 'Detaljert beskrivelse for Shopify kruset.' },
-            brand: 'ShopifyBrand',
-            status: 'active',
-          },
-           media: { images: [{ id: uuidv4(), url: 'https://placehold.co/300x300.png?text=Shopify+Mug', type: 'image', altText: defaultMultilingualString }]},
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        }
-      ];
-      
-      storeImportProducts(dummyShopifyProducts); // Use the merging import function
-      
-      toast({ title: 'Shopify Import (Simulated)', description: `${dummyShopifyProducts.length} products 'imported' from Shopify.` });
+      storeImportProducts(data.products as Product[]);
+      toast({ title: 'Shopify Import Successful', description: data.message });
     } catch (error: any) {
       console.error('Shopify Import Error:', error);
       toast({ title: 'Shopify Import Failed', description: error.message || 'An error occurred.', variant: 'destructive' });
@@ -160,28 +129,25 @@ export default function ImportExportPage() {
       return;
     }
     if (products.length === 0) {
-      toast({ title: 'No Products to Export', description: 'Add some products before exporting.', variant: 'default' });
+      toast({ title: 'No Products to Export', description: 'Add some products before exporting.' });
       return;
     }
 
     setIsExportingToShopify(true);
     try {
-      let exportedCount = 0;
-      for (const product of products) {
-        // Example: Shopify API endpoint for creating a product
-        const apiUrl = `https://${storeUrl}/admin/api/2024-04/products.json`;
-        console.log(`Simulating export of "${product.basicInfo.name.en}" to: ${apiUrl} with key: ${apiKey.substring(0,5)}...`);
-        
-        // Simulate API call for each product
-        // In a real scenario, you'd map your product data to Shopify's format here
-        // const shopifyProductPayload = { product: { title: product.basicInfo.name.en, ... } };
-        // await fetch(apiUrl, { method: 'POST', headers: { 'X-Shopify-Access-Token': apiKey, 'Content-Type': 'application/json' }, body: JSON.stringify(shopifyProductPayload) });
-        
-        await new Promise(resolve => setTimeout(resolve, 700)); // Simulate network delay per product
-        exportedCount++;
+      const response = await fetch('/api/shopify/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storeUrl, apiKey, productsToExport: products }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || `API request failed: ${response.statusText}`);
       }
       
-      toast({ title: 'Shopify Export (Simulated)', description: `${exportedCount} products 'exported' to Shopify.` });
+      toast({ title: 'Shopify Export Successful', description: data.message });
     } catch (error: any) {
       console.error('Shopify Export Error:', error);
       toast({ title: 'Shopify Export Failed', description: error.message || 'An error occurred.', variant: 'destructive' });
@@ -214,8 +180,8 @@ export default function ImportExportPage() {
               className="hidden"
               id="import-file-input"
             />
-            <Button onClick={() => fileInputRef.current?.click()} disabled={isImporting} className="w-full">
-              <FileJson className="mr-2 h-5 w-5" /> {isImporting ? 'Importing...' : 'Choose JSON File'}
+            <Button onClick={() => fileInputRef.current?.click()} disabled={isImportingJson} className="w-full">
+              <FileJson className="mr-2 h-5 w-5" /> {isImportingJson ? 'Importing...' : 'Choose JSON File'}
             </Button>
             {fileName && <p className="text-sm text-muted-foreground">Selected file: {fileName}</p>}
             {importError && (
@@ -241,7 +207,7 @@ export default function ImportExportPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={handleExport} disabled={products.length === 0} className="w-full">
+            <Button onClick={handleExportJson} disabled={products.length === 0} className="w-full">
               <FileJson className="mr-2 h-5 w-5" /> Export All Products
             </Button>
             {products.length === 0 && (
@@ -263,7 +229,7 @@ export default function ImportExportPage() {
             Connect to your Shopify store to import or export products. API key and store URL are required.
             <br />
             <span className="text-destructive text-xs font-semibold">
-              Note: API interactions are simulated. For production, use server-side API calls for security.
+              Note: Shopify API Key is sent to your backend. For true production security, ensure it is stored and managed securely on the server (e.g., via environment variables not exposed to client).
             </span>
           </CardDescription>
         </CardHeader>
@@ -295,7 +261,7 @@ export default function ImportExportPage() {
                   className="mt-1"
                 />
                  <p className="text-xs text-muted-foreground mt-1">
-                  This is typically an Admin API access token (starting with "shpat_"). Stored locally in your browser.
+                  This is typically an Admin API access token (starting with "shpat_"). Stored locally in your browser and sent to your backend for API calls.
                 </p>
               </div>
               <Button onClick={handleSaveShopifyConfig}>
@@ -336,4 +302,3 @@ export default function ImportExportPage() {
     </div>
   );
 }
-

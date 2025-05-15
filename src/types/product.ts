@@ -1,3 +1,4 @@
+
 export type MultilingualString = {
   en: string;
   no: string;
@@ -17,6 +18,7 @@ export type MediaEntry = {
   type: 'image' | 'video' | '3d_model' | 'manual' | 'certificate';
   language?: string; // for manuals
   title?: string; // for videos, 3d models, manuals, certificates
+  dataAiHint?: string; // for placeholder images
 };
 
 export type PriceEntry = {
