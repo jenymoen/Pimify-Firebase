@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -80,11 +81,11 @@ const FormItem = React.forwardRef<
 
   return (
     <FormItemContext.Provider value={{ id }}>
-      <div 
-        ref={ref} 
-        className={cn("space-y-2", className)} 
-        {...props} 
-        suppressHydrationWarning={true} 
+      <div
+        ref={ref}
+        className={cn("space-y-2", className)}
+        {...props}
+        suppressHydrationWarning={true}
       />
     </FormItemContext.Provider>
   )
@@ -131,18 +132,18 @@ const FormControl = React.forwardRef<
 FormControl.displayName = "FormControl"
 
 const FormDescription = React.forwardRef<
-  HTMLDivElement, 
+  HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => {
   const { formDescriptionId } = useFormField()
 
   return (
-    <div 
+    <div
       ref={ref}
       id={formDescriptionId}
       className={cn("text-sm text-muted-foreground", className)}
       {...props}
-      suppressHydrationWarning={true} 
+      suppressHydrationWarning={true}
     />
   )
 })
@@ -165,6 +166,7 @@ const FormMessage = React.forwardRef<
       id={formMessageId}
       className={cn("text-sm font-medium text-destructive", className)}
       {...props}
+      suppressHydrationWarning={true}
     >
       {body}
     </p>
