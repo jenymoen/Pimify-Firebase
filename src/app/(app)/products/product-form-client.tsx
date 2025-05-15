@@ -1,3 +1,4 @@
+
 // src/app/(app)/products/product-form-client.tsx
 "use client";
 
@@ -42,7 +43,7 @@ import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
 import { v4 as uuidv4 } from 'uuid';
 import { useEffect, useState } from "react";
-import Image from "next/image"; // Added for image preview
+import Image from "next/image";
 
 const multilingualStringSchema = z.object({
   en: z.string().min(1, "English version is required"),
@@ -57,7 +58,7 @@ const keyValueEntrySchema = z.object({
 
 const mediaEntrySchema = z.object({
   id: z.string(),
-  url: z.string().url("Must be a valid URL"),
+  url: z.string().url("Must be a valid URL").or(z.literal('')).optional(), // Allow empty string or valid URL
   altText: multilingualStringSchema.optional(),
   type: z.enum(['image', 'video', '3d_model', 'manual', 'certificate']),
   language: z.string().optional(),
@@ -77,13 +78,18 @@ const productFormSchema = z.object({
     endDate: z.date().optional(),
   }),
   attributesAndSpecs: z.object({
-    categories: z.array(z.string()).optional(), // For now, simple string array. Could be more complex.
+    categories: z.array(z.string()).optional(),
     properties: z.array(keyValueEntrySchema).optional(),
     technicalSpecs: z.array(keyValueEntrySchema).optional(),
     countryOfOrigin: z.string().optional(),
   }),
   media: z.object({
-    images: z.array(mediaEntrySchema).min(0, "At least one image is recommended").optional(),
+    // Make images array optional, and individual entries can have optional URL
+    images: z.array(mediaEntrySchema.extend({
+      url: mediaEntrySchema.shape.url.refine(val => val === '' || (typeof val === 'string' && val.startsWith('http')), {
+        message: "URL must be a valid HTTP/HTTPS link or empty.",
+      }).optional(), 
+    })).optional(),
   }),
   marketingSEO: z.object({
     seoTitle: multilingualStringSchema,
@@ -96,7 +102,7 @@ const productFormSchema = z.object({
 type ProductFormData = z.infer<typeof productFormSchema>;
 
 interface ProductFormClientProps {
-  product?: Product; // For editing existing product
+  product?: Product;
 }
 
 export function ProductFormClient({ product: existingProduct }: ProductFormClientProps) {
@@ -109,13 +115,13 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
   const defaultValues: ProductFormData = existingProduct ? {
       basicInfo: {
         ...existingProduct.basicInfo,
-        gtin: existingProduct.basicInfo.gtin || '', // Ensure empty string
+        gtin: existingProduct.basicInfo.gtin || '', 
         launchDate: existingProduct.basicInfo.launchDate ? parseISO(existingProduct.basicInfo.launchDate) : undefined,
         endDate: existingProduct.basicInfo.endDate ? parseISO(existingProduct.basicInfo.endDate) : undefined,
       },
       attributesAndSpecs: {
         ...existingProduct.attributesAndSpecs,
-        countryOfOrigin: existingProduct.attributesAndSpecs.countryOfOrigin || '', // Ensure empty string
+        countryOfOrigin: existingProduct.attributesAndSpecs.countryOfOrigin || '', 
         categories: existingProduct.attributesAndSpecs.categories || [],
         properties: existingProduct.attributesAndSpecs.properties || [],
         technicalSpecs: existingProduct.attributesAndSpecs.technicalSpecs || [],
@@ -132,7 +138,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     basicInfo: {
       name: { ...defaultMultilingualString },
       sku: '',
-      gtin: '', // Initialize as empty string
+      gtin: '', 
       descriptionShort: { ...defaultMultilingualString },
       descriptionLong: { ...defaultMultilingualString },
       brand: '',
@@ -142,7 +148,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       categories: [],
       properties: [],
       technicalSpecs: [],
-      countryOfOrigin: '', // Initialize as empty string
+      countryOfOrigin: '', 
     },
     media: {
       images: [],
@@ -188,7 +194,10 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
           endDate: data.basicInfo.endDate ? data.basicInfo.endDate.toISOString() : undefined,
         },
         attributesAndSpecs: data.attributesAndSpecs,
-        media: data.media,
+        media: {
+          // Filter out images with empty URLs before saving, unless they are intended to be empty
+          images: (data.media.images || []).filter(img => img.url || typeof img.url === 'undefined') 
+        },
         marketingSEO: data.marketingSEO,
         aiSummary: data.aiSummary,
       };
@@ -201,7 +210,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         toast({ title: "Product Created", description: `"${newProd.basicInfo.name.en}" has been successfully created.` });
       }
       router.push("/products");
-      router.refresh(); // Refresh server components
+      router.refresh(); 
     } catch (error) {
       console.error("Submission error:", error);
       toast({ title: "Error", description: "Failed to save product. Please try again.", variant: "destructive" });
@@ -232,10 +241,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       });
 
       if (result.summary) {
-        const currentAiSummary = form.getValues("aiSummary") || { ...defaultMultilingualString };
         form.setValue("aiSummary.en", result.summary, { shouldValidate: true, shouldDirty: true });
-        // Potentially, generate for other languages or use a translation service. For now, only EN.
-        form.setValue("aiSummary.no", result.summary + " (automatisk oppsummert)", { shouldValidate: true, shouldDirty: true }); // Placeholder for NO summary
+        form.setValue("aiSummary.no", result.summary + " (automatisk oppsummert)", { shouldValidate: true, shouldDirty: true }); 
         toast({ title: "AI Summary Generated", description: "English summary has been populated." });
       } else {
         toast({ title: "AI Summary Failed", description: "Could not generate summary.", variant: "destructive" });
@@ -248,14 +255,12 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     }
   };
   
-  // For Keywords input (string array)
   const keywords = form.watch("marketingSEO.keywords") || [];
   const handleKeywordsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newKeywords = e.target.value.split(',').map(k => k.trim()).filter(k => k !== "");
     form.setValue("marketingSEO.keywords", newKeywords, { shouldValidate: true, shouldDirty: true });
   };
   
-  // For Categories input (string array)
   const categories = form.watch("attributesAndSpecs.categories") || [];
   const handleCategoriesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newCategories = e.target.value.split(',').map(c => c.trim()).filter(c => c !== "");
@@ -264,7 +269,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
 
 
   return (
-    <Card className="max-w-6xl mx-auto"> {/* Increased max-width for two columns */}
+    <Card className="max-w-6xl mx-auto"> 
       <CardHeader>
         <CardTitle className="text-2xl font-bold text-primary flex items-center gap-2">
           {existingProduct ? <Edit className="h-7 w-7"/> : <Package className="h-7 w-7"/>}
@@ -283,7 +288,12 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       control={form.control}
                       name="basicInfo.name"
                       render={({ field }) => (
-                        <MultilingualInput id="name" label="Product Name" required {...field} />
+                        <FormItem>
+                          <FormControl>
+                            <MultilingualInput id="name" label="Product Name" required {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
                       )}
                     />
                     <FormField
@@ -341,14 +351,24 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       control={form.control}
                       name="basicInfo.descriptionShort"
                       render={({ field }) => (
-                        <MultilingualInput id="descriptionShort" label="Short Description" type="textarea" required {...field} />
+                        <FormItem>
+                          <FormControl>
+                            <MultilingualInput id="descriptionShort" label="Short Description" type="textarea" required {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
                       )}
                     />
                     <FormField
                       control={form.control}
                       name="basicInfo.descriptionLong"
                       render={({ field }) => (
-                        <MultilingualInput id="descriptionLong" label="Long Description" type="textarea" required {...field} />
+                        <FormItem>
+                           <FormControl>
+                            <MultilingualInput id="descriptionLong" label="Long Description" type="textarea" required {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
                       )}
                     />
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -455,6 +475,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       control={form.control}
                       name="attributesAndSpecs.properties"
                       render={({ field }) => (
+                        // KeyValueEditor likely handles its own labels/messages if needed, or assumes simple values
                         <KeyValueEditor 
                           label="Properties" 
                           entries={field.value || []} 
@@ -495,6 +516,9 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       control={form.control}
                       name="media.images"
                       render={({ field }) => (
+                        // MediaEditor might need similar FormItem/FormControl/FormMessage treatment
+                        // if its internal validation needs to be surfaced at the FormField level.
+                        // For now, assuming MediaEditor handles its display.
                         <MediaEditor 
                           label="Images" 
                           entries={field.value || []} 
@@ -503,7 +527,6 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                         />
                       )}
                     />
-                     {/* Add more media types (videos, 3D models) here later if needed */}
                   </ProductFormSection>
 
                   <ProductFormSection title="Marketing & SEO" value="marketing-seo" icon={BarChart3} description="Optimize product visibility for search engines and marketing campaigns.">
@@ -511,14 +534,24 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       control={form.control}
                       name="marketingSEO.seoTitle"
                       render={({ field }) => (
-                        <MultilingualInput id="seoTitle" label="SEO Title" required {...field} />
+                        <FormItem>
+                          <FormControl>
+                            <MultilingualInput id="seoTitle" label="SEO Title" required {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
                       )}
                     />
                     <FormField
                       control={form.control}
                       name="marketingSEO.seoDescription"
                       render={({ field }) => (
-                        <MultilingualInput id="seoDescription" label="SEO Meta Description" type="textarea" required {...field} />
+                        <FormItem>
+                          <FormControl>
+                            <MultilingualInput id="seoDescription" label="SEO Meta Description" type="textarea" required {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
                       )}
                     />
                     <FormField
@@ -550,14 +583,19 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       control={form.control}
                       name="aiSummary"
                       render={({ field }) => (
-                        <MultilingualInput 
-                          id="aiSummary" 
-                          label="AI Generated Summary" 
-                          type="textarea" 
-                          disabled={true} // Make it read-only or editable by user
-                          value={field.value || defaultMultilingualString} 
-                          onChange={field.onChange} 
-                        />
+                        <FormItem>
+                          <FormControl>
+                            <MultilingualInput 
+                              id="aiSummary" 
+                              label="AI Generated Summary" 
+                              type="textarea" 
+                              disabled={true} 
+                              value={field.value || defaultMultilingualString} 
+                              onChange={field.onChange} 
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
                       )}
                     />
                   </ProductFormSection>
@@ -572,7 +610,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       <div key={image.id || index} className="border p-3 rounded-lg shadow-sm bg-card">
                         <div className="relative aspect-video w-full rounded-md overflow-hidden border mb-2">
                           <Image 
-                            src={image.url} 
+                            src={image.url!} // Assert non-null as it's filtered
                             alt={image.altText?.en || `Product image ${index + 1}`} 
                             layout="fill" 
                             objectFit="contain"
@@ -609,3 +647,6 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     </Card>
   );
 }
+
+
+    
