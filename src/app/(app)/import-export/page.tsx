@@ -31,14 +31,22 @@ export default function ImportExportPage() {
 
   const [localStoreUrl, setLocalStoreUrl] = useState('');
   const [localApiKey, setLocalApiKey] = useState('');
+  const [clientShopifyReady, setClientShopifyReady] = useState(false); // For client-side readiness
 
   const [isImportingFromShopify, setIsImportingFromShopify] = useState(false);
   const [isExportingToShopify, setIsExportingToShopify] = useState(false);
 
   useEffect(() => {
+    // Sync local input state with Zustand store state after hydration
     setLocalStoreUrl(storeUrl);
     setLocalApiKey(apiKey);
   }, [storeUrl, apiKey]);
+
+  useEffect(() => {
+    // Determine Shopify readiness on the client after hydration
+    setClientShopifyReady(isConfigured());
+  }, [isConfigured, storeUrl, apiKey]);
+
 
   const handleExportJson = () => {
     const jsonString = JSON.stringify(products, null, 2);
@@ -89,13 +97,13 @@ export default function ImportExportPage() {
   const handleSaveShopifyConfig = () => {
     setShopifyStoreUrl(localStoreUrl);
     setShopifyApiKey(localApiKey);
+    // clientShopifyReady will update via its own useEffect
     toast({ title: 'Shopify Configuration Saved', description: 'Your Shopify Store URL and API Key have been saved locally.' });
   };
 
-  const shopifyReady = isConfigured();
 
   const handleImportFromShopify = async () => {
-    if (!shopifyReady) {
+    if (!clientShopifyReady) {
       toast({ title: 'Configuration Incomplete', description: 'Please configure Shopify Store URL and API Key.', variant: 'destructive' });
       return;
     }
@@ -104,7 +112,7 @@ export default function ImportExportPage() {
       const response = await fetch('/api/shopify/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storeUrl, apiKey }), // Send both storeUrl and apiKey
+        body: JSON.stringify({ storeUrl, apiKey }),
       });
 
       const data = await response.json();
@@ -124,7 +132,7 @@ export default function ImportExportPage() {
   };
 
   const handleExportToShopify = async () => {
-    if (!shopifyReady) {
+    if (!clientShopifyReady) {
       toast({ title: 'Configuration Incomplete', description: 'Please configure Shopify Store URL and API Key.', variant: 'destructive' });
       return;
     }
@@ -138,7 +146,7 @@ export default function ImportExportPage() {
       const response = await fetch('/api/shopify/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storeUrl, apiKey, productsToExport: products }), // Send storeUrl, apiKey and products
+        body: JSON.stringify({ storeUrl, apiKey, productsToExport: products }),
       });
 
       const data = await response.json();
@@ -278,7 +286,7 @@ export default function ImportExportPage() {
             <Button 
               variant="outline" 
               onClick={handleImportFromShopify} 
-              disabled={!shopifyReady || isImportingFromShopify || isExportingToShopify}
+              disabled={!clientShopifyReady || isImportingFromShopify || isExportingToShopify}
             >
               {isImportingFromShopify ? <RefreshCw className="mr-2 h-5 w-5 animate-spin" /> : <DownloadCloud className="mr-2 h-5 w-5" />}
               {isImportingFromShopify ? 'Importing...' : 'Import from Shopify'}
@@ -286,13 +294,13 @@ export default function ImportExportPage() {
             <Button 
               variant="outline" 
               onClick={handleExportToShopify} 
-              disabled={!shopifyReady || isImportingFromShopify || isExportingToShopify || products.length === 0}
+              disabled={!clientShopifyReady || isImportingFromShopify || isExportingToShopify || products.length === 0}
             >
               {isExportingToShopify ? <RefreshCw className="mr-2 h-5 w-5 animate-spin" /> : <UploadCloud className="mr-2 h-5 w-5" />}
               {isExportingToShopify ? 'Exporting...' : 'Export to Shopify'}
             </Button>
           </div>
-          {!shopifyReady && (
+          {!clientShopifyReady && (
              <Alert variant="default" className="bg-accent/10 border-accent/30 text-accent-foreground">
                 <Settings className="h-4 w-4 text-accent" />
                 <AlertTitle>Configuration Required</AlertTitle>
