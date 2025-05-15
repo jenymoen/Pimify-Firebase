@@ -35,7 +35,7 @@ import { useProductStore } from "@/lib/product-store";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { summarizeProductInformation } from "@/ai/flows/summarize-product-information";
-import { Info, Package, Tag, Image as ImageIcon, BarChart3, Globe, Brain, CalendarDays, CheckCircle, Save, Trash2, Sparkles, Languages } from "lucide-react";
+import { Info, Package, Tag, Image as ImageIcon, BarChart3, Globe, Brain, CalendarDays, CheckCircle, Save, Trash2, Sparkles, Languages, Edit } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
