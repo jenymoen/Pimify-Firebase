@@ -38,18 +38,19 @@ export function ProductCard({ product }: ProductCardProps) {
     });
   };
   
-  const firstImage = product.media.images.length > 0 ? product.media.images[0].url : "https://placehold.co/300x200.png";
+  const firstImage = product.media.images.length > 0 ? product.media.images[0].url : "https://placehold.co/300x300.png";
   const imageAlt = product.media.images.length > 0 ? (product.media.images[0].altText?.en || product.basicInfo.name.en) : product.basicInfo.name.en;
 
   return (
     <Card className="flex flex-col overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
       <CardHeader className="p-0">
-        <div className="relative w-full h-48">
+        <div className="relative w-full aspect-square bg-muted/20">
           <Image
             src={firstImage}
             alt={imageAlt}
             layout="fill"
-            objectFit="cover"
+            objectFit="contain"
+            className="p-1" // Added some padding so image doesn't touch edges
             data-ai-hint="product item"
           />
         </div>
