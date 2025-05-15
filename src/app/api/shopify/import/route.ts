@@ -1,31 +1,29 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 import type { Product } from '@/types/product';
-import { initialProductData, defaultMultilingualString } from '@/types/product'; // For dummy data
-import { v4 as uuidv4 } from 'uuid'; // For dummy data
+import { initialProductData, defaultMultilingualString } from '@/types/product'; 
+import { v4 as uuidv4 } from 'uuid'; 
 
 export async function POST(request: NextRequest) {
   try {
-    const { storeUrl } = await request.json(); // API Key is no longer sent from client
-    const apiKey = process.env.SHOPIFY_API_KEY; // Read API Key from server environment variable
+    const { storeUrl, apiKey } = await request.json(); // API Key is now sent from client
 
     if (!storeUrl) {
       return NextResponse.json({ error: 'Shopify store URL is required.' }, { status: 400 });
     }
     if (!apiKey) {
-      console.error('Shopify Import API Error: SHOPIFY_API_KEY environment variable is not set on the server.');
-      return NextResponse.json({ error: 'Shopify API Key is not configured on the server. Please contact support.' }, { status: 500 });
+      return NextResponse.json({ error: 'Shopify Admin API Access Token is required.' }, { status: 400 });
     }
 
     // --- Actual Shopify API Call Would Go Here (Simulated for now) ---
-    const shopifyApiUrl = `https://${storeUrl.replace(/^https?:\/\//, '')}/admin/api/2024-04/products.json`;
-    console.log(`Backend: Simulating Shopify import from ${shopifyApiUrl} with server-configured key: ${apiKey.substring(0, 5)}...`);
+    const shopifyApiUrl = `https://${storeUrl.replace(/^https?:\/\//, '')}/admin/api/2024-04/products.json`; // Using a recent, stable API version
+    console.log(`Backend: Simulating Shopify import from ${shopifyApiUrl} with client-provided key: ${apiKey.substring(0, 5)}...`);
 
     // Example:
     // const shopifyResponse = await fetch(shopifyApiUrl, {
     //   method: 'GET',
     //   headers: {
-    //     'X-Shopify-Access-Token': apiKey,
+    //     'X-Shopify-Access-Token': apiKey, // Use the apiKey from the client request
     //     'Content-Type': 'application/json',
     //   },
     // });
@@ -38,39 +36,39 @@ export async function POST(request: NextRequest) {
     // const productsToImport = shopifyData.products.map(product => mapShopifyToPimProduct(product)); // You'd need a mapping function
 
     // --- Simulated Data for demonstration ---
-    await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
 
     const dummyShopifyProducts: Product[] = [
       {
         ...initialProductData,
-        id: 'BE-SKU-001',
+        id: 'SIM-SKU-001', // Using a different prefix to distinguish from env var sourced
         basicInfo: {
           ...initialProductData.basicInfo,
-          name: { en: 'Backend Imported T-Shirt', no: 'Backend Importert T-skjorte' },
-          sku: 'BE-SKU-001',
-          descriptionShort: { en: 'A cool t-shirt from Shopify (via backend).', no: 'En kul t-skjorte fra Shopify (via backend).' },
+          name: { en: 'Client Key Imported T-Shirt', no: 'Klientnøkkel Importert T-skjorte' },
+          sku: 'SIM-SKU-001',
+          descriptionShort: { en: 'A t-shirt imported using client-provided API key.', no: 'En t-skjorte importert med klientlevert API-nøkkel.' },
         },
-        media: { images: [{ id: uuidv4(), url: 'https://placehold.co/300x300.png', type: 'image', altText: defaultMultilingualString, dataAiHint: "t-shirt" }]},
+        media: { images: [{ id: uuidv4(), url: 'https://placehold.co/300x300.png', type: 'image', altText: defaultMultilingualString, dataAiHint: "t-shirt design" }]},
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       },
       {
         ...initialProductData,
-        id: 'BE-SKU-002',
+        id: 'SIM-SKU-002',
         basicInfo: {
           ...initialProductData.basicInfo,
-          name: { en: 'Backend Imported Mug', no: 'Backend Importert Krus' },
-          sku: 'BE-SKU-002',
-          descriptionShort: { en: 'A nice mug from Shopify (via backend).', no: 'Et fint krus fra Shopify (via backend).' },
+          name: { en: 'Client Key Imported Mug', no: 'Klientnøkkel Importert Krus' },
+          sku: 'SIM-SKU-002',
+          descriptionShort: { en: 'A mug imported using client-provided API key.', no: 'Et krus importert med klientlevert API-nøkkel.' },
         },
-        media: { images: [{ id: uuidv4(), url: 'https://placehold.co/300x300.png', type: 'image', altText: defaultMultilingualString, dataAiHint: "mug" }]},
+        media: { images: [{id: uuidv4(), url: 'https://placehold.co/300x300.png', type: 'image', altText: defaultMultilingualString, dataAiHint: "coffee mug" }]},
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }
     ];
     // End of simulated data
 
-    return NextResponse.json({ products: dummyShopifyProducts, message: `${dummyShopifyProducts.length} products 'imported' from Shopify (via backend).` });
+    return NextResponse.json({ products: dummyShopifyProducts, message: `${dummyShopifyProducts.length} products 'imported' from Shopify (using client-provided key).` });
 
   } catch (error: any) {
     console.error('Shopify Import API Error:', error);

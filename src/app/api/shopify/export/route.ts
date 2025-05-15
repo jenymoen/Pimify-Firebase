@@ -4,15 +4,13 @@ import type { Product } from '@/types/product';
 
 export async function POST(request: NextRequest) {
   try {
-    const { storeUrl, productsToExport } = await request.json(); // API Key is no longer sent from client
-    const apiKey = process.env.SHOPIFY_API_KEY; // Read API Key from server environment variable
+    const { storeUrl, apiKey, productsToExport } = await request.json(); // API Key is now sent from client
 
     if (!storeUrl) {
       return NextResponse.json({ error: 'Shopify store URL is required.' }, { status: 400 });
     }
     if (!apiKey) {
-      console.error('Shopify Export API Error: SHOPIFY_API_KEY environment variable is not set on the server.');
-      return NextResponse.json({ error: 'Shopify API Key is not configured on the server. Please contact support.' }, { status: 500 });
+      return NextResponse.json({ error: 'Shopify Admin API Access Token is required.' }, { status: 400 });
     }
     if (!productsToExport || !Array.isArray(productsToExport) || productsToExport.length === 0) {
       return NextResponse.json({ error: 'No products provided for export.' }, { status: 400 });
@@ -20,8 +18,8 @@ export async function POST(request: NextRequest) {
 
     let exportedCount = 0;
     for (const product of productsToExport as Product[]) {
-      const shopifyApiUrl = `https://${storeUrl.replace(/^https?:\/\//, '')}/admin/api/2024-04/products.json`; // Create product endpoint
-      console.log(`Backend: Simulating export of "${product.basicInfo.name.en}" to ${shopifyApiUrl} with server-configured key: ${apiKey.substring(0,5)}...`);
+      const shopifyApiUrl = `https://${storeUrl.replace(/^https?:\/\//, '')}/admin/api/2024-04/products.json`;
+      console.log(`Backend: Simulating export of "${product.basicInfo.name.en}" to ${shopifyApiUrl} with client-provided key: ${apiKey.substring(0,5)}...`);
 
       // --- Actual Shopify API Call Would Go Here (Simulated) ---
       // Example:
@@ -29,7 +27,7 @@ export async function POST(request: NextRequest) {
       // const shopifyResponse = await fetch(shopifyApiUrl, {
       //   method: 'POST',
       //   headers: {
-      //     'X-Shopify-Access-Token': apiKey,
+      //     'X-Shopify-Access-Token': apiKey, // Use the apiKey from the client request
       //     'Content-Type': 'application/json',
       //   },
       //   body: JSON.stringify(shopifyProductPayload),
@@ -38,15 +36,14 @@ export async function POST(request: NextRequest) {
       // if (!shopifyResponse.ok) {
       //   const errorData = await shopifyResponse.json();
       //   console.error(`Failed to export product ${product.id}:`, errorData.errors || shopifyResponse.statusText);
-      //   // Decide if you want to stop on first error or continue
       //   continue; 
       // }
       
-      await new Promise(resolve => setTimeout(resolve, 700)); // Simulate network delay per product
+      await new Promise(resolve => setTimeout(resolve, 500)); // Simulate network delay per product
       exportedCount++;
     }
 
-    return NextResponse.json({ message: `${exportedCount} products 'exported' to Shopify (via backend).` });
+    return NextResponse.json({ message: `${exportedCount} products 'exported' to Shopify (using client-provided key).` });
 
   } catch (error: any) {
     console.error('Shopify Export API Error:', error);

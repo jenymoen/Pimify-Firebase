@@ -23,18 +23,22 @@ export default function ImportExportPage() {
 
   const { 
     storeUrl, 
+    apiKey,
     setStoreUrl: setShopifyStoreUrl,
+    setApiKey: setShopifyApiKey,
     isConfigured 
   } = useShopifyConfigStore();
 
   const [localStoreUrl, setLocalStoreUrl] = useState('');
+  const [localApiKey, setLocalApiKey] = useState('');
 
   const [isImportingFromShopify, setIsImportingFromShopify] = useState(false);
   const [isExportingToShopify, setIsExportingToShopify] = useState(false);
 
   useEffect(() => {
     setLocalStoreUrl(storeUrl);
-  }, [storeUrl]);
+    setLocalApiKey(apiKey);
+  }, [storeUrl, apiKey]);
 
   const handleExportJson = () => {
     const jsonString = JSON.stringify(products, null, 2);
@@ -84,14 +88,15 @@ export default function ImportExportPage() {
 
   const handleSaveShopifyConfig = () => {
     setShopifyStoreUrl(localStoreUrl);
-    toast({ title: 'Shopify Configuration Saved', description: 'Your Shopify Store URL has been saved locally.' });
+    setShopifyApiKey(localApiKey);
+    toast({ title: 'Shopify Configuration Saved', description: 'Your Shopify Store URL and API Key have been saved locally.' });
   };
 
-  const shopifyReady = isConfigured(); // Checks only for storeUrl now
+  const shopifyReady = isConfigured();
 
   const handleImportFromShopify = async () => {
     if (!shopifyReady) {
-      toast({ title: 'Configuration Incomplete', description: 'Please configure Shopify Store URL.', variant: 'destructive' });
+      toast({ title: 'Configuration Incomplete', description: 'Please configure Shopify Store URL and API Key.', variant: 'destructive' });
       return;
     }
     setIsImportingFromShopify(true);
@@ -99,7 +104,7 @@ export default function ImportExportPage() {
       const response = await fetch('/api/shopify/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storeUrl }), // Only send storeUrl
+        body: JSON.stringify({ storeUrl, apiKey }), // Send both storeUrl and apiKey
       });
 
       const data = await response.json();
@@ -120,7 +125,7 @@ export default function ImportExportPage() {
 
   const handleExportToShopify = async () => {
     if (!shopifyReady) {
-      toast({ title: 'Configuration Incomplete', description: 'Please configure Shopify Store URL.', variant: 'destructive' });
+      toast({ title: 'Configuration Incomplete', description: 'Please configure Shopify Store URL and API Key.', variant: 'destructive' });
       return;
     }
     if (products.length === 0) {
@@ -133,7 +138,7 @@ export default function ImportExportPage() {
       const response = await fetch('/api/shopify/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storeUrl, productsToExport: products }), // Only send storeUrl and products
+        body: JSON.stringify({ storeUrl, apiKey, productsToExport: products }), // Send storeUrl, apiKey and products
       });
 
       const data = await response.json();
@@ -221,11 +226,11 @@ export default function ImportExportPage() {
             <ShoppingCart className="h-6 w-6 text-primary" /> Shopify Sync
           </CardTitle>
           <CardDescription>
-            Connect to your Shopify store to import or export products. Your Store URL is required.
-            The Shopify Admin API Access Token must be configured on the server via environment variables.
+            Connect to your Shopify store to import or export products. Your Store URL and Admin API Access Token are required.
             <br />
-            <span className="text-xs font-semibold text-green-600">
-              Note: The Shopify Admin API Access Token is securely managed on the server.
+            <span className="text-xs font-semibold text-destructive">
+              Security Note: Your API Access Token will be stored in your browser's local storage.
+              Ensure you are on a secure computer and network.
             </span>
           </CardDescription>
         </CardHeader>
@@ -246,11 +251,25 @@ export default function ImportExportPage() {
                   className="mt-1"
                 />
                  <p className="text-xs text-muted-foreground mt-1">
-                  Enter the full URL of your Shopify store. This is stored locally in your browser.
+                  Enter the full URL of your Shopify store.
+                </p>
+              </div>
+              <div>
+                <Label htmlFor="shopify-api-key" className="text-sm font-medium">Shopify Admin API Access Token</Label>
+                <Input 
+                  id="shopify-api-key" 
+                  type="password" 
+                  placeholder="Enter your Shopify Admin API Access Token (e.g., shpat_...)" 
+                  value={localApiKey}
+                  onChange={(e) => setLocalApiKey(e.target.value)}
+                  className="mt-1"
+                />
+                 <p className="text-xs text-muted-foreground mt-1">
+                  Your Admin API Access Token is used to authenticate with Shopify.
                 </p>
               </div>
               <Button onClick={handleSaveShopifyConfig}>
-                <Save className="mr-2 h-4 w-4" /> Save Store URL
+                <Save className="mr-2 h-4 w-4" /> Save Configuration
               </Button>
             </div>
           </div>
@@ -273,13 +292,12 @@ export default function ImportExportPage() {
               {isExportingToShopify ? 'Exporting...' : 'Export to Shopify'}
             </Button>
           </div>
-          {!shopifyReady && ( // This condition now means storeUrl is not set
+          {!shopifyReady && (
              <Alert variant="default" className="bg-accent/10 border-accent/30 text-accent-foreground">
                 <Settings className="h-4 w-4 text-accent" />
-                <AlertTitle>Store URL Required</AlertTitle>
+                <AlertTitle>Configuration Required</AlertTitle>
                 <AlertDescription>
-                 Please enter and save your Shopify Store URL to enable Shopify integration.
-                 Ensure the Shopify API Key is set as an environment variable on the server.
+                 Please enter and save your Shopify Store URL and Admin API Access Token to enable Shopify integration.
                 </AlertDescription>
               </Alert>
           )}
@@ -288,3 +306,4 @@ export default function ImportExportPage() {
     </div>
   );
 }
+
