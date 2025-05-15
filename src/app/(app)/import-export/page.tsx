@@ -9,12 +9,14 @@ import { Label } from '@/components/ui/label';
 import { useProductStore } from '@/lib/product-store';
 import type { Product } from '@/types/product';
 import { useToast } from '@/hooks/use-toast';
-import { UploadCloud, DownloadCloud, FileJson, AlertTriangle, ShoppingCart, Save, Settings } from 'lucide-react';
+import { UploadCloud, DownloadCloud, FileJson, AlertTriangle, ShoppingCart, Save, Settings, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useShopifyConfigStore } from '@/lib/shopify-config-store';
+import { initialProductData, defaultMultilingualString } from '@/types/product'; // For dummy data
+import { v4 as uuidv4 } from 'uuid'; // For dummy data
 
 export default function ImportExportPage() {
-  const { products, setProducts: setStoreProducts } = useProductStore();
+  const { products, setProducts: setStoreProducts, importProducts: storeImportProducts } = useProductStore();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -24,14 +26,16 @@ export default function ImportExportPage() {
   const { 
     storeUrl, 
     apiKey, 
-    setStoreUrl, 
-    setApiKey,
+    setStoreUrl: setShopifyStoreUrl, // Renamed to avoid conflict
+    setApiKey: setShopifyApiKey,     // Renamed to avoid conflict
     isConfigured 
   } = useShopifyConfigStore();
 
-  // Local state for input fields to allow editing before saving to store
   const [localStoreUrl, setLocalStoreUrl] = useState('');
   const [localApiKey, setLocalApiKey] = useState('');
+
+  const [isImportingFromShopify, setIsImportingFromShopify] = useState(false);
+  const [isExportingToShopify, setIsExportingToShopify] = useState(false);
 
   useEffect(() => {
     setLocalStoreUrl(storeUrl);
@@ -69,8 +73,8 @@ export default function ImportExportPage() {
         throw new Error("Invalid JSON format. Expected an array of products.");
       }
       
-      setStoreProducts(importedData as Product[]);
-      toast({ title: 'Import Successful', description: `${importedData.length} products imported and replaced existing data.` });
+      storeImportProducts(importedData as Product[]); // Use store's import function
+      toast({ title: 'Import Successful', description: `${importedData.length} products imported.` });
 
     } catch (err: any) {
       console.error('Import error:', err);
@@ -85,12 +89,107 @@ export default function ImportExportPage() {
   };
 
   const handleSaveShopifyConfig = () => {
-    setStoreUrl(localStoreUrl);
-    setApiKey(localApiKey);
+    setShopifyStoreUrl(localStoreUrl);
+    setShopifyApiKey(localApiKey);
     toast({ title: 'Shopify Configuration Saved', description: 'Your Shopify API settings have been saved locally.' });
   };
 
   const shopifyReady = isConfigured();
+
+  const handleImportFromShopify = async () => {
+    if (!shopifyReady) {
+      toast({ title: 'Configuration Incomplete', description: 'Please configure Shopify URL and API Key.', variant: 'destructive' });
+      return;
+    }
+    setIsImportingFromShopify(true);
+    try {
+      const apiUrl = `https://${storeUrl}/admin/api/2024-04/products.json`; // Example API version
+      console.log(`Simulating fetch from: ${apiUrl} with key: ${apiKey.substring(0, 5)}...`);
+      
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Simulate received data (this would come from Shopify)
+      const dummyShopifyProducts: Product[] = [
+        {
+          ...initialProductData,
+          id: 'SHOPIFY-SKU-001',
+          basicInfo: {
+            name: { en: 'Shopify Imported T-Shirt', no: 'Shopify Importert T-skjorte' },
+            sku: 'SHOPIFY-SKU-001',
+            descriptionShort: { en: 'A cool t-shirt from Shopify.', no: 'En kul t-skjorte fra Shopify.' },
+            descriptionLong: { en: 'Detailed description for the Shopify t-shirt.', no: 'Detaljert beskrivelse for Shopify t-skjorten.' },
+            brand: 'ShopifyBrand',
+            status: 'active',
+          },
+          media: { images: [{ id: uuidv4(), url: 'https://placehold.co/300x300.png?text=Shopify+T-Shirt', type: 'image', altText: defaultMultilingualString }]},
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+         {
+          ...initialProductData,
+          id: 'SHOPIFY-SKU-002',
+          basicInfo: {
+            name: { en: 'Shopify Imported Mug', no: 'Shopify Importert Krus' },
+            sku: 'SHOPIFY-SKU-002',
+            descriptionShort: { en: 'A nice mug from Shopify.', no: 'Et fint krus fra Shopify.' },
+            descriptionLong: { en: 'Detailed description for the Shopify mug.', no: 'Detaljert beskrivelse for Shopify kruset.' },
+            brand: 'ShopifyBrand',
+            status: 'active',
+          },
+           media: { images: [{ id: uuidv4(), url: 'https://placehold.co/300x300.png?text=Shopify+Mug', type: 'image', altText: defaultMultilingualString }]},
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }
+      ];
+      
+      storeImportProducts(dummyShopifyProducts); // Use the merging import function
+      
+      toast({ title: 'Shopify Import (Simulated)', description: `${dummyShopifyProducts.length} products 'imported' from Shopify.` });
+    } catch (error: any) {
+      console.error('Shopify Import Error:', error);
+      toast({ title: 'Shopify Import Failed', description: error.message || 'An error occurred.', variant: 'destructive' });
+    } finally {
+      setIsImportingFromShopify(false);
+    }
+  };
+
+  const handleExportToShopify = async () => {
+    if (!shopifyReady) {
+      toast({ title: 'Configuration Incomplete', description: 'Please configure Shopify URL and API Key.', variant: 'destructive' });
+      return;
+    }
+    if (products.length === 0) {
+      toast({ title: 'No Products to Export', description: 'Add some products before exporting.', variant: 'default' });
+      return;
+    }
+
+    setIsExportingToShopify(true);
+    try {
+      let exportedCount = 0;
+      for (const product of products) {
+        // Example: Shopify API endpoint for creating a product
+        const apiUrl = `https://${storeUrl}/admin/api/2024-04/products.json`;
+        console.log(`Simulating export of "${product.basicInfo.name.en}" to: ${apiUrl} with key: ${apiKey.substring(0,5)}...`);
+        
+        // Simulate API call for each product
+        // In a real scenario, you'd map your product data to Shopify's format here
+        // const shopifyProductPayload = { product: { title: product.basicInfo.name.en, ... } };
+        // await fetch(apiUrl, { method: 'POST', headers: { 'X-Shopify-Access-Token': apiKey, 'Content-Type': 'application/json' }, body: JSON.stringify(shopifyProductPayload) });
+        
+        await new Promise(resolve => setTimeout(resolve, 700)); // Simulate network delay per product
+        exportedCount++;
+      }
+      
+      toast({ title: 'Shopify Export (Simulated)', description: `${exportedCount} products 'exported' to Shopify.` });
+    } catch (error: any) {
+      console.error('Shopify Export Error:', error);
+      toast({ title: 'Shopify Export Failed', description: error.message || 'An error occurred.', variant: 'destructive' });
+    } finally {
+      setIsExportingToShopify(false);
+    }
+  };
+
 
   return (
     <div className="container mx-auto py-8">
@@ -103,7 +202,7 @@ export default function ImportExportPage() {
               <UploadCloud className="h-6 w-6 text-primary" /> Import Products (JSON)
             </CardTitle>
             <CardDescription>
-              Import products from a JSON file. This will replace all existing product data.
+              Import products from a JSON file. This will merge with existing product data.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -154,7 +253,6 @@ export default function ImportExportPage() {
         </Card>
       </div>
 
-      {/* Shopify Integration Section */}
       <h2 className="text-2xl font-semibold text-primary mb-6 pt-4 border-t">Shopify Integration</h2>
       <Card className="shadow-lg col-span-1 md:col-span-2">
         <CardHeader>
@@ -162,7 +260,11 @@ export default function ImportExportPage() {
             <ShoppingCart className="h-6 w-6 text-primary" /> Shopify Sync
           </CardTitle>
           <CardDescription>
-            Connect to your Shopify store to import or export products directly. API key and store URL are required.
+            Connect to your Shopify store to import or export products. API key and store URL are required.
+            <br />
+            <span className="text-destructive text-xs font-semibold">
+              Note: API interactions are simulated. For production, use server-side API calls for security.
+            </span>
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -203,11 +305,21 @@ export default function ImportExportPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t mt-6">
-            <Button variant="outline" disabled={!shopifyReady}>
-              <DownloadCloud className="mr-2 h-5 w-5" /> Import from Shopify
+            <Button 
+              variant="outline" 
+              onClick={handleImportFromShopify} 
+              disabled={!shopifyReady || isImportingFromShopify || isExportingToShopify}
+            >
+              {isImportingFromShopify ? <RefreshCw className="mr-2 h-5 w-5 animate-spin" /> : <DownloadCloud className="mr-2 h-5 w-5" />}
+              {isImportingFromShopify ? 'Importing...' : 'Import from Shopify'}
             </Button>
-            <Button variant="outline" disabled={!shopifyReady}>
-              <UploadCloud className="mr-2 h-5 w-5" /> Export to Shopify
+            <Button 
+              variant="outline" 
+              onClick={handleExportToShopify} 
+              disabled={!shopifyReady || isImportingFromShopify || isExportingToShopify || products.length === 0}
+            >
+              {isExportingToShopify ? <RefreshCw className="mr-2 h-5 w-5 animate-spin" /> : <UploadCloud className="mr-2 h-5 w-5" />}
+              {isExportingToShopify ? 'Exporting...' : 'Export to Shopify'}
             </Button>
           </div>
           {!shopifyReady && (
@@ -219,12 +331,9 @@ export default function ImportExportPage() {
                 </AlertDescription>
               </Alert>
           )}
-          <p className="text-xs text-muted-foreground text-center">
-            Shopify import/export functionality is a future enhancement. Configuration can be saved locally for now.
-          </p>
         </CardContent>
       </Card>
-
     </div>
   );
 }
+
