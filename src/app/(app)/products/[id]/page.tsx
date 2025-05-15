@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -5,11 +6,10 @@ import { useParams, useRouter } from 'next/navigation';
 import type { Product, KeyValueEntry, MediaEntry } from '@/types/product';
 import { useProductStore } from '@/lib/product-store';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'; // Restored Card sub-components
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
-import { ArrowLeft, Edit, Tag, Info, ImageIcon, BarChart3, Brain, Globe, CalendarDays, Package } from 'lucide-react';
-import { Separator } from '@/components/ui/separator';
+import { ArrowLeft, Edit, Tag, Info, ImageIcon, BarChart3, Brain, Package } from 'lucide-react'; // Restored icons
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format, parseISO } from 'date-fns';
@@ -116,7 +116,12 @@ export default function ProductDetailsPage() {
     );
   }
 
-  const { basicInfo, attributesAndSpecs, media, marketingSEO, aiSummary } = product;
+  // Explicitly assign properties to constants
+  const basicInfo = product.basicInfo;
+  const attributesAndSpecs = product.attributesAndSpecs;
+  const media = product.media;
+  const marketingSEO = product.marketingSEO;
+  // aiSummary will be accessed directly as product.aiSummary
 
   return (
     <div className="container mx-auto py-8 px-4 md:px-6 lg:px-8">
@@ -150,7 +155,7 @@ export default function ProductDetailsPage() {
                   <Image src={media.images[0].url} alt={media.images[0].altText?.en || basicInfo.name.en} layout="fill" objectFit="cover" data-ai-hint="product main image" />
                 </div>
               ) : (
-                <div className="relative aspect-[4/3] rounded-lg overflow-hidden border bg-muted flex items-center justify-center data-ai-hint="product placeholder">
+                <div className="relative aspect-[4/3] rounded-lg overflow-hidden border bg-muted flex items-center justify-center" data-ai-hint="product placeholder">
                   <ImageIcon className="h-24 w-24 text-muted-foreground" />
                 </div>
               )}
@@ -166,9 +171,9 @@ export default function ProductDetailsPage() {
         </CardContent>
       </Card>
       
-      {aiSummary && (aiSummary.en || aiSummary.no) && (
+      {product.aiSummary && (product.aiSummary.en || product.aiSummary.no) && (
         <DetailSection title="AI Summary" icon={Brain}>
-          <MultilingualTextDisplay label="Summary" data={aiSummary} />
+          <MultilingualTextDisplay label="Summary" data={product.aiSummary} />
         </DetailSection>
       )}
 
