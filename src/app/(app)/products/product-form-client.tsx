@@ -30,13 +30,13 @@ import { ProductFormSection } from "@/components/products/product-form-section";
 import { KeyValueEditor } from "@/components/products/key-value-editor";
 import { MediaEditor } from "@/components/products/media-editor";
 import { MultilingualInput } from "@/components/shared/multilingual-input";
-import type { Product, MultilingualString, KeyValueEntry, MediaEntry, ProductStatus, PriceEntry } from "@/types/product";
+import type { Product, MultilingualString, KeyValueEntry, MediaEntry, ProductStatus, PriceEntry, ProductOption, ProductVariant } from "@/types/product";
 import { initialProductData, defaultMultilingualString } from "@/types/product";
 import { useProductStore } from "@/lib/product-store";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { summarizeProductInformation } from "@/ai/flows/summarize-product-information";
-import { Info, Package, Tag, Image as ImageIconLucide, BarChart3, Brain, CalendarDays, CheckCircle, Save, Trash2, Sparkles, Languages, Edit, DollarSign } from "lucide-react";
+import { Info, Package, Tag, Image as ImageIconLucide, BarChart3, Brain, CalendarDays, CheckCircle, Save, Trash2, Sparkles, Languages, Edit, DollarSign, ListPlus, Cog } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
@@ -44,10 +44,11 @@ import { format, parseISO } from "date-fns";
 import { v4 as uuidv4 } from 'uuid';
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const requiredMultilingualStringSchema = z.object({
-  en: z.string(), // min(1) removed, superRefine will handle it
-  no: z.string(), // min(1) removed, superRefine will handle it
+  en: z.string(), 
+  no: z.string(), 
 }).catchall(z.string())
 .superRefine((data, ctx) => {
   const enEmpty = !data.en || data.en.trim() === "";
@@ -56,14 +57,14 @@ const requiredMultilingualStringSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "At least one language (English or Norwegian) is required.",
-      path: ['en'], // Or ['no'], or a general path if preferred
+      path: ['en'], 
     });
   }
 });
 
 const baseMultilingualStringSchema = z.object({
-  en: z.string().optional(), // Made optional, as AI summary might be empty
-  no: z.string().optional(), // Made optional
+  en: z.string().optional(),
+  no: z.string().optional(),
 }).catchall(z.string().optional());
 
 
@@ -76,13 +77,12 @@ const keyValueEntrySchema = z.object({
 const mediaEntrySchema = z.object({
   id: z.string(),
   url: z.string().refine(val => {
-    if (val === '' || val === undefined) return true; // Allow empty string
-    // Check if it's a valid HTTP/HTTPS URL or a relative path starting with '/'
+    if (val === '' || val === undefined) return true;
     try {
-      const url = new URL(val);
-      return url.protocol === 'http:' || url.protocol === 'https:';
+      new URL(val);
+      return true;
     } catch (_) {
-      return val.startsWith('/'); // Allows relative paths like /placeholder.png
+      return val.startsWith('/'); 
     }
   }, {
     message: "Must be a valid HTTP/HTTPS URL, a relative path starting with '/', or empty.",
@@ -91,6 +91,28 @@ const mediaEntrySchema = z.object({
   type: z.enum(['image', 'video', '3d_model', 'manual', 'certificate']),
   language: z.string().optional(),
   title: z.string().optional(),
+});
+
+const productOptionValueSchema = z.string().min(1, "Option value cannot be empty.");
+const productOptionSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1, "Option name is required."),
+  values: z.string().min(1, "Option values are required (comma-separated).").transform(val => val.split(',').map(v => v.trim()).filter(v => v)), //Stored as string, converted to array
+});
+
+const productVariantSchema = z.object({
+    id: z.string(),
+    sku: z.string().min(1, "Variant SKU is required."),
+    gtin: z.string().optional(),
+    optionValues: z.record(z.string()),
+    standardPriceAmount: z.coerce.number({invalid_type_error: "Price must be a number"}).min(0, "Price cannot be negative").optional().nullable(),
+    standardPriceCurrency: z.string().length(3, "Currency code must be 3 letters").optional().default("NOK"),
+    salePriceAmount: z.preprocess(
+        (val) => (val === "" ? undefined : val),
+        z.coerce.number({invalid_type_error: "Sale price must be a number"}).min(0, "Sale price cannot be negative").optional().nullable()
+    ),
+    salePriceCurrency: z.string().length(3, "Currency code must be 3 letters").optional().default("NOK"),
+    // costPriceAmount and imageIds can be added later
 });
 
 
@@ -124,16 +146,18 @@ const productFormSchema = z.object({
     standardPriceAmount: z.coerce.number({ required_error: "Original price amount is required.", invalid_type_error: "Original price must be a number"}).min(0, "Original price cannot be negative"),
     standardPriceCurrency: z.string().length(3, "Currency code must be 3 letters").default("NOK"),
     salePriceAmount: z.preprocess(
-        (val) => (val === "" ? undefined : val), // Treat empty string as undefined for optional number
+        (val) => (val === "" ? undefined : val), 
         z.coerce.number({invalid_type_error: "Sale price must be a number"}).min(0, "Sale price cannot be negative").optional().nullable()
     ),
     salePriceCurrency: z.string().length(3, "Currency code must be 3 letters").optional().default("NOK"),
     costPriceAmount: z.preprocess(
-        (val) => (val === "" ? undefined : val), // Treat empty string as undefined for optional number
+        (val) => (val === "" ? undefined : val), 
         z.coerce.number({invalid_type_error: "Cost price must be a number"}).min(0, "Cost price cannot be negative").optional().nullable()
     ),
     costPriceCurrency: z.string().length(3, "Currency code must be 3 letters").optional().default("NOK"),
   }).optional(),
+  options: z.array(productOptionSchema).max(3, "Maximum of 3 options allowed.").optional(),
+  variants: z.array(productVariantSchema).optional(),
   aiSummary: baseMultilingualStringSchema.optional(),
 });
 
@@ -187,6 +211,14 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         costPriceAmount: existingProduct.pricingAndStock?.costPrice?.[0]?.amount,
         costPriceCurrency: existingProduct.pricingAndStock?.costPrice?.[0]?.currency || "NOK",
       },
+      options: (existingProduct.options || []).map(opt => ({...opt, values: opt.values.join(',')})),
+      variants: (existingProduct.variants || []).map(v => ({
+          ...v,
+          standardPriceAmount: v.standardPrice?.[0]?.amount,
+          standardPriceCurrency: v.standardPrice?.[0]?.currency || "NOK",
+          salePriceAmount: v.salePrice?.[0]?.amount,
+          salePriceCurrency: v.salePrice?.[0]?.currency || "NOK",
+      })),
       aiSummary: existingProduct.aiSummary || { ...defaultMultilingualString },
     } : {
     basicInfo: {
@@ -213,13 +245,15 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       keywords: [],
     },
     pricingAndStock: {
-        standardPriceAmount: undefined, // Will be handled by `value={field.value ?? ''}`
+        standardPriceAmount: undefined,
         standardPriceCurrency: "NOK",
-        salePriceAmount: undefined, // Will be handled by `value={field.value ?? ''}`
+        salePriceAmount: undefined,
         salePriceCurrency: "NOK",
-        costPriceAmount: undefined, // Will be handled by `value={field.value ?? ''}`
+        costPriceAmount: undefined,
         costPriceCurrency: "NOK",
     },
+    options: [],
+    variants: [],
     aiSummary: { ...defaultMultilingualString },
   };
 
@@ -230,17 +264,14 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     mode: "onChange",
   });
 
-  const { fields: propertiesFields, append: appendProperty, remove: removeProperty } = useFieldArray({
+  const { fields: optionsFields, append: appendOption, remove: removeOption } = useFieldArray({
     control: form.control,
-    name: "attributesAndSpecs.properties",
+    name: "options",
   });
-   const { fields: techSpecsFields, append: appendTechSpec, remove: removeTechSpec } = useFieldArray({
-    control: form.control,
-    name: "attributesAndSpecs.technicalSpecs",
-  });
-  const { fields: imagesFields, append: appendImage, remove: removeImage } = useFieldArray({
-    control: form.control,
-    name: "media.images",
+
+  const { fields: variantsFields, replace: replaceVariants } = useFieldArray({
+      control: form.control,
+      name: "variants",
   });
 
   const watchedImages = form.watch("media.images");
@@ -249,7 +280,10 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
   async function onSubmit(data: ProductFormData) {
     setIsSubmitting(true);
     try {
-      const productPayload: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'aiSummary'> & { aiSummary?: Product['aiSummary'], pricingAndStock?: Product['pricingAndStock'] } = {
+      const productPayload: Product = {
+        id: existingProduct?.id || data.basicInfo.sku || uuidv4(),
+        createdAt: existingProduct?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         basicInfo: {
           ...data.basicInfo,
           launchDate: data.basicInfo.launchDate ? data.basicInfo.launchDate.toISOString() : undefined,
@@ -259,16 +293,10 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         media: {
           images: (data.media.images || []).filter(img => {
             if (!img.url || img.url.trim() === '') return false;
-            // Ensure it's a valid image URL format before including
             if (img.type === 'image') {
-                try {
-                    new URL(img.url); // Throws error if invalid absolute URL
-                    return true;
-                } catch (_) {
-                    return img.url.startsWith('/'); // Allows relative paths
-                }
+                try { new URL(img.url); return true; } catch (_) { return img.url.startsWith('/'); }
             }
-            return true; // For other media types, assume URL is fine if present
+            return true; 
           })
         },
         marketingSEO: data.marketingSEO,
@@ -278,6 +306,15 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
             salePrice: [],
             costPrice: [],
         },
+        options: (data.options || []).map(opt => ({
+            ...opt,
+            values: typeof opt.values === 'string' ? opt.values.split(',').map(v => v.trim()).filter(v => v) : opt.values,
+        })),
+        variants: (data.variants || []).map(v => ({
+            ...v,
+            standardPrice: v.standardPriceAmount !== undefined && v.standardPriceAmount !== null ? [{ id: uuidv4(), amount: Number(v.standardPriceAmount), currency: v.standardPriceCurrency || "NOK" }] : [],
+            salePrice: v.salePriceAmount !== undefined && v.salePriceAmount !== null ? [{ id: uuidv4(), amount: Number(v.salePriceAmount), currency: v.salePriceCurrency || "NOK" }] : [],
+        })),
       };
 
       if (data.pricingAndStock) {
@@ -306,10 +343,10 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
 
 
       if (existingProduct) {
-        storeUpdateProduct(existingProduct.id, productPayload as Partial<Product>);
+        storeUpdateProduct(existingProduct.id, productPayload);
         toast({ title: "Product Updated", description: `"${data.basicInfo.name.en || data.basicInfo.name.no}" has been successfully updated.` });
       } else {
-        const newProd = addProduct(productPayload, data.aiSummary);
+        const newProd = addProduct(productPayload as Omit<Product, 'id' | 'createdAt' | 'updatedAt'>, data.aiSummary);
         toast({ title: "Product Created", description: `"${newProd.basicInfo.name.en || newProd.basicInfo.name.no}" has been successfully created.` });
       }
       router.push("/products");
@@ -383,6 +420,63 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     form.setValue("attributesAndSpecs.categories", newCategories, { shouldValidate: true, shouldDirty: true });
   };
 
+  const generateVariants = () => {
+    const options = form.getValues("options");
+    if (!options || options.length === 0) {
+        toast({ title: "No Options Defined", description: "Please define at least one option to generate variants.", variant: "destructive" });
+        replaceVariants([]); // Clear existing variants if any
+        return;
+    }
+
+    const validOptions = options.filter(opt => opt.name && opt.values);
+    if (validOptions.length === 0) {
+        toast({ title: "Incomplete Options", description: "Ensure all defined options have a name and values.", variant: "destructive" });
+        replaceVariants([]);
+        return;
+    }
+    
+    const parsedOptions = validOptions.map(opt => ({
+        name: opt.name,
+        values: typeof opt.values === 'string' ? opt.values.split(',').map(v => v.trim()).filter(v => v) : opt.values
+    }));
+
+    if (parsedOptions.some(opt => opt.values.length === 0)) {
+        toast({ title: "Empty Option Values", description: "One or more options have no values defined after parsing.", variant: "destructive" });
+        replaceVariants([]);
+        return;
+    }
+
+    // Cartesian product function
+    const cartesian = <T,>(...a: T[][]): T[][] => a.reduce((acc, curr) => acc.flatMap(x => curr.map(y => [...x, y])), [[]] as T[][]);
+
+    const optionValueArrays = parsedOptions.map(opt => opt.values);
+    const combinations = cartesian(...optionValueArrays);
+
+    const newVariants = combinations.map(combo => {
+        const optionValues: Record<string, string> = {};
+        let variantSkuSuffixParts: string[] = [];
+        parsedOptions.forEach((opt, i) => {
+            optionValues[opt.name] = combo[i];
+            variantSkuSuffixParts.push(combo[i].replace(/[^a-zA-Z0-9]/g, '').substring(0, 3).toUpperCase());
+        });
+        const baseSku = form.getValues("basicInfo.sku") || "VARSKU";
+        const variantSkuSuffix = variantSkuSuffixParts.join('-');
+        
+        return {
+            id: uuidv4(),
+            sku: `${baseSku}-${variantSkuSuffix}`,
+            gtin: '',
+            optionValues,
+            standardPriceAmount: form.getValues("pricingAndStock.standardPriceAmount"),
+            standardPriceCurrency: form.getValues("pricingAndStock.standardPriceCurrency") || "NOK",
+            salePriceAmount: form.getValues("pricingAndStock.salePriceAmount"),
+            salePriceCurrency: form.getValues("pricingAndStock.salePriceCurrency") || "NOK",
+        };
+    });
+    replaceVariants(newVariants);
+    toast({ title: "Variants Generated", description: `${newVariants.length} variants created based on options.` });
+  };
+
 
   return (
     <Card className="max-w-6xl mx-auto">
@@ -397,7 +491,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
           <form onSubmit={form.handleSubmit(onSubmit, onError)} className="space-y-8">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2 space-y-8">
-                <Accordion type="multiple" defaultValue={["basic-info", "attributes-specs", "pricing-stock"]} className="w-full">
+                <Accordion type="multiple" defaultValue={["basic-info", "options-variants", "attributes-specs", "pricing-stock"]} className="w-full">
 
                   <ProductFormSection title="Basic Information" value="basic-info" icon={Info} description="Core details about the product.">
                     <FormField
@@ -417,8 +511,9 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       name="basicInfo.sku"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>SKU (Stock Keeping Unit) <span className="text-destructive">*</span></FormLabel>
-                          <FormControl><Input placeholder="Enter unique SKU" {...field} /></FormControl>
+                          <FormLabel>Base SKU (Stock Keeping Unit) <span className="text-destructive">*</span></FormLabel>
+                          <FormControl><Input placeholder="Enter unique base SKU" {...field} /></FormControl>
+                          <FormDescription>This SKU is used as a base if variants are generated.</FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -428,8 +523,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       name="basicInfo.gtin"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>GTIN/EAN/UPC</FormLabel>
-                          <FormControl><Input placeholder="Global Trade Item Number" {...field} value={field.value || ''} /></FormControl>
+                          <FormLabel>Base GTIN/EAN/UPC</FormLabel>
+                          <FormControl><Input placeholder="Global Trade Item Number for base product" {...field} value={field.value || ''} /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -568,7 +663,109 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                     </div>
                   </ProductFormSection>
 
-                  <ProductFormSection title="Attributes & Specifications" value="attributes-specs" icon={Tag} description="Define product features, technical details, and categorization.">
+                  <ProductFormSection title="Product Options & Variants" value="options-variants" icon={Cog} description="Define options (like color, size) to generate product variants. Max 3 options.">
+                    <div className="space-y-4">
+                        <Label className="text-base">Define Options</Label>
+                        {optionsFields.map((optionField, index) => (
+                            <Card key={optionField.id} className="p-4 bg-muted/30">
+                                <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr_auto] gap-3 items-end">
+                                    <FormField
+                                        control={form.control}
+                                        name={`options.${index}.name`}
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Option Name {index + 1}</FormLabel>
+                                                <FormControl><Input placeholder="e.g., Color" {...field} /></FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name={`options.${index}.values`}
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Option Values (comma-separated)</FormLabel>
+                                                <FormControl><Input placeholder="e.g., Red, Blue, Green" {...field} /></FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <Button type="button" variant="destructive" size="icon" onClick={() => removeOption(index)} className="mb-1">
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </Card>
+                        ))}
+                        {optionsFields.length < 3 && (
+                            <Button type="button" variant="outline" onClick={() => appendOption({ id: uuidv4(), name: '', values: '' })}>
+                                <ListPlus className="mr-2 h-4 w-4" /> Add Option
+                            </Button>
+                        )}
+                        {form.formState.errors.options && <FormMessage>{form.formState.errors.options.message}</FormMessage>}
+                    </div>
+                    
+                    <Button type="button" onClick={generateVariants} className="mt-4" disabled={optionsFields.length === 0}>
+                        <Sparkles className="mr-2 h-4 w-4" /> Generate Variants
+                    </Button>
+
+                    {variantsFields.length > 0 && (
+                        <div className="mt-6 space-y-4">
+                            <h4 className="text-md font-semibold">Generated Variants ({variantsFields.length})</h4>
+                            <div className="rounded-md border overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        {optionsFields.map(optField => form.getValues(`options.${optField.fieldArrIndex}.name` as any) && ( // Use fieldArrIndex if available or index
+                                            <TableHead key={optField.id}>{form.getValues(`options.${optField.fieldArrIndex}.name` as any)}</TableHead>
+                                        ))}
+                                        <TableHead>SKU</TableHead>
+                                        <TableHead>GTIN</TableHead>
+                                        <TableHead>Std. Price</TableHead>
+                                        <TableHead>Std. Currency</TableHead>
+                                        <TableHead>Sale Price</TableHead>
+                                        <TableHead>Sale Currency</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {variantsFields.map((variantField, index) => (
+                                        <TableRow key={variantField.id}>
+                                            {optionsFields.map(optField => form.getValues(`options.${optField.fieldArrIndex}.name` as any) && (
+                                                <TableCell key={`${variantField.id}-${optField.id}`}>
+                                                    {form.getValues(`variants.${index}.optionValues.${form.getValues(`options.${optField.fieldArrIndex}.name` as any)}`)}
+                                                </TableCell>
+                                            ))}
+                                            <TableCell>
+                                                <FormField control={form.control} name={`variants.${index}.sku`} render={({ field }) => ( <Input {...field} placeholder="Variant SKU" /> )} />
+                                                <FormMessage>{form.formState.errors.variants?.[index]?.sku?.message}</FormMessage>
+                                            </TableCell>
+                                            <TableCell>
+                                                <FormField control={form.control} name={`variants.${index}.gtin`} render={({ field }) => ( <Input {...field} value={field.value || ''} placeholder="Variant GTIN" /> )} />
+                                            </TableCell>
+                                            <TableCell>
+                                                <FormField control={form.control} name={`variants.${index}.standardPriceAmount`} render={({ field }) => ( <Input type="number" {...field} value={field.value ?? ''} placeholder="Amount"/> )} />
+                                            </TableCell>
+                                            <TableCell>
+                                                <FormField control={form.control} name={`variants.${index}.standardPriceCurrency`} render={({ field }) => ( <Input {...field} value={field.value ?? 'NOK'} placeholder="NOK" maxLength={3}/> )} />
+                                            </TableCell>
+                                            <TableCell>
+                                                <FormField control={form.control} name={`variants.${index}.salePriceAmount`} render={({ field }) => ( <Input type="number" {...field} value={field.value ?? ''} placeholder="Amount"/> )} />
+                                            </TableCell>
+                                            <TableCell>
+                                                <FormField control={form.control} name={`variants.${index}.salePriceCurrency`} render={({ field }) => ( <Input {...field} value={field.value ?? 'NOK'} placeholder="NOK" maxLength={3}/> )} />
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                            </div>
+                             {form.formState.errors.variants && <FormMessage>Errors in variants list.</FormMessage>}
+                        </div>
+                    )}
+                  </ProductFormSection>
+
+
+                  <ProductFormSection title="Attributes & Specifications (General)" value="attributes-specs" icon={Tag} description="Define product features, technical details, and categorization. These apply to the main product, not specific variants.">
                     <FormField
                       control={form.control}
                       name="attributesAndSpecs.categories"
@@ -595,8 +792,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                           label="Properties"
                           entries={field.value || []}
                           onChange={field.onChange}
-                          keyPlaceholder="e.g., Color"
-                          valuePlaceholder="e.g., Red"
+                          keyPlaceholder="e.g., Material"
+                          valuePlaceholder="e.g., Cotton"
                         />
                       )}
                     />
@@ -632,7 +829,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                     />
                   </ProductFormSection>
 
-                  <ProductFormSection title="Pricing & Stock" value="pricing-stock" icon={DollarSign} description="Manage product pricing details.">
+                  <ProductFormSection title="Base Pricing & Stock (if no variants)" value="pricing-stock" icon={DollarSign} description="Manage base product pricing. If variants are defined, their prices take precedence.">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                         <FormField
                             control={form.control}
@@ -657,7 +854,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                             render={({ field }) => (
                                 <FormItem>
                                 <FormLabel>Original Price Currency <span className="text-destructive">*</span></FormLabel>
-                                <FormControl><Input placeholder="e.g., NOK" {...field} maxLength={3} /></FormControl>
+                                <FormControl><Input placeholder="e.g., NOK" {...field} value={field.value ?? 'NOK'} maxLength={3} /></FormControl>
                                 <FormMessage />
                                 </FormItem>
                             )}
@@ -686,7 +883,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                             render={({ field }) => (
                                 <FormItem>
                                 <FormLabel>Sales Price Currency</FormLabel>
-                                <FormControl><Input placeholder="e.g., NOK" {...field} maxLength={3} value={field.value ?? 'NOK'} /></FormControl>
+                                <FormControl><Input placeholder="e.g., NOK" {...field} value={field.value ?? 'NOK'} maxLength={3} /></FormControl>
                                 <FormMessage />
                                 </FormItem>
                             )}
@@ -715,7 +912,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                             render={({ field }) => (
                                 <FormItem>
                                 <FormLabel>Cost Price Currency</FormLabel>
-                                <FormControl><Input placeholder="e.g., NOK" {...field} maxLength={3} value={field.value ?? 'NOK'} /></FormControl>
+                                <FormControl><Input placeholder="e.g., NOK" {...field} value={field.value ?? 'NOK'} maxLength={3} /></FormControl>
                                 <FormMessage />
                                 </FormItem>
                             )}
@@ -821,13 +1018,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                   <div className="space-y-3 max-h-[calc(100vh-10rem)] overflow-y-auto p-2 rounded-md border bg-muted/10">
                     {watchedImages.filter(img => {
                         if (img.type !== 'image' || !img.url || img.url.trim() === '') return false;
-                        // Check if it's a valid absolute URL or a valid relative path
-                        try {
-                            new URL(img.url); // Throws for invalid absolute URLs
-                            return true;
-                        } catch (_) {
-                            return img.url.startsWith('/'); // Allows relative paths
-                        }
+                        try { new URL(img.url); return true; } catch (_) { return img.url.startsWith('/'); }
                     }).map((image, index) => (
                       <div key={image.id || index} className="border p-3 rounded-lg shadow-sm bg-card">
                         <div className="relative aspect-video w-full rounded-md overflow-hidden border mb-2">
@@ -838,8 +1029,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                             objectFit="contain"
                             data-ai-hint="product form image"
                             onError={(e) => {
-                              // More specific placeholder for invalid URLs during preview
-                              e.currentTarget.src = 'https://placehold.co/300x200.png?text=Invalid+or+Inaccessible+URL';
+                              e.currentTarget.src = 'https://placehold.co/300x200.png?text=Invalid+URL';
                               e.currentTarget.alt = 'Invalid image URL';
                             }}
                           />

@@ -39,14 +39,31 @@ export type CampaignEntry = {
 
 export type ProductStatus = 'active' | 'inactive' | 'development' | 'discontinued';
 
+export type ProductOption = {
+  id: string;
+  name: string; // e.g., "Color", "Size"
+  values: string[]; // e.g., ["Red", "Blue"], ["S", "M", "L"]
+};
+
+export type ProductVariant = {
+  id: string; // Unique ID for the variant
+  sku: string;
+  gtin?: string;
+  optionValues: Record<string, string>; // e.g., { "Color": "Red", "Size": "M" }
+  standardPrice?: PriceEntry[];
+  salePrice?: PriceEntry[];
+  costPrice?: PriceEntry[];
+  imageIds?: string[]; // Array of MediaEntry IDs linked to this variant
+  // Potentially other variant-specific fields like weight, dimensions if they differ
+};
+
 export interface Product {
   id: string; // Unique product ID, can be auto-generated or SKU
   
-  // Basic Product Information
   basicInfo: {
     name: MultilingualString;
-    sku: string; // Stock Keeping Unit
-    gtin?: string; // GTIN/EAN/UPC
+    sku: string; // Stock Keeping Unit - for products without variants or as a base SKU
+    gtin?: string; // GTIN/EAN/UPC - for products without variants
     internalId?: string; // PIM-specific ID, could be same as id
     descriptionShort: MultilingualString;
     descriptionLong: MultilingualString;
@@ -56,70 +73,63 @@ export interface Product {
     endDate?: string; // ISO date string for discontinuation
   };
 
-  // Attributes and Specifications
   attributesAndSpecs: {
-    categories: string[]; // e.g., ["Electronics", "Audio", "Headphones"]
-    properties: KeyValueEntry[]; // e.g., material, color, size
+    categories: string[];
+    properties: KeyValueEntry[]; 
     technicalSpecs: KeyValueEntry[];
     maintenanceInstructions?: MultilingualString;
     warrantyInfo?: MultilingualString;
     countryOfOrigin?: string;
   };
 
-  // Media and Visual Content
   media: {
-    images: MediaEntry[]; // type: 'image'
-    videos?: MediaEntry[]; // type: 'video'
-    models3d?: MediaEntry[]; // type: '3d_model'
-    manuals?: MediaEntry[]; // type: 'manual'
-    certificates?: MediaEntry[]; // type: 'certificate'
+    images: MediaEntry[];
+    videos?: MediaEntry[];
+    models3d?: MediaEntry[];
+    manuals?: MediaEntry[];
+    certificates?: MediaEntry[];
   };
 
-  // Marketing and SEO
   marketingSEO: {
     seoTitle: MultilingualString;
     seoDescription: MultilingualString;
-    keywords: string[]; // For search tags
+    keywords: string[];
     marketingTexts?: Array<{ id: string; channel: string; text: MultilingualString }>;
     campaignCodes?: CampaignEntry[];
   };
 
-  // Pricing and Stock
-  pricingAndStock?: {
-    standardPrice: PriceEntry[]; // "Original Price"
-    salePrice?: PriceEntry[];    // "Sales Price"
-    costPrice?: PriceEntry[];     // "Cost Price"
-    // Stock level might be too dynamic for PIM, usually from ERP
+  pricingAndStock?: { // For products without variants or as base pricing
+    standardPrice: PriceEntry[];
+    salePrice?: PriceEntry[];
+    costPrice?: PriceEntry[];
   };
 
-  // Relations and Connections
+  options?: ProductOption[]; // Defines the types of options available (e.g., Color, Size)
+  variants?: ProductVariant[]; // Actual product variants based on options
+
   relations?: {
-    relatedProducts?: string[]; // Array of product IDs/SKUs
-    accessories?: string[]; // Array of product IDs/SKUs
-    replacementProducts?: string[]; // Array of product IDs/SKUs
+    relatedProducts?: string[];
+    accessories?: string[];
+    replacementProducts?: string[];
   };
 
-  // Localization (Norway specific as example)
   localizationNorway?: {
-    // Specific Norwegian names/descriptions if different from basicInfo.name.no
-    // This section might be redundant if MultilingualString is used well
-    norwegianRegulations?: string; // Information about Norwegian standards/regulations
+    norwegianRegulations?: string;
   };
 
-  // AI Generated Summary
   aiSummary?: MultilingualString;
 
-  createdAt: string; // ISO date string
-  updatedAt: string; // ISO date string
+  createdAt: string;
+  updatedAt: string;
 }
 
-// For form handling, partial product and default values
 export const defaultMultilingualString: MultilingualString = { en: '', no: '' };
 
 export const initialProductData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'> = {
   basicInfo: {
     name: { ...defaultMultilingualString },
     sku: '',
+    gtin: '',
     descriptionShort: { ...defaultMultilingualString },
     descriptionLong: { ...defaultMultilingualString },
     brand: '',
@@ -129,6 +139,7 @@ export const initialProductData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>
     categories: [],
     properties: [],
     technicalSpecs: [],
+    countryOfOrigin: '',
   },
   media: {
     images: [],
@@ -138,9 +149,13 @@ export const initialProductData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>
     seoDescription: { ...defaultMultilingualString },
     keywords: [],
   },
-  pricingAndStock: { // Initialize pricingAndStock
+  pricingAndStock: {
     standardPrice: [],
     salePrice: [],
     costPrice: [],
   },
+  options: [],
+  variants: [],
+  aiSummary: { ...defaultMultilingualString },
 };
+

@@ -3,16 +3,17 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import type { Product, KeyValueEntry, MediaEntry, PriceEntry } from '@/types/product';
+import type { Product, KeyValueEntry, MediaEntry, PriceEntry, ProductOption, ProductVariant } from '@/types/product';
 import { useProductStore } from '@/lib/product-store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'; 
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
-import { ArrowLeft, Edit, Tag, Info, ImageIcon, BarChart3, Brain, Package, DollarSign } from 'lucide-react'; 
+import { ArrowLeft, Edit, Tag, Info, ImageIcon, BarChart3, Brain, Package, DollarSign, Cog } from 'lucide-react'; 
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format, parseISO } from 'date-fns';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 const DetailSection: React.FC<{ title: string; icon: React.ElementType; children: React.ReactNode }> = ({ title, icon: Icon, children }) => (
   <div className="mb-8">
@@ -129,7 +130,7 @@ export default function ProductDetailsPage() {
     );
   }
 
-  const { basicInfo, attributesAndSpecs, media, marketingSEO, pricingAndStock } = product;
+  const { basicInfo, attributesAndSpecs, media, marketingSEO, pricingAndStock, options, variants } = product;
 
   return (
     <div className="container mx-auto py-8 px-4 md:px-6 lg:px-8">
@@ -142,7 +143,7 @@ export default function ProductDetailsPage() {
           <div>
             <CardTitle className="text-3xl font-bold text-primary">{basicInfo.name.en || basicInfo.sku}</CardTitle>
             {basicInfo.name.no && basicInfo.name.no !== basicInfo.name.en && <CardDescription className="text-lg">{basicInfo.name.no}</CardDescription>}
-            <p className="text-sm text-muted-foreground mt-1">SKU: {basicInfo.sku} {basicInfo.gtin && `| GTIN: ${basicInfo.gtin}`}</p>
+            <p className="text-sm text-muted-foreground mt-1">Base SKU: {basicInfo.sku} {basicInfo.gtin && `| Base GTIN: ${basicInfo.gtin}`}</p>
           </div>
           <div className="flex flex-col sm:items-end gap-2">
             <Badge variant={basicInfo.status === 'active' ? 'default' : 'secondary'} className="text-sm px-3 py-1">
@@ -160,7 +161,7 @@ export default function ProductDetailsPage() {
             <div className="md:col-span-1">
               {media.images && media.images.length > 0 && media.images[0].url ? (
                 <div className="relative aspect-square rounded-lg overflow-hidden border shadow-md">
-                  <Image src={media.images[0].url} alt={media.images[0].altText?.en || basicInfo.name.en} layout="fill" objectFit="contain" data-ai-hint="product main image" />
+                  <Image src={media.images[0].url} alt={media.images[0].altText?.en || basicInfo.name.en || ''} layout="fill" objectFit="contain" data-ai-hint="product main image" />
                 </div>
               ) : (
                 <div className="relative aspect-square rounded-lg overflow-hidden border bg-muted flex items-center justify-center" data-ai-hint="product placeholder">
@@ -185,6 +186,50 @@ export default function ProductDetailsPage() {
         </DetailSection>
       )}
 
+      {options && options.length > 0 && (
+        <DetailSection title="Product Options & Variants" icon={Cog}>
+          <div className="space-y-3 mb-4">
+            {options.map(opt => (
+              <div key={opt.id}>
+                <p className="font-medium text-foreground/90">{opt.name}:</p>
+                <p className="text-sm text-muted-foreground pl-2">{opt.values.join(', ')}</p>
+              </div>
+            ))}
+          </div>
+          {variants && variants.length > 0 && (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    {options.map(opt => <TableHead key={opt.id}>{opt.name}</TableHead>)}
+                    <TableHead>SKU</TableHead>
+                    <TableHead>GTIN</TableHead>
+                    <TableHead>Standard Price</TableHead>
+                    <TableHead>Sale Price</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {variants.map(variant => (
+                    <TableRow key={variant.id}>
+                      {options.map(opt => <TableCell key={`${variant.id}-${opt.id}`}>{variant.optionValues[opt.name]}</TableCell>)}
+                      <TableCell>{variant.sku}</TableCell>
+                      <TableCell>{variant.gtin || 'N/A'}</TableCell>
+                      <TableCell>
+                        {variant.standardPrice?.[0] ? `${variant.standardPrice[0].amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${variant.standardPrice[0].currency}` : 'N/A'}
+                      </TableCell>
+                      <TableCell>
+                        {variant.salePrice?.[0] ? `${variant.salePrice[0].amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${variant.salePrice[0].currency}` : 'N/A'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </DetailSection>
+      )}
+
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8">
         <DetailSection title="Attributes & Specifications" icon={Tag}>
           {attributesAndSpecs.categories && attributesAndSpecs.categories.length > 0 && (
@@ -203,8 +248,8 @@ export default function ProductDetailsPage() {
           )}
         </DetailSection>
 
-        {pricingAndStock && (pricingAndStock.standardPrice?.length > 0 || pricingAndStock.salePrice?.length > 0 || pricingAndStock.costPrice?.length > 0) && (
-          <DetailSection title="Pricing" icon={DollarSign}>
+        {pricingAndStock && (!variants || variants.length === 0) && (pricingAndStock.standardPrice?.length > 0 || pricingAndStock.salePrice?.length > 0 || pricingAndStock.costPrice?.length > 0) && (
+          <DetailSection title="Base Pricing" icon={DollarSign}>
             <PriceDisplay label="Original Price" priceEntries={pricingAndStock.standardPrice} />
             <PriceDisplay label="Sales Price" priceEntries={pricingAndStock.salePrice} />
             <PriceDisplay label="Cost Price" priceEntries={pricingAndStock.costPrice} />
@@ -220,3 +265,4 @@ export default function ProductDetailsPage() {
     </div>
   );
 }
+

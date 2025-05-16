@@ -1,14 +1,21 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
-import type { Product, ProductStatus as PimStatus, MediaEntry, PriceEntry } from '@/types/product';
+import type { Product, ProductStatus as PimStatus, MediaEntry, PriceEntry, ProductOption as PimProductOption, ProductVariant as PimProductVariant } from '@/types/product';
 
+interface ShopifyOptionPayload {
+  name: string;
+  values: string[];
+}
 interface ShopifyProductVariantPayload {
   sku?: string;
   price: string; 
   compare_at_price?: string | null; 
   barcode?: string; // GTIN
-  // inventory_quantity?: number; 
-  // option1?: string; // For variants
+  option1?: string | null;
+  option2?: string | null;
+  option3?: string | null;
+  // inventory_quantity?: number; // Requires inventory management setup
+  // image_id?: number; // For associating variant with a specific image (more complex to map by URL directly)
 }
 interface ShopifyProductPayload {
   title: string;
@@ -17,6 +24,7 @@ interface ShopifyProductPayload {
   product_type?: string;
   status?: 'active' | 'draft' | 'archived';
   tags?: string; 
+  options?: ShopifyOptionPayload[];
   variants?: ShopifyProductVariantPayload[];
   images?: Array<{
     src: string;
@@ -41,7 +49,7 @@ function mapPimStatusToShopify(pimStatus: PimStatus): ShopifyProductPayload['sta
 
 function mapPimToShopifyProduct(product: Product): { product: ShopifyProductPayload } {
   const shopifyPayload: ShopifyProductPayload = {
-    title: product.basicInfo.name.en || product.basicInfo.name.no, 
+    title: product.basicInfo.name.en || product.basicInfo.name.no || 'Untitled Product', 
     body_html: product.basicInfo.descriptionLong.en || product.basicInfo.descriptionLong.no,
     vendor: product.basicInfo.brand,
     product_type: product.attributesAndSpecs.categories?.[0] || undefined, 
@@ -49,37 +57,78 @@ function mapPimToShopifyProduct(product: Product): { product: ShopifyProductPayl
     tags: product.marketingSEO.keywords?.join(', ') || undefined,
   };
 
-  const standardPriceEntry = product.pricingAndStock?.standardPrice?.[0];
-  const salePriceEntry = product.pricingAndStock?.salePrice?.[0];
-  // Cost price is not typically sent to Shopify's main product endpoint this way.
-
-  let shopifyPrice: string;
-  let shopifyCompareAtPrice: string | null = null;
-
-  if (salePriceEntry && salePriceEntry.amount !== undefined && standardPriceEntry && standardPriceEntry.amount !== undefined && salePriceEntry.amount < standardPriceEntry.amount) {
-    shopifyPrice = salePriceEntry.amount.toString();
-    shopifyCompareAtPrice = standardPriceEntry.amount.toString();
-  } else if (standardPriceEntry && standardPriceEntry.amount !== undefined) {
-    shopifyPrice = standardPriceEntry.amount.toString();
-  } else {
-    shopifyPrice = "0.00"; // Default if no price info
-  }
-  
-  shopifyPayload.variants = [{
-    sku: product.basicInfo.sku,
-    price: shopifyPrice,
-    compare_at_price: shopifyCompareAtPrice,
-    barcode: product.basicInfo.gtin,
-  }];
-
-
   if (product.media.images && product.media.images.length > 0) {
     shopifyPayload.images = product.media.images
-      .filter(img => img.type === 'image' && img.url)
+      .filter(img => img.type === 'image' && img.url && (img.url.startsWith('http') || img.url.startsWith('/'))) // Ensure valid URL
       .map(img => ({
-        src: img.url,
-        alt: img.altText?.en || product.basicInfo.name.en,
+        src: img.url!, // Assert non-null as it's filtered
+        alt: img.altText?.en || product.basicInfo.name.en || '',
       }));
+  }
+
+  // Handle variants
+  if (product.options && product.options.length > 0 && product.variants && product.variants.length > 0) {
+    shopifyPayload.options = product.options.map(opt => ({
+      name: opt.name,
+      values: opt.values,
+    }));
+
+    shopifyPayload.variants = product.variants.map(v => {
+      const variantPayload: ShopifyProductVariantPayload = {
+        sku: v.sku,
+        barcode: v.gtin || undefined,
+        price: "0.00", // Default, will be overridden
+      };
+
+      const stdPriceEntry = v.standardPrice?.[0];
+      const slPriceEntry = v.salePrice?.[0];
+
+      if (slPriceEntry && stdPriceEntry && slPriceEntry.amount < stdPriceEntry.amount) {
+        variantPayload.price = slPriceEntry.amount.toString();
+        variantPayload.compare_at_price = stdPriceEntry.amount.toString();
+      } else if (stdPriceEntry) {
+        variantPayload.price = stdPriceEntry.amount.toString();
+      } else {
+         // Fallback to main product pricing if variant price is missing - or set a default
+        const mainStdPrice = product.pricingAndStock?.standardPrice?.[0];
+        const mainSalePrice = product.pricingAndStock?.salePrice?.[0];
+        if (mainSalePrice && mainStdPrice && mainSalePrice.amount < mainStdPrice.amount) {
+            variantPayload.price = mainSalePrice.amount.toString();
+            variantPayload.compare_at_price = mainStdPrice.amount.toString();
+        } else if (mainStdPrice) {
+            variantPayload.price = mainStdPrice.amount.toString();
+        }
+      }
+      
+      // Map option values to option1, option2, option3
+      // This assumes product.options (PIM) order matches shopifyPayload.options order
+      product.options?.forEach((opt, index) => {
+        if (index < 3) { // Shopify supports up to 3 options
+          (variantPayload as any)[`option${index + 1}`] = v.optionValues[opt.name] || null;
+        }
+      });
+      return variantPayload;
+    });
+  } else {
+    // Single variant logic (fallback or product without options)
+    const standardPriceEntry = product.pricingAndStock?.standardPrice?.[0];
+    const salePriceEntry = product.pricingAndStock?.salePrice?.[0];
+    let shopifyPrice: string = "0.00";
+    let shopifyCompareAtPrice: string | null = null;
+
+    if (salePriceEntry && standardPriceEntry && salePriceEntry.amount < standardPriceEntry.amount) {
+      shopifyPrice = salePriceEntry.amount.toString();
+      shopifyCompareAtPrice = standardPriceEntry.amount.toString();
+    } else if (standardPriceEntry) {
+      shopifyPrice = standardPriceEntry.amount.toString();
+    }
+    
+    shopifyPayload.variants = [{
+      sku: product.basicInfo.sku,
+      price: shopifyPrice,
+      compare_at_price: shopifyCompareAtPrice,
+      barcode: product.basicInfo.gtin || undefined,
+    }];
   }
   
   return { product: shopifyPayload };
@@ -130,19 +179,22 @@ export async function POST(request: NextRequest) {
             errorDetail = await shopifyResponse.text().catch(() => `Failed to retrieve error details for product, status: ${shopifyResponse.status}`);
         }
         const errorMessage = `Failed to export product "${product.basicInfo.name.en || product.basicInfo.sku}": ${errorDetail}`;
-        console.error(errorMessage.substring(0,1000));
+        console.error(errorMessage.substring(0,1000)); // Log a snippet
         errors.push(errorMessage);
-        continue;
+        continue; // Continue with the next product
       }
       
       exportedCount++;
     }
 
     if (errors.length > 0) {
+      const fullMessage = `${exportedCount} products exported. ${errors.length} products failed.`;
+      // If all failed, return 500, otherwise 207 (Multi-Status)
+      const status = errors.length === productsToExport.length ? 500 : 207; 
       return NextResponse.json({ 
-        message: `${exportedCount} products exported. ${errors.length} products failed.`,
-        errors, 
-      }, { status: errors.length === productsToExport.length ? 500 : 207 }); 
+        message: fullMessage,
+        errors, // Send back the detailed errors
+      }, { status }); 
     }
 
     return NextResponse.json({ message: `${exportedCount} products exported successfully to Shopify.` });
@@ -152,3 +204,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message || 'An internal server error occurred during Shopify export.' }, { status: 500 });
   }
 }
+
