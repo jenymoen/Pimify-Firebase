@@ -46,8 +46,8 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 
 const requiredMultilingualStringSchema = z.object({
-  en: z.string(),
-  no: z.string(),
+  en: z.string(), // min(1) removed, superRefine will handle it
+  no: z.string(), // min(1) removed, superRefine will handle it
 }).catchall(z.string())
 .superRefine((data, ctx) => {
   const enEmpty = !data.en || data.en.trim() === "";
@@ -56,15 +56,16 @@ const requiredMultilingualStringSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "At least one language (English or Norwegian) is required.",
-      path: ['en'], 
+      path: ['en'], // Or ['no'], or a general path if preferred
     });
   }
 });
 
 const baseMultilingualStringSchema = z.object({
-  en: z.string(), 
-  no: z.string(), 
-}).catchall(z.string());
+  en: z.string().optional(), // Made optional, as AI summary might be empty
+  no: z.string().optional(), // Made optional
+}).catchall(z.string().optional());
+
 
 const keyValueEntrySchema = z.object({
   id: z.string(),
@@ -75,12 +76,13 @@ const keyValueEntrySchema = z.object({
 const mediaEntrySchema = z.object({
   id: z.string(),
   url: z.string().refine(val => {
-    if (val === '' || val === undefined) return true; 
+    if (val === '' || val === undefined) return true; // Allow empty string
+    // Check if it's a valid HTTP/HTTPS URL or a relative path starting with '/'
     try {
       const url = new URL(val);
       return url.protocol === 'http:' || url.protocol === 'https:';
     } catch (_) {
-      return val.startsWith('/'); 
+      return val.startsWith('/'); // Allows relative paths like /placeholder.png
     }
   }, {
     message: "Must be a valid HTTP/HTTPS URL, a relative path starting with '/', or empty.",
@@ -90,11 +92,6 @@ const mediaEntrySchema = z.object({
   language: z.string().optional(),
   title: z.string().optional(),
 });
-
-const priceEntryFormSchema = z.object({
-    amount: z.coerce.number({invalid_type_error: "Amount must be a number"}).min(0, "Amount cannot be negative").optional(),
-    currency: z.string().length(3, "Currency code must be 3 letters").optional().default("NOK"),
-}).optional();
 
 
 const productFormSchema = z.object({
@@ -126,9 +123,15 @@ const productFormSchema = z.object({
   pricingAndStock: z.object({
     standardPriceAmount: z.coerce.number({ required_error: "Original price amount is required.", invalid_type_error: "Original price must be a number"}).min(0, "Original price cannot be negative"),
     standardPriceCurrency: z.string().length(3, "Currency code must be 3 letters").default("NOK"),
-    salePriceAmount: z.coerce.number({invalid_type_error: "Sale price must be a number"}).min(0, "Sale price cannot be negative").optional().nullable().or(z.literal('')),
+    salePriceAmount: z.preprocess(
+        (val) => (val === "" ? undefined : val), // Treat empty string as undefined for optional number
+        z.coerce.number({invalid_type_error: "Sale price must be a number"}).min(0, "Sale price cannot be negative").optional().nullable()
+    ),
     salePriceCurrency: z.string().length(3, "Currency code must be 3 letters").optional().default("NOK"),
-    costPriceAmount: z.coerce.number({invalid_type_error: "Cost price must be a number"}).min(0, "Cost price cannot be negative").optional().nullable().or(z.literal('')),
+    costPriceAmount: z.preprocess(
+        (val) => (val === "" ? undefined : val), // Treat empty string as undefined for optional number
+        z.coerce.number({invalid_type_error: "Cost price must be a number"}).min(0, "Cost price cannot be negative").optional().nullable()
+    ),
     costPriceCurrency: z.string().length(3, "Currency code must be 3 letters").optional().default("NOK"),
   }).optional(),
   aiSummary: baseMultilingualStringSchema.optional(),
@@ -210,11 +213,11 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       keywords: [],
     },
     pricingAndStock: {
-        standardPriceAmount: undefined,
+        standardPriceAmount: undefined, // Will be handled by `value={field.value ?? ''}`
         standardPriceCurrency: "NOK",
-        salePriceAmount: undefined,
+        salePriceAmount: undefined, // Will be handled by `value={field.value ?? ''}`
         salePriceCurrency: "NOK",
-        costPriceAmount: undefined,
+        costPriceAmount: undefined, // Will be handled by `value={field.value ?? ''}`
         costPriceCurrency: "NOK",
     },
     aiSummary: { ...defaultMultilingualString },
@@ -256,15 +259,16 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         media: {
           images: (data.media.images || []).filter(img => {
             if (!img.url || img.url.trim() === '') return false;
+            // Ensure it's a valid image URL format before including
             if (img.type === 'image') {
                 try {
-                    new URL(img.url); 
+                    new URL(img.url); // Throws error if invalid absolute URL
                     return true;
                 } catch (_) {
-                    return img.url.startsWith('/');
+                    return img.url.startsWith('/'); // Allows relative paths
                 }
             }
-            return true; 
+            return true; // For other media types, assume URL is fine if present
           })
         },
         marketingSEO: data.marketingSEO,
@@ -284,14 +288,14 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                 currency: data.pricingAndStock.standardPriceCurrency || "NOK",
             }];
         }
-        if (data.pricingAndStock.salePriceAmount !== undefined && data.pricingAndStock.salePriceAmount !== null && data.pricingAndStock.salePriceAmount !== '') {
+        if (data.pricingAndStock.salePriceAmount !== undefined && data.pricingAndStock.salePriceAmount !== null) {
              productPayload.pricingAndStock!.salePrice = [{
                 id: uuidv4(),
                 amount: Number(data.pricingAndStock.salePriceAmount),
                 currency: data.pricingAndStock.salePriceCurrency || "NOK",
             }];
         }
-        if (data.pricingAndStock.costPriceAmount !== undefined && data.pricingAndStock.costPriceAmount !== null && data.pricingAndStock.costPriceAmount !== '') {
+        if (data.pricingAndStock.costPriceAmount !== undefined && data.pricingAndStock.costPriceAmount !== null) {
             productPayload.pricingAndStock!.costPrice = [{
                 id: uuidv4(),
                 amount: Number(data.pricingAndStock.costPriceAmount),
@@ -636,7 +640,13 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                             render={({ field }) => (
                                 <FormItem>
                                 <FormLabel>Original Price Amount <span className="text-destructive">*</span></FormLabel>
-                                <FormControl><Input type="number" placeholder="e.g., 999.99" {...field} onChange={e => field.onChange(e.target.value === '' ? null : parseFloat(e.target.value))} /></FormControl>
+                                <FormControl><Input 
+                                    type="number" 
+                                    placeholder="e.g., 999.99" 
+                                    {...field} 
+                                    value={field.value ?? ''}
+                                    onChange={e => field.onChange(e.target.value)}
+                                /></FormControl>
                                 <FormMessage />
                                 </FormItem>
                             )}
@@ -658,7 +668,13 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                             render={({ field }) => (
                                 <FormItem>
                                 <FormLabel>Sales Price Amount</FormLabel>
-                                <FormControl><Input type="number" placeholder="e.g., 799.99" {...field} onChange={e => field.onChange(e.target.value === '' ? null : parseFloat(e.target.value))} /></FormControl>
+                                <FormControl><Input 
+                                    type="number" 
+                                    placeholder="e.g., 799.99" 
+                                    {...field} 
+                                    value={field.value ?? ''}
+                                    onChange={e => field.onChange(e.target.value)}
+                                /></FormControl>
                                 <FormDescription>Optional. If set, this is the active selling price.</FormDescription>
                                 <FormMessage />
                                 </FormItem>
@@ -670,7 +686,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                             render={({ field }) => (
                                 <FormItem>
                                 <FormLabel>Sales Price Currency</FormLabel>
-                                <FormControl><Input placeholder="e.g., NOK" {...field} maxLength={3} /></FormControl>
+                                <FormControl><Input placeholder="e.g., NOK" {...field} maxLength={3} value={field.value ?? 'NOK'} /></FormControl>
                                 <FormMessage />
                                 </FormItem>
                             )}
@@ -681,7 +697,13 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                             render={({ field }) => (
                                 <FormItem>
                                 <FormLabel>Cost Price Amount</FormLabel>
-                                <FormControl><Input type="number" placeholder="e.g., 499.99" {...field} onChange={e => field.onChange(e.target.value === '' ? null : parseFloat(e.target.value))} /></FormControl>
+                                <FormControl><Input 
+                                    type="number" 
+                                    placeholder="e.g., 499.99" 
+                                    {...field} 
+                                    value={field.value ?? ''}
+                                    onChange={e => field.onChange(e.target.value)}
+                                /></FormControl>
                                 <FormDescription>Optional. Internal cost price.</FormDescription>
                                 <FormMessage />
                                 </FormItem>
@@ -693,7 +715,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                             render={({ field }) => (
                                 <FormItem>
                                 <FormLabel>Cost Price Currency</FormLabel>
-                                <FormControl><Input placeholder="e.g., NOK" {...field} maxLength={3} /></FormControl>
+                                <FormControl><Input placeholder="e.g., NOK" {...field} maxLength={3} value={field.value ?? 'NOK'} /></FormControl>
                                 <FormMessage />
                                 </FormItem>
                             )}
@@ -785,7 +807,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                               onChange={field.onChange} 
                             />
                           </FormControl>
-                          <FormMessage />
+                           <FormMessage />
                         </FormItem>
                       )}
                     />
@@ -799,7 +821,13 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                   <div className="space-y-3 max-h-[calc(100vh-10rem)] overflow-y-auto p-2 rounded-md border bg-muted/10">
                     {watchedImages.filter(img => {
                         if (img.type !== 'image' || !img.url || img.url.trim() === '') return false;
-                        return img.url.startsWith('http://') || img.url.startsWith('https://') || img.url.startsWith('/');
+                        // Check if it's a valid absolute URL or a valid relative path
+                        try {
+                            new URL(img.url); // Throws for invalid absolute URLs
+                            return true;
+                        } catch (_) {
+                            return img.url.startsWith('/'); // Allows relative paths
+                        }
                     }).map((image, index) => (
                       <div key={image.id || index} className="border p-3 rounded-lg shadow-sm bg-card">
                         <div className="relative aspect-video w-full rounded-md overflow-hidden border mb-2">
@@ -810,7 +838,9 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                             objectFit="contain"
                             data-ai-hint="product form image"
                             onError={(e) => {
-                              e.currentTarget.src = 'https://placehold.co/300x200.png?text=Invalid+URL';
+                              // More specific placeholder for invalid URLs during preview
+                              e.currentTarget.src = 'https://placehold.co/300x200.png?text=Invalid+or+Inaccessible+URL';
+                              e.currentTarget.alt = 'Invalid image URL';
                             }}
                           />
                         </div>
@@ -844,4 +874,6 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     </Card>
   );
 }
+    
+
     
