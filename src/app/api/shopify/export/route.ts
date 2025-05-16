@@ -1,26 +1,27 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
-import type { Product, ProductStatus as PimStatus, MediaEntry } from '@/types/product';
+import type { Product, ProductStatus as PimStatus, MediaEntry, PriceEntry } from '@/types/product';
 
-// Simplified Shopify Product structure for POST/PUT
+interface ShopifyProductVariantPayload {
+  sku?: string;
+  price: string; 
+  compare_at_price?: string | null; 
+  barcode?: string; // GTIN
+  // inventory_quantity?: number; 
+  // option1?: string; // For variants
+}
 interface ShopifyProductPayload {
   title: string;
   body_html?: string;
   vendor?: string;
   product_type?: string;
   status?: 'active' | 'draft' | 'archived';
-  tags?: string; // Comma-separated
-  variants?: Array<{
-    sku?: string;
-    price?: string; // Shopify expects price as string
-    barcode?: string; // GTIN
-    // inventory_quantity?: number; // For inventory management
-  }>;
+  tags?: string; 
+  variants?: ShopifyProductVariantPayload[];
   images?: Array<{
     src: string;
     alt?: string;
   }>;
-  // We can add metafields here if needed
 }
 
 function mapPimStatusToShopify(pimStatus: PimStatus): ShopifyProductPayload['status'] {
@@ -30,7 +31,7 @@ function mapPimStatusToShopify(pimStatus: PimStatus): ShopifyProductPayload['sta
     case 'development':
       return 'draft';
     case 'inactive':
-      return 'draft'; // Or 'archived', 'draft' is safer for "inactive" not meant to be public yet
+      return 'draft'; 
     case 'discontinued':
       return 'archived';
     default:
@@ -40,22 +41,38 @@ function mapPimStatusToShopify(pimStatus: PimStatus): ShopifyProductPayload['sta
 
 function mapPimToShopifyProduct(product: Product): { product: ShopifyProductPayload } {
   const shopifyPayload: ShopifyProductPayload = {
-    title: product.basicInfo.name.en, // Assuming English as primary for Shopify
-    body_html: product.basicInfo.descriptionLong.en,
+    title: product.basicInfo.name.en || product.basicInfo.name.no, 
+    body_html: product.basicInfo.descriptionLong.en || product.basicInfo.descriptionLong.no,
     vendor: product.basicInfo.brand,
-    product_type: product.attributesAndSpecs.categories?.[0] || undefined, // Take first category
+    product_type: product.attributesAndSpecs.categories?.[0] || undefined, 
     status: mapPimStatusToShopify(product.basicInfo.status),
     tags: product.marketingSEO.keywords?.join(', ') || undefined,
   };
 
-  // Basic variant mapping (assumes single variant or primary one)
+  const standardPriceEntry = product.pricingAndStock?.standardPrice?.[0];
+  const salePriceEntry = product.pricingAndStock?.salePrice?.[0];
+  // Cost price is not typically sent to Shopify's main product endpoint this way.
+
+  let shopifyPrice: string;
+  let shopifyCompareAtPrice: string | null = null;
+
+  if (salePriceEntry && salePriceEntry.amount !== undefined && standardPriceEntry && standardPriceEntry.amount !== undefined && salePriceEntry.amount < standardPriceEntry.amount) {
+    shopifyPrice = salePriceEntry.amount.toString();
+    shopifyCompareAtPrice = standardPriceEntry.amount.toString();
+  } else if (standardPriceEntry && standardPriceEntry.amount !== undefined) {
+    shopifyPrice = standardPriceEntry.amount.toString();
+  } else {
+    shopifyPrice = "0.00"; // Default if no price info
+  }
+  
   shopifyPayload.variants = [{
     sku: product.basicInfo.sku,
+    price: shopifyPrice,
+    compare_at_price: shopifyCompareAtPrice,
     barcode: product.basicInfo.gtin,
-    // price: product.pricingAndStock?.standardPrice?.[0]?.amount.toString() || "0.00", // Price needs careful handling
   }];
 
-  // Image mapping
+
   if (product.media.images && product.media.images.length > 0) {
     shopifyPayload.images = product.media.images
       .filter(img => img.type === 'image' && img.url)
@@ -90,8 +107,6 @@ export async function POST(request: NextRequest) {
       const shopifyApiUrl = `https://${storeUrl.replace(/^https?:\/\//, '')}/admin/api/2024-04/products.json`;
       const shopifyPayload = mapPimToShopifyProduct(product);
       
-      // console.log(`Exporting to Shopify: ${product.basicInfo.name.en}`, JSON.stringify(shopifyPayload, null, 2));
-
       const shopifyResponse = await fetch(shopifyApiUrl, {
         method: 'POST',
         headers: {
@@ -109,8 +124,6 @@ export async function POST(request: NextRequest) {
         continue;
       }
       
-      // const responseData = await shopifyResponse.json();
-      // console.log(`Successfully exported product: ${responseData.product?.id}`);
       exportedCount++;
     }
 
@@ -118,7 +131,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ 
         message: `${exportedCount} products exported. ${errors.length} products failed.`,
         errors, 
-      }, { status: errors.length === productsToExport.length ? 500 : 207 }); // 207 Multi-Status if some succeed
+      }, { status: errors.length === productsToExport.length ? 500 : 207 }); 
     }
 
     return NextResponse.json({ message: `${exportedCount} products exported successfully to Shopify.` });
@@ -128,4 +141,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message || 'An internal server error occurred during Shopify export.' }, { status: 500 });
   }
 }
-

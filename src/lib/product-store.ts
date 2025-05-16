@@ -1,6 +1,6 @@
 
 import { create } from 'zustand';
-import type { Product } from '@/types/product'; // Ensure 'type' import for Product if it's only a type
+import type { Product, PriceEntry } from '@/types/product'; 
 import { initialProductData, defaultMultilingualString } from '@/types/product';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -15,13 +15,19 @@ interface ProductState {
 }
 
 export const useProductStore = create<ProductState>((set, get) => ({
-  products: [], // Initialize with an empty array for server/client consistency
+  products: [], 
   addProduct: (productData, aiSummary) => {
     const newProduct: Product = {
-      ...initialProductData,
-      ...productData,
-      id: productData.basicInfo.sku || uuidv4(),
+      ...initialProductData, // Start with initialProductData to ensure all fields are present
+      ...productData, // Then spread the incoming productData
+      id: productData.basicInfo.sku || uuidv4(), // Ensure ID based on SKU or generate new
       aiSummary: aiSummary || { ...defaultMultilingualString },
+      // Ensure pricingAndStock is initialized if not provided fully by productData
+      pricingAndStock: productData.pricingAndStock ? {
+        standardPrice: productData.pricingAndStock.standardPrice || [],
+        salePrice: productData.pricingAndStock.salePrice || [],
+        costPrice: productData.pricingAndStock.costPrice || [],
+      } : { ...initialProductData.pricingAndStock },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -34,7 +40,19 @@ export const useProductStore = create<ProductState>((set, get) => ({
   },
   updateProduct: (productId, productUpdate) => {
     const updatedProducts = get().products.map(p =>
-      p.id === productId ? { ...p, ...productUpdate, updatedAt: new Date().toISOString() } : p
+      p.id === productId ? { 
+        ...p, 
+        ...productUpdate, 
+        // Ensure pricingAndStock structure is preserved if partially updated
+        pricingAndStock: productUpdate.pricingAndStock ? {
+            ...p.pricingAndStock,
+            ...productUpdate.pricingAndStock,
+            standardPrice: productUpdate.pricingAndStock.standardPrice || p.pricingAndStock?.standardPrice || [],
+            salePrice: productUpdate.pricingAndStock.salePrice || p.pricingAndStock?.salePrice || [],
+            costPrice: productUpdate.pricingAndStock.costPrice || p.pricingAndStock?.costPrice || [],
+        } : p.pricingAndStock,
+        updatedAt: new Date().toISOString() 
+      } : p
     );
     if (typeof window !== 'undefined') {
       localStorage.setItem('products', JSON.stringify(updatedProducts));
@@ -60,14 +78,21 @@ export const useProductStore = create<ProductState>((set, get) => ({
     const productMap = new Map(existingProducts.map(p => [p.id, p]));
 
     newProducts.forEach(np => {
-      const id = np.id || np.basicInfo?.sku || uuidv4(); // Ensure an ID exists or is generated
+      const id = np.id || np.basicInfo?.sku || uuidv4(); 
+      const existingP = productMap.get(id);
       productMap.set(id, { 
-        ...initialProductData, // ensure all fields are present
-        ...productMap.get(id), // existing data
-        ...np, // new data
-        id, // ensure id is set
+        ...initialProductData, 
+        ...existingP, 
+        ...np, 
+        id, 
+        // Ensure pricingAndStock is merged correctly
+        pricingAndStock: np.pricingAndStock ? {
+            standardPrice: np.pricingAndStock.standardPrice || existingP?.pricingAndStock?.standardPrice || [],
+            salePrice: np.pricingAndStock.salePrice || existingP?.pricingAndStock?.salePrice || [],
+            costPrice: np.pricingAndStock.costPrice || existingP?.pricingAndStock?.costPrice || [],
+        } : (existingP?.pricingAndStock || initialProductData.pricingAndStock),
         updatedAt: new Date().toISOString(),
-        createdAt: productMap.get(id)?.createdAt || new Date().toISOString() // preserve original creation date if updating
+        createdAt: existingP?.createdAt || new Date().toISOString() 
       });
     });
     
@@ -85,9 +110,6 @@ export const useProductStore = create<ProductState>((set, get) => ({
   }
 }));
 
-// Example initial product for testing (optional)
-// This logic runs on the client after the store is created.
-// It seeds localStorage if it's the first time and products are not already there.
 if (typeof window !== 'undefined') {
   const productsInitialized = localStorage.getItem('products_initialized');
   const currentProducts = localStorage.getItem('products');
@@ -127,11 +149,15 @@ if (typeof window !== 'undefined') {
         seoDescription: { en: 'Get the best deals on the Example Laptop. High performance, great value.', no: 'Få de beste tilbudene på Eksempel Bærbar PC. Høy ytelse, god verdi.' },
         keywords: ['laptop', 'computer', 'TechBrand', 'notebook', 'bærbar pc'],
       },
+      pricingAndStock: {
+        standardPrice: [{id: uuidv4(), amount: 9999, currency: 'NOK'}],
+        salePrice: [{id: uuidv4(), amount: 8999, currency: 'NOK'}],
+        costPrice: [{id: uuidv4(), amount: 6000, currency: 'NOK'}],
+      },
       aiSummary: { en: 'A high-performance Silver laptop with 16GB RAM and 512GB SSD.', no: 'En høytytende sølvfarget bærbar PC med 16 GB RAM og 512 GB SSD.' },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    // Use the store's setProducts action to ensure localStorage is updated correctly by the store itself
     useProductStore.getState().setProducts([exampleProduct]);
     localStorage.setItem('products_initialized', 'true');
   }

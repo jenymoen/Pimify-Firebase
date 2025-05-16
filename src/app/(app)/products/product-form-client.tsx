@@ -30,13 +30,13 @@ import { ProductFormSection } from "@/components/products/product-form-section";
 import { KeyValueEditor } from "@/components/products/key-value-editor";
 import { MediaEditor } from "@/components/products/media-editor";
 import { MultilingualInput } from "@/components/shared/multilingual-input";
-import type { Product, MultilingualString, KeyValueEntry, MediaEntry, ProductStatus } from "@/types/product";
+import type { Product, MultilingualString, KeyValueEntry, MediaEntry, ProductStatus, PriceEntry } from "@/types/product";
 import { initialProductData, defaultMultilingualString } from "@/types/product";
 import { useProductStore } from "@/lib/product-store";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { summarizeProductInformation } from "@/ai/flows/summarize-product-information";
-import { Info, Package, Tag, Image as ImageIconLucide, BarChart3, Brain, CalendarDays, CheckCircle, Save, Trash2, Sparkles, Languages, Edit } from "lucide-react";
+import { Info, Package, Tag, Image as ImageIconLucide, BarChart3, Brain, CalendarDays, CheckCircle, Save, Trash2, Sparkles, Languages, Edit, DollarSign } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
@@ -56,21 +56,14 @@ const requiredMultilingualStringSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "At least one language (English or Norwegian) is required.",
-      path: ['en'], // Attach error to 'en' field to ensure it's displayed
+      path: ['en'], 
     });
-     // Optionally, you could add the same issue to 'no' path as well
-     // ctx.addIssue({
-     //   code: z.ZodIssueCode.custom,
-     //   message: "At least one language (English or Norwegian) is required.",
-     //   path: ['no'],
-     // });
   }
 });
 
-// Schema for multilingual strings where content can be empty (e.g., for AI summary before generation)
 const baseMultilingualStringSchema = z.object({
-  en: z.string(), // Allows empty string
-  no: z.string(), // Allows empty string
+  en: z.string(), 
+  no: z.string(), 
 }).catchall(z.string());
 
 const keyValueEntrySchema = z.object({
@@ -82,21 +75,27 @@ const keyValueEntrySchema = z.object({
 const mediaEntrySchema = z.object({
   id: z.string(),
   url: z.string().refine(val => {
-    if (val === '' || val === undefined) return true; // Allow empty or undefined string for optional URLs
+    if (val === '' || val === undefined) return true; 
     try {
       const url = new URL(val);
       return url.protocol === 'http:' || url.protocol === 'https:';
     } catch (_) {
-      return val.startsWith('/'); // Allow relative paths
+      return val.startsWith('/'); 
     }
   }, {
     message: "Must be a valid HTTP/HTTPS URL, a relative path starting with '/', or empty.",
   }).optional(),
-  altText: baseMultilingualStringSchema.optional(), // Alt text can be empty
+  altText: baseMultilingualStringSchema.optional(), 
   type: z.enum(['image', 'video', '3d_model', 'manual', 'certificate']),
   language: z.string().optional(),
   title: z.string().optional(),
 });
+
+const priceEntryFormSchema = z.object({
+    amount: z.coerce.number({invalid_type_error: "Amount must be a number"}).min(0, "Amount cannot be negative").optional(),
+    currency: z.string().length(3, "Currency code must be 3 letters").optional().default("NOK"),
+}).optional();
+
 
 const productFormSchema = z.object({
   basicInfo: z.object({
@@ -124,6 +123,14 @@ const productFormSchema = z.object({
     seoDescription: requiredMultilingualStringSchema,
     keywords: z.array(z.string()).optional(),
   }),
+  pricingAndStock: z.object({
+    standardPriceAmount: z.coerce.number({ required_error: "Original price amount is required.", invalid_type_error: "Original price must be a number"}).min(0, "Original price cannot be negative"),
+    standardPriceCurrency: z.string().length(3, "Currency code must be 3 letters").default("NOK"),
+    salePriceAmount: z.coerce.number({invalid_type_error: "Sale price must be a number"}).min(0, "Sale price cannot be negative").optional().nullable().or(z.literal('')),
+    salePriceCurrency: z.string().length(3, "Currency code must be 3 letters").optional().default("NOK"),
+    costPriceAmount: z.coerce.number({invalid_type_error: "Cost price must be a number"}).min(0, "Cost price cannot be negative").optional().nullable().or(z.literal('')),
+    costPriceCurrency: z.string().length(3, "Currency code must be 3 letters").optional().default("NOK"),
+  }).optional(),
   aiSummary: baseMultilingualStringSchema.optional(),
 });
 
@@ -169,6 +176,14 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         seoDescription: existingProduct.marketingSEO.seoDescription || {...defaultMultilingualString},
         keywords: existingProduct.marketingSEO.keywords || [],
       },
+      pricingAndStock: {
+        standardPriceAmount: existingProduct.pricingAndStock?.standardPrice?.[0]?.amount,
+        standardPriceCurrency: existingProduct.pricingAndStock?.standardPrice?.[0]?.currency || "NOK",
+        salePriceAmount: existingProduct.pricingAndStock?.salePrice?.[0]?.amount,
+        salePriceCurrency: existingProduct.pricingAndStock?.salePrice?.[0]?.currency || "NOK",
+        costPriceAmount: existingProduct.pricingAndStock?.costPrice?.[0]?.amount,
+        costPriceCurrency: existingProduct.pricingAndStock?.costPrice?.[0]?.currency || "NOK",
+      },
       aiSummary: existingProduct.aiSummary || { ...defaultMultilingualString },
     } : {
     basicInfo: {
@@ -179,7 +194,6 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       descriptionLong: { ...defaultMultilingualString },
       brand: '',
       status: 'development',
-      countryOfOrigin: '', // Ensure initialization
     },
     attributesAndSpecs: {
       categories: [],
@@ -194,6 +208,14 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       seoTitle: { ...defaultMultilingualString },
       seoDescription: { ...defaultMultilingualString },
       keywords: [],
+    },
+    pricingAndStock: {
+        standardPriceAmount: undefined,
+        standardPriceCurrency: "NOK",
+        salePriceAmount: undefined,
+        salePriceCurrency: "NOK",
+        costPriceAmount: undefined,
+        costPriceCurrency: "NOK",
     },
     aiSummary: { ...defaultMultilingualString },
   };
@@ -224,7 +246,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
   async function onSubmit(data: ProductFormData) {
     setIsSubmitting(true);
     try {
-      const productPayload: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'aiSummary'> & { aiSummary?: Product['aiSummary'] } = {
+      const productPayload: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'aiSummary'> & { aiSummary?: Product['aiSummary'], pricingAndStock?: Product['pricingAndStock'] } = {
         basicInfo: {
           ...data.basicInfo,
           launchDate: data.basicInfo.launchDate ? data.basicInfo.launchDate.toISOString() : undefined,
@@ -236,19 +258,48 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
             if (!img.url || img.url.trim() === '') return false;
             if (img.type === 'image') {
                 try {
-                    new URL(img.url); // This will throw if it's not a full URL
+                    new URL(img.url); 
                     return true;
                 } catch (_) {
-                    // If new URL fails, check if it's a relative path
                     return img.url.startsWith('/');
                 }
             }
-            return true; // For non-image types, assume valid if URL is present
+            return true; 
           })
         },
         marketingSEO: data.marketingSEO,
         aiSummary: data.aiSummary,
+        pricingAndStock: {
+            standardPrice: [],
+            salePrice: [],
+            costPrice: [],
+        },
       };
+
+      if (data.pricingAndStock) {
+        if (data.pricingAndStock.standardPriceAmount !== undefined && data.pricingAndStock.standardPriceAmount !== null) {
+            productPayload.pricingAndStock!.standardPrice = [{
+                id: uuidv4(),
+                amount: Number(data.pricingAndStock.standardPriceAmount),
+                currency: data.pricingAndStock.standardPriceCurrency || "NOK",
+            }];
+        }
+        if (data.pricingAndStock.salePriceAmount !== undefined && data.pricingAndStock.salePriceAmount !== null && data.pricingAndStock.salePriceAmount !== '') {
+             productPayload.pricingAndStock!.salePrice = [{
+                id: uuidv4(),
+                amount: Number(data.pricingAndStock.salePriceAmount),
+                currency: data.pricingAndStock.salePriceCurrency || "NOK",
+            }];
+        }
+        if (data.pricingAndStock.costPriceAmount !== undefined && data.pricingAndStock.costPriceAmount !== null && data.pricingAndStock.costPriceAmount !== '') {
+            productPayload.pricingAndStock!.costPrice = [{
+                id: uuidv4(),
+                amount: Number(data.pricingAndStock.costPriceAmount),
+                currency: data.pricingAndStock.costPriceCurrency || "NOK",
+            }];
+        }
+      }
+
 
       if (existingProduct) {
         storeUpdateProduct(existingProduct.id, productPayload as Partial<Product>);
@@ -302,9 +353,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       });
 
       if (result.summary) {
-        // For now, AI summary populates English, and a placeholder for Norwegian
         form.setValue("aiSummary.en", result.summary, { shouldValidate: true, shouldDirty: true });
-        form.setValue("aiSummary.no", result.summary + " (automatisk oppsummert)", { shouldValidate: true, shouldDirty: true }); // Consider a more sophisticated translation or separate generation for NO
+        form.setValue("aiSummary.no", result.summary + " (automatisk oppsummert)", { shouldValidate: true, shouldDirty: true }); 
         toast({ title: "AI Summary Generated", description: "Summary has been populated." });
       } else {
         toast({ title: "AI Summary Failed", description: "Could not generate summary.", variant: "destructive" });
@@ -343,7 +393,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
           <form onSubmit={form.handleSubmit(onSubmit, onError)} className="space-y-8">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2 space-y-8">
-                <Accordion type="multiple" defaultValue={["basic-info", "attributes-specs"]} className="w-full">
+                <Accordion type="multiple" defaultValue={["basic-info", "attributes-specs", "pricing-stock"]} className="w-full">
 
                   <ProductFormSection title="Basic Information" value="basic-info" icon={Info} description="Core details about the product.">
                     <FormField
@@ -413,7 +463,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       control={form.control}
                       name="basicInfo.descriptionShort"
                       render={({ field }) => (
-                        <FormItem>
+                         <FormItem>
                            <FormControl>
                             <MultilingualInput id="descriptionShort" label="Short Description" type="textarea" required {...field} />
                           </FormControl>
@@ -578,6 +628,80 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                     />
                   </ProductFormSection>
 
+                  <ProductFormSection title="Pricing & Stock" value="pricing-stock" icon={DollarSign} description="Manage product pricing details.">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                        <FormField
+                            control={form.control}
+                            name="pricingAndStock.standardPriceAmount"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Original Price Amount <span className="text-destructive">*</span></FormLabel>
+                                <FormControl><Input type="number" placeholder="e.g., 999.99" {...field} onChange={e => field.onChange(e.target.value === '' ? null : parseFloat(e.target.value))} /></FormControl>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="pricingAndStock.standardPriceCurrency"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Original Price Currency <span className="text-destructive">*</span></FormLabel>
+                                <FormControl><Input placeholder="e.g., NOK" {...field} maxLength={3} /></FormControl>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="pricingAndStock.salePriceAmount"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Sales Price Amount</FormLabel>
+                                <FormControl><Input type="number" placeholder="e.g., 799.99" {...field} onChange={e => field.onChange(e.target.value === '' ? null : parseFloat(e.target.value))} /></FormControl>
+                                <FormDescription>Optional. If set, this is the active selling price.</FormDescription>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="pricingAndStock.salePriceCurrency"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Sales Price Currency</FormLabel>
+                                <FormControl><Input placeholder="e.g., NOK" {...field} maxLength={3} /></FormControl>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                         <FormField
+                            control={form.control}
+                            name="pricingAndStock.costPriceAmount"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Cost Price Amount</FormLabel>
+                                <FormControl><Input type="number" placeholder="e.g., 499.99" {...field} onChange={e => field.onChange(e.target.value === '' ? null : parseFloat(e.target.value))} /></FormControl>
+                                <FormDescription>Optional. Internal cost price.</FormDescription>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="pricingAndStock.costPriceCurrency"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Cost Price Currency</FormLabel>
+                                <FormControl><Input placeholder="e.g., NOK" {...field} maxLength={3} /></FormControl>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    </div>
+                  </ProductFormSection>
+
+
                   <ProductFormSection title="Media" value="media" icon={ImageIconLucide} description="Manage product images and other visual assets.">
                      <Controller
                       control={form.control}
@@ -602,7 +726,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       name="marketingSEO.seoTitle"
                       render={({ field }) => (
                          <FormItem>
-                          <FormControl>
+                           <FormControl>
                             <MultilingualInput id="seoTitle" label="SEO Title" required {...field} />
                           </FormControl>
                           <FormMessage />
@@ -656,9 +780,9 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                               id="aiSummary"
                               label="AI Generated Summary"
                               type="textarea"
-                              disabled={true} // Summary is not directly editable by user
+                              disabled={true} 
                               value={field.value || defaultMultilingualString}
-                              onChange={field.onChange} // Keep onChange for react-hook-form
+                              onChange={field.onChange} 
                             />
                           </FormControl>
                           <FormMessage />
@@ -675,7 +799,6 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                   <div className="space-y-3 max-h-[calc(100vh-10rem)] overflow-y-auto p-2 rounded-md border bg-muted/10">
                     {watchedImages.filter(img => {
                         if (img.type !== 'image' || !img.url || img.url.trim() === '') return false;
-                        // Basic URL validation for preview
                         return img.url.startsWith('http://') || img.url.startsWith('https://') || img.url.startsWith('/');
                     }).map((image, index) => (
                       <div key={image.id || index} className="border p-3 rounded-lg shadow-sm bg-card">
@@ -687,7 +810,6 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                             objectFit="contain"
                             data-ai-hint="product form image"
                             onError={(e) => {
-                              // Optionally handle image loading errors for preview, e.g., show placeholder
                               e.currentTarget.src = 'https://placehold.co/300x200.png?text=Invalid+URL';
                             }}
                           />
@@ -722,6 +844,4 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     </Card>
   );
 }
-    
-
     

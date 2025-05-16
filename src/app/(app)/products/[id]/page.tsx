@@ -3,13 +3,13 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import type { Product, KeyValueEntry, MediaEntry } from '@/types/product';
+import type { Product, KeyValueEntry, MediaEntry, PriceEntry } from '@/types/product';
 import { useProductStore } from '@/lib/product-store';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'; // Restored Card sub-components
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'; 
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
-import { ArrowLeft, Edit, Tag, Info, ImageIcon, BarChart3, Brain, Package } from 'lucide-react'; // Restored icons
+import { ArrowLeft, Edit, Tag, Info, ImageIcon, BarChart3, Brain, Package, DollarSign } from 'lucide-react'; 
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format, parseISO } from 'date-fns';
@@ -68,6 +68,19 @@ const MediaDisplay: React.FC<{ label: string; items?: MediaEntry[] }> = ({ label
   );
 };
 
+const PriceDisplay: React.FC<{ label: string; priceEntries?: PriceEntry[] }> = ({ label, priceEntries }) => {
+  if (!priceEntries || priceEntries.length === 0 || priceEntries[0].amount === undefined) {
+    return <p className="text-sm"><span className="font-medium text-foreground/90">{label}:</span> <span className="text-muted-foreground">Not specified</span></p>;
+  }
+  const price = priceEntries[0];
+  return (
+    <p className="text-sm">
+      <span className="font-medium text-foreground/90">{label}:</span>{' '}
+      <span className="text-muted-foreground">{price.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {price.currency}</span>
+    </p>
+  );
+};
+
 
 export default function ProductDetailsPage() {
   const router = useRouter();
@@ -116,12 +129,7 @@ export default function ProductDetailsPage() {
     );
   }
 
-  // Explicitly assign properties to constants
-  const basicInfo = product.basicInfo;
-  const attributesAndSpecs = product.attributesAndSpecs;
-  const media = product.media;
-  const marketingSEO = product.marketingSEO;
-  // aiSummary will be accessed directly as product.aiSummary
+  const { basicInfo, attributesAndSpecs, media, marketingSEO, pricingAndStock, aiSummary } = product;
 
   return (
     <div className="container mx-auto py-8 px-4 md:px-6 lg:px-8">
@@ -171,9 +179,9 @@ export default function ProductDetailsPage() {
         </CardContent>
       </Card>
       
-      {product.aiSummary && (product.aiSummary.en || product.aiSummary.no) && (
+      {aiSummary && (aiSummary.en || aiSummary.no) && (
         <DetailSection title="AI Summary" icon={Brain}>
-          <MultilingualTextDisplay label="Summary" data={product.aiSummary} />
+          <MultilingualTextDisplay label="Summary" data={aiSummary} />
         </DetailSection>
       )}
 
@@ -194,12 +202,19 @@ export default function ProductDetailsPage() {
              <p className="text-sm"><span className="font-medium text-foreground/90">Keywords:</span> <span className="text-muted-foreground">{marketingSEO.keywords.join(', ')}</span></p>
           )}
         </DetailSection>
+
+        {pricingAndStock && (pricingAndStock.standardPrice?.length > 0 || pricingAndStock.salePrice?.length > 0 || pricingAndStock.costPrice?.length > 0) && (
+          <DetailSection title="Pricing" icon={DollarSign}>
+            <PriceDisplay label="Original Price" priceEntries={pricingAndStock.standardPrice} />
+            <PriceDisplay label="Sales Price" priceEntries={pricingAndStock.salePrice} />
+            <PriceDisplay label="Cost Price" priceEntries={pricingAndStock.costPrice} />
+          </DetailSection>
+        )}
       </div>
 
       {media.images && media.images.length > 1 && (
         <DetailSection title="Additional Media" icon={ImageIcon}>
           <MediaDisplay label="Images" items={media.images.slice(1)} />
-           {/* Placeholder for other media types */}
         </DetailSection>
       )}
     </div>

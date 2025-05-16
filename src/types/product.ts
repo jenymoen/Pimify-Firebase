@@ -84,10 +84,11 @@ export interface Product {
     campaignCodes?: CampaignEntry[];
   };
 
-  // Pricing and Stock (simplified view)
+  // Pricing and Stock
   pricingAndStock?: {
-    standardPrice: PriceEntry[];
-    salePrice?: PriceEntry[];
+    standardPrice: PriceEntry[]; // "Original Price"
+    salePrice?: PriceEntry[];    // "Sales Price"
+    costPrice?: PriceEntry[];     // "Cost Price"
     // Stock level might be too dynamic for PIM, usually from ERP
   };
 
@@ -136,5 +137,10 @@ export const initialProductData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>
     seoTitle: { ...defaultMultilingualString },
     seoDescription: { ...defaultMultilingualString },
     keywords: [],
+  },
+  pricingAndStock: { // Initialize pricingAndStock
+    standardPrice: [],
+    salePrice: [],
+    costPrice: [],
   },
 };
