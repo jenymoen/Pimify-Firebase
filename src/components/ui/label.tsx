@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -19,6 +20,7 @@ const Label = React.forwardRef<
     ref={ref}
     className={cn(labelVariants(), className)}
     {...props}
+    suppressHydrationWarning={true} // Added this line
   />
 ))
 Label.displayName = LabelPrimitive.Root.displayName
