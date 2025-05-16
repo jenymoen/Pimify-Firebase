@@ -39,6 +39,7 @@ import { summarizeProductInformation } from "@/ai/flows/summarize-product-inform
 import { Info, Package, Tag, Image as ImageIconLucide, BarChart3, Brain, CalendarDays, CheckCircle, Save, Trash2, Sparkles, Languages, Edit, DollarSign, ListPlus, Cog } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { Label } from "@/components/ui/label"; // Added import
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
 import { v4 as uuidv4 } from 'uuid';
@@ -47,9 +48,9 @@ import Image from "next/image";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const requiredMultilingualStringSchema = z.object({
-  en: z.string(), 
-  no: z.string(), 
-}).catchall(z.string())
+  en: z.string().optional(), 
+  no: z.string().optional(), 
+}).catchall(z.string().optional())
 .superRefine((data, ctx) => {
   const enEmpty = !data.en || data.en.trim() === "";
   const noEmpty = !data.no || data.no.trim() === "";
@@ -194,6 +195,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       media: {
         images: (existingProduct.media.images || []).map(img => ({
           ...img,
+          url: img.url || '',
           altText: img.altText || {...defaultMultilingualString}
         })),
       },
@@ -702,7 +704,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                 <ListPlus className="mr-2 h-4 w-4" /> Add Option
                             </Button>
                         )}
-                        {form.formState.errors.options && <FormMessage>{form.formState.errors.options.message}</FormMessage>}
+                        {form.formState.errors.options && <FormMessage>{typeof form.formState.errors.options === 'string' ? form.formState.errors.options : form.formState.errors.options.message}</FormMessage>}
                     </div>
                     
                     <Button type="button" onClick={generateVariants} className="mt-4" disabled={optionsFields.length === 0}>
@@ -716,8 +718,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        {optionsFields.map(optField => form.getValues(`options.${optField.fieldArrIndex}.name` as any) && ( // Use fieldArrIndex if available or index
-                                            <TableHead key={optField.id}>{form.getValues(`options.${optField.fieldArrIndex}.name` as any)}</TableHead>
+                                        {optionsFields.map((optField,idx) => form.getValues(`options.${idx}.name` as any) && ( 
+                                            <TableHead key={optField.id}>{form.getValues(`options.${idx}.name` as any)}</TableHead>
                                         ))}
                                         <TableHead>SKU</TableHead>
                                         <TableHead>GTIN</TableHead>
@@ -730,9 +732,9 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                 <TableBody>
                                     {variantsFields.map((variantField, index) => (
                                         <TableRow key={variantField.id}>
-                                            {optionsFields.map(optField => form.getValues(`options.${optField.fieldArrIndex}.name` as any) && (
+                                            {optionsFields.map((optField, optIdx) => form.getValues(`options.${optIdx}.name` as any) && (
                                                 <TableCell key={`${variantField.id}-${optField.id}`}>
-                                                    {form.getValues(`variants.${index}.optionValues.${form.getValues(`options.${optField.fieldArrIndex}.name` as any)}`)}
+                                                    {form.getValues(`variants.${index}.optionValues.${form.getValues(`options.${optIdx}.name` as any)}`)}
                                                 </TableCell>
                                             ))}
                                             <TableCell>
@@ -798,7 +800,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       )}
                     />
                      {form.formState.errors.attributesAndSpecs?.properties && (
-                        <FormMessage>{form.formState.errors.attributesAndSpecs.properties.message || typeof form.formState.errors.attributesAndSpecs.properties === 'object' && 'Error in properties (check fields).'}</FormMessage>
+                        <FormMessage>{typeof form.formState.errors.attributesAndSpecs.properties === 'string' ? form.formState.errors.attributesAndSpecs.properties : 'Error in properties (check fields).'}</FormMessage>
                      )}
                     <Controller
                       control={form.control}
@@ -814,7 +816,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       )}
                     />
                     {form.formState.errors.attributesAndSpecs?.technicalSpecs && (
-                        <FormMessage>{form.formState.errors.attributesAndSpecs.technicalSpecs.message || typeof form.formState.errors.attributesAndSpecs.technicalSpecs === 'object' && 'Error in technical specs (check fields).'}</FormMessage>
+                        <FormMessage>{typeof form.formState.errors.attributesAndSpecs.technicalSpecs === 'string' ? form.formState.errors.attributesAndSpecs.technicalSpecs : 'Error in technical specs (check fields).'}</FormMessage>
                      )}
                      <FormField
                       control={form.control}
@@ -935,7 +937,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       )}
                     />
                     {form.formState.errors.media?.images && (
-                        <FormMessage>{form.formState.errors.media.images.message || typeof form.formState.errors.media.images === 'object' && 'Error in media images (check URLs/alt text).'}</FormMessage>
+                        <FormMessage>{typeof form.formState.errors.media.images === 'string' ? form.formState.errors.media.images : 'Error in media images (check URLs/alt text).'}</FormMessage>
                     )}
                   </ProductFormSection>
 
@@ -1067,3 +1069,4 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     
 
     
+
