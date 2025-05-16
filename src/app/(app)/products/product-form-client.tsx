@@ -3,7 +3,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, Controller, useFieldArray } from "react-hook-form";
+import { useForm, Controller, useFieldArray, type FieldErrors } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -86,9 +86,9 @@ const productFormSchema = z.object({
   media: z.object({
     // Make images array optional, and individual entries can have optional URL
     images: z.array(mediaEntrySchema.extend({
-      url: mediaEntrySchema.shape.url.refine(val => val === '' || (typeof val === 'string' && val.startsWith('http')), {
-        message: "URL must be a valid HTTP/HTTPS link or empty.",
-      }).optional(), 
+      url: mediaEntrySchema.shape.url.refine(val => val === '' || (typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://') || val.startsWith('/'))), {
+        message: "URL must be a valid HTTP/HTTPS link, a relative path starting with '/', or empty.",
+      }).optional(),
     })).optional(),
   }),
   marketingSEO: z.object({
@@ -115,13 +115,13 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
   const defaultValues: ProductFormData = existingProduct ? {
       basicInfo: {
         ...existingProduct.basicInfo,
-        gtin: existingProduct.basicInfo.gtin || '', 
+        gtin: existingProduct.basicInfo.gtin || '',
         launchDate: existingProduct.basicInfo.launchDate ? parseISO(existingProduct.basicInfo.launchDate) : undefined,
         endDate: existingProduct.basicInfo.endDate ? parseISO(existingProduct.basicInfo.endDate) : undefined,
       },
       attributesAndSpecs: {
         ...existingProduct.attributesAndSpecs,
-        countryOfOrigin: existingProduct.attributesAndSpecs.countryOfOrigin || '', 
+        countryOfOrigin: existingProduct.attributesAndSpecs.countryOfOrigin || '',
         categories: existingProduct.attributesAndSpecs.categories || [],
         properties: existingProduct.attributesAndSpecs.properties || [],
         technicalSpecs: existingProduct.attributesAndSpecs.technicalSpecs || [],
@@ -138,7 +138,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     basicInfo: {
       name: { ...defaultMultilingualString },
       sku: '',
-      gtin: '', 
+      gtin: '',
       descriptionShort: { ...defaultMultilingualString },
       descriptionLong: { ...defaultMultilingualString },
       brand: '',
@@ -148,7 +148,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       categories: [],
       properties: [],
       technicalSpecs: [],
-      countryOfOrigin: '', 
+      countryOfOrigin: '',
     },
     media: {
       images: [],
@@ -180,7 +180,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     control: form.control,
     name: "media.images",
   });
-  
+
   const watchedImages = form.watch("media.images");
 
 
@@ -195,8 +195,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         },
         attributesAndSpecs: data.attributesAndSpecs,
         media: {
-          // Filter out images with empty URLs before saving, unless they are intended to be empty
-          images: (data.media.images || []).filter(img => img.url || typeof img.url === 'undefined') 
+          images: (data.media.images || []).filter(img => img.url || typeof img.url === 'undefined')
         },
         marketingSEO: data.marketingSEO,
         aiSummary: data.aiSummary,
@@ -210,7 +209,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         toast({ title: "Product Created", description: `"${newProd.basicInfo.name.en}" has been successfully created.` });
       }
       router.push("/products");
-      router.refresh(); 
+      router.refresh();
     } catch (error) {
       console.error("Submission error:", error);
       toast({ title: "Error", description: "Failed to save product. Please try again.", variant: "destructive" });
@@ -218,6 +217,15 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       setIsSubmitting(false);
     }
   }
+
+  const onError = (errors: FieldErrors<ProductFormData>) => {
+    console.error("Form validation errors:", errors);
+    toast({
+      title: "Validation Error",
+      description: "Please check the form for errors. Some required fields might be missing or invalid.",
+      variant: "destructive",
+    });
+  };
 
   const handleGenerateSummary = async () => {
     setIsGeneratingSummary(true);
@@ -233,7 +241,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         .map(spec => `${spec.key}: ${spec.value}`).join('\n');
       const propertiesString = (currentData.attributesAndSpecs.properties || [])
         .map(prop => `${prop.key}: ${prop.value}`).join('\n');
-      
+
       const result = await summarizeProductInformation({
         productName: currentData.basicInfo.name.en,
         productDescription: currentData.basicInfo.descriptionLong.en,
@@ -242,7 +250,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
 
       if (result.summary) {
         form.setValue("aiSummary.en", result.summary, { shouldValidate: true, shouldDirty: true });
-        form.setValue("aiSummary.no", result.summary + " (automatisk oppsummert)", { shouldValidate: true, shouldDirty: true }); 
+        form.setValue("aiSummary.no", result.summary + " (automatisk oppsummert)", { shouldValidate: true, shouldDirty: true });
         toast({ title: "AI Summary Generated", description: "English summary has been populated." });
       } else {
         toast({ title: "AI Summary Failed", description: "Could not generate summary.", variant: "destructive" });
@@ -254,13 +262,13 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       setIsGeneratingSummary(false);
     }
   };
-  
+
   const keywords = form.watch("marketingSEO.keywords") || [];
   const handleKeywordsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newKeywords = e.target.value.split(',').map(k => k.trim()).filter(k => k !== "");
     form.setValue("marketingSEO.keywords", newKeywords, { shouldValidate: true, shouldDirty: true });
   };
-  
+
   const categories = form.watch("attributesAndSpecs.categories") || [];
   const handleCategoriesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newCategories = e.target.value.split(',').map(c => c.trim()).filter(c => c !== "");
@@ -269,7 +277,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
 
 
   return (
-    <Card className="max-w-6xl mx-auto"> 
+    <Card className="max-w-6xl mx-auto">
       <CardHeader>
         <CardTitle className="text-2xl font-bold text-primary flex items-center gap-2">
           {existingProduct ? <Edit className="h-7 w-7"/> : <Package className="h-7 w-7"/>}
@@ -278,11 +286,11 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+          <form onSubmit={form.handleSubmit(onSubmit, onError)} className="space-y-8">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2 space-y-8">
                 <Accordion type="multiple" defaultValue={["basic-info", "attributes-specs"]} className="w-full">
-                  
+
                   <ProductFormSection title="Basic Information" value="basic-info" icon={Info} description="Core details about the product.">
                     <FormField
                       control={form.control}
@@ -352,7 +360,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       name="basicInfo.descriptionShort"
                       render={({ field }) => (
                         <FormItem>
-                          <FormControl>
+                           <FormControl>
                             <MultilingualInput id="descriptionShort" label="Short Description" type="textarea" required {...field} />
                           </FormControl>
                           <FormMessage />
@@ -460,9 +468,9 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                         <FormItem>
                           <FormLabel>Categories</FormLabel>
                           <FormControl>
-                            <Input 
-                              placeholder="e.g., Electronics, Audio, Headphones (comma-separated)" 
-                              value={categories.join(', ')} 
+                            <Input
+                              placeholder="e.g., Electronics, Audio, Headphones (comma-separated)"
+                              value={categories.join(', ')}
                               onChange={handleCategoriesChange}
                             />
                           </FormControl>
@@ -475,29 +483,36 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       control={form.control}
                       name="attributesAndSpecs.properties"
                       render={({ field }) => (
-                        // KeyValueEditor likely handles its own labels/messages if needed, or assumes simple values
-                        <KeyValueEditor 
-                          label="Properties" 
-                          entries={field.value || []} 
+                        <KeyValueEditor
+                          label="Properties"
+                          entries={field.value || []}
                           onChange={field.onChange}
                           keyPlaceholder="e.g., Color"
                           valuePlaceholder="e.g., Red"
                         />
                       )}
                     />
+                     {/* Optionally, add a FormMessage for the whole properties array if needed */}
+                     {form.formState.errors.attributesAndSpecs?.properties && (
+                        <FormMessage>{form.formState.errors.attributesAndSpecs.properties.message || 'Error in properties.'}</FormMessage>
+                     )}
                     <Controller
                       control={form.control}
                       name="attributesAndSpecs.technicalSpecs"
                       render={({ field }) => (
-                        <KeyValueEditor 
-                          label="Technical Specifications" 
-                          entries={field.value || []} 
+                        <KeyValueEditor
+                          label="Technical Specifications"
+                          entries={field.value || []}
                           onChange={field.onChange}
                           keyPlaceholder="e.g., Weight"
                           valuePlaceholder="e.g., 2.5kg"
                         />
                       )}
                     />
+                    {/* Optionally, add a FormMessage for the whole technicalSpecs array if needed */}
+                    {form.formState.errors.attributesAndSpecs?.technicalSpecs && (
+                        <FormMessage>{form.formState.errors.attributesAndSpecs.technicalSpecs.message || 'Error in technical specifications.'}</FormMessage>
+                     )}
                      <FormField
                       control={form.control}
                       name="attributesAndSpecs.countryOfOrigin"
@@ -516,17 +531,18 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       control={form.control}
                       name="media.images"
                       render={({ field }) => (
-                        // MediaEditor might need similar FormItem/FormControl/FormMessage treatment
-                        // if its internal validation needs to be surfaced at the FormField level.
-                        // For now, assuming MediaEditor handles its display.
-                        <MediaEditor 
-                          label="Images" 
-                          entries={field.value || []} 
+                        <MediaEditor
+                          label="Images"
+                          entries={field.value || []}
                           onChange={field.onChange}
                           allowedTypes={['image']}
                         />
                       )}
                     />
+                    {/* Optionally, add a FormMessage for the whole images array if needed */}
+                    {form.formState.errors.media?.images && (
+                        <FormMessage>{form.formState.errors.media.images.message || 'Error in media images.'}</FormMessage>
+                    )}
                   </ProductFormSection>
 
                   <ProductFormSection title="Marketing & SEO" value="marketing-seo" icon={BarChart3} description="Optimize product visibility for search engines and marketing campaigns.">
@@ -561,9 +577,9 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                          <FormItem>
                           <FormLabel>Keywords/Tags</FormLabel>
                           <FormControl>
-                            <Input 
-                              placeholder="e.g., laptop, gaming, high-performance (comma-separated)" 
-                              value={keywords.join(', ')} 
+                            <Input
+                              placeholder="e.g., laptop, gaming, high-performance (comma-separated)"
+                              value={keywords.join(', ')}
                               onChange={handleKeywordsChange}
                             />
                           </FormControl>
@@ -585,13 +601,13 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       render={({ field }) => (
                         <FormItem>
                           <FormControl>
-                            <MultilingualInput 
-                              id="aiSummary" 
-                              label="AI Generated Summary" 
-                              type="textarea" 
-                              disabled={true} 
-                              value={field.value || defaultMultilingualString} 
-                              onChange={field.onChange} 
+                            <MultilingualInput
+                              id="aiSummary"
+                              label="AI Generated Summary"
+                              type="textarea"
+                              disabled={true}
+                              value={field.value || defaultMultilingualString}
+                              onChange={field.onChange}
                             />
                           </FormControl>
                           <FormMessage />
@@ -606,13 +622,13 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                 <h3 className="text-lg font-semibold text-foreground">Image Preview</h3>
                 {watchedImages && watchedImages.length > 0 ? (
                   <div className="space-y-3 max-h-[calc(100vh-10rem)] overflow-y-auto p-2 rounded-md border bg-muted/10">
-                    {watchedImages.filter(img => img.type === 'image' && img.url).map((image, index) => (
+                    {watchedImages.filter(img => img.type === 'image' && img.url && (img.url.startsWith('http://') || img.url.startsWith('https://') || img.url.startsWith('/')) ).map((image, index) => (
                       <div key={image.id || index} className="border p-3 rounded-lg shadow-sm bg-card">
                         <div className="relative aspect-video w-full rounded-md overflow-hidden border mb-2">
-                          <Image 
+                          <Image
                             src={image.url!} // Assert non-null as it's filtered
-                            alt={image.altText?.en || `Product image ${index + 1}`} 
-                            layout="fill" 
+                            alt={image.altText?.en || `Product image ${index + 1}`}
+                            layout="fill"
                             objectFit="contain"
                             data-ai-hint="product form image"
                           />
@@ -647,6 +663,4 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     </Card>
   );
 }
-
-
     
