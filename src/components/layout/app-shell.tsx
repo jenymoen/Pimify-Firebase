@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, PackagePlus, Package, UploadCloud, DownloadCloud, Settings, Menu } from 'lucide-react';
+import { LayoutDashboard, PackagePlus, Package, UploadCloud, Settings, Menu } from 'lucide-react'; // Added LayoutDashboard
 import {
   SidebarProvider,
   Sidebar,
@@ -28,6 +28,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }, // Added Dashboard
   { href: '/products', label: 'Products', icon: Package },
   { href: '/products/new', label: 'Add Product', icon: PackagePlus },
   { href: '/import-export', label: 'Import/Export', icon: UploadCloud },
@@ -58,7 +59,7 @@ export function AppShell({ children }: AppShellProps) {
             <SidebarMenuItem key={item.label}>
               <Link href={item.href} passHref legacyBehavior>
                 <SidebarMenuButton
-                  isActive={pathname === item.href || (item.href !== '/products' && pathname.startsWith(item.href))}
+                  isActive={pathname === item.href || (item.href !== '/products' && item.href !== '/dashboard' && pathname.startsWith(item.href)) || (item.href === '/dashboard' && pathname === '/dashboard') }
                   asChild={false} // Important: ensure it's a button for proper styling from sidebar component
                   tooltip={item.label}
                 >
