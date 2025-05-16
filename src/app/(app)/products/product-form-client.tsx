@@ -58,7 +58,18 @@ const keyValueEntrySchema = z.object({
 
 const mediaEntrySchema = z.object({
   id: z.string(),
-  url: z.string().url("Must be a valid URL").or(z.literal('')).optional(), // Allow empty string or valid URL
+  // URL is optional for the entry itself, but if present, it must be a valid format or empty
+  url: z.string().refine(val => {
+    if (val === '') return true; // Allow empty string
+    try {
+      const url = new URL(val);
+      return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch (_) {
+      return val.startsWith('/'); // Allow relative paths
+    }
+  }, {
+    message: "Must be a valid HTTP/HTTPS URL, a relative path starting with '/', or empty.",
+  }).optional(),
   altText: multilingualStringSchema.optional(),
   type: z.enum(['image', 'video', '3d_model', 'manual', 'certificate']),
   language: z.string().optional(),
@@ -84,12 +95,7 @@ const productFormSchema = z.object({
     countryOfOrigin: z.string().optional(),
   }),
   media: z.object({
-    // Make images array optional, and individual entries can have optional URL
-    images: z.array(mediaEntrySchema.extend({
-      url: mediaEntrySchema.shape.url.refine(val => val === '' || (typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://') || val.startsWith('/'))), {
-        message: "URL must be a valid HTTP/HTTPS link, a relative path starting with '/', or empty.",
-      }).optional(),
-    })).optional(),
+    images: z.array(mediaEntrySchema).optional(),
   }),
   marketingSEO: z.object({
     seoTitle: multilingualStringSchema,
@@ -195,7 +201,19 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         },
         attributesAndSpecs: data.attributesAndSpecs,
         media: {
-          images: (data.media.images || []).filter(img => img.url || typeof img.url === 'undefined')
+          images: (data.media.images || []).filter(img => {
+            if (!img.url || img.url.trim() === '') return false; // Filter out if URL is empty or undefined
+             // For image type, ensure it's a valid looking URL for rendering
+            if (img.type === 'image') {
+                try {
+                    new URL(img.url); // Check if it's an absolute URL
+                    return true;
+                } catch (_) {
+                    return img.url.startsWith('/'); // Or a relative path
+                }
+            }
+            return true; // For other media types, accept any non-empty URL for now
+          })
         },
         marketingSEO: data.marketingSEO,
         aiSummary: data.aiSummary,
@@ -219,7 +237,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
   }
 
   const onError = (errors: FieldErrors<ProductFormData>) => {
-    console.error("Form validation errors:", errors);
+    console.error("Form validation errors (raw object):", errors);
+    console.error("Form validation errors (JSON stringified):", JSON.stringify(errors, null, 2));
     toast({
       title: "Validation Error",
       description: "Please check the form for errors. Some required fields might be missing or invalid.",
@@ -321,7 +340,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>GTIN/EAN/UPC</FormLabel>
-                          <FormControl><Input placeholder="Global Trade Item Number" {...field} /></FormControl>
+                          <FormControl><Input placeholder="Global Trade Item Number" {...field} value={field.value || ''} /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -492,9 +511,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                         />
                       )}
                     />
-                     {/* Optionally, add a FormMessage for the whole properties array if needed */}
                      {form.formState.errors.attributesAndSpecs?.properties && (
-                        <FormMessage>{form.formState.errors.attributesAndSpecs.properties.message || 'Error in properties.'}</FormMessage>
+                        <FormMessage>{form.formState.errors.attributesAndSpecs.properties.message || typeof form.formState.errors.attributesAndSpecs.properties === 'object' && 'Error in properties (check fields).'}</FormMessage>
                      )}
                     <Controller
                       control={form.control}
@@ -509,9 +527,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                         />
                       )}
                     />
-                    {/* Optionally, add a FormMessage for the whole technicalSpecs array if needed */}
                     {form.formState.errors.attributesAndSpecs?.technicalSpecs && (
-                        <FormMessage>{form.formState.errors.attributesAndSpecs.technicalSpecs.message || 'Error in technical specifications.'}</FormMessage>
+                        <FormMessage>{form.formState.errors.attributesAndSpecs.technicalSpecs.message || typeof form.formState.errors.attributesAndSpecs.technicalSpecs === 'object' && 'Error in technical specs (check fields).'}</FormMessage>
                      )}
                      <FormField
                       control={form.control}
@@ -519,7 +536,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Country of Origin</FormLabel>
-                          <FormControl><Input placeholder="e.g., Norway, China" {...field} /></FormControl>
+                          <FormControl><Input placeholder="e.g., Norway, China" {...field} value={field.value || ''}/></FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -539,9 +556,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                         />
                       )}
                     />
-                    {/* Optionally, add a FormMessage for the whole images array if needed */}
                     {form.formState.errors.media?.images && (
-                        <FormMessage>{form.formState.errors.media.images.message || 'Error in media images.'}</FormMessage>
+                        <FormMessage>{form.formState.errors.media.images.message || typeof form.formState.errors.media.images === 'object' && 'Error in media images (check URLs/alt text).'}</FormMessage>
                     )}
                   </ProductFormSection>
 
@@ -605,9 +621,9 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                               id="aiSummary"
                               label="AI Generated Summary"
                               type="textarea"
-                              disabled={true}
+                              disabled={true} /* AI summary is read-only */
                               value={field.value || defaultMultilingualString}
-                              onChange={field.onChange}
+                              onChange={field.onChange} /* onChange is needed by Controller but won't be used due to disabled */
                             />
                           </FormControl>
                           <FormMessage />
@@ -622,7 +638,15 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                 <h3 className="text-lg font-semibold text-foreground">Image Preview</h3>
                 {watchedImages && watchedImages.length > 0 ? (
                   <div className="space-y-3 max-h-[calc(100vh-10rem)] overflow-y-auto p-2 rounded-md border bg-muted/10">
-                    {watchedImages.filter(img => img.type === 'image' && img.url && (img.url.startsWith('http://') || img.url.startsWith('https://') || img.url.startsWith('/')) ).map((image, index) => (
+                    {watchedImages.filter(img => {
+                        if (img.type !== 'image' || !img.url || img.url.trim() === '') return false;
+                        try {
+                            new URL(img.url); // Check if it's an absolute URL
+                            return true;
+                        } catch (_) {
+                            return img.url.startsWith('/'); // Or a relative path
+                        }
+                    }).map((image, index) => (
                       <div key={image.id || index} className="border p-3 rounded-lg shadow-sm bg-card">
                         <div className="relative aspect-video w-full rounded-md overflow-hidden border mb-2">
                           <Image
@@ -663,4 +687,6 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     </Card>
   );
 }
+    
+
     
