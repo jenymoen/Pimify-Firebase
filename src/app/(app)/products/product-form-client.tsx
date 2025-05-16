@@ -78,12 +78,12 @@ const keyValueEntrySchema = z.object({
 const mediaEntrySchema = z.object({
   id: z.string(),
   url: z.string().refine(val => {
-    if (val === '' || val === undefined) return true;
+    if (val === '' || val === undefined) return true; // Allow empty string
     try {
-      new URL(val);
+      new URL(val); // Check if it's an absolute URL
       return true;
     } catch (_) {
-      return val.startsWith('/'); 
+      return val.startsWith('/'); // Or if it's a relative path
     }
   }, {
     message: "Must be a valid HTTP/HTTPS URL, a relative path starting with '/', or empty.",
@@ -147,12 +147,12 @@ const productFormSchema = z.object({
     standardPriceAmount: z.coerce.number({ required_error: "Original price amount is required.", invalid_type_error: "Original price must be a number"}).min(0, "Original price cannot be negative"),
     standardPriceCurrency: z.string().length(3, "Currency code must be 3 letters").default("NOK"),
     salePriceAmount: z.preprocess(
-        (val) => (val === "" ? undefined : val), 
+        (val) => (val === "" || val === null || val === undefined ? undefined : val), 
         z.coerce.number({invalid_type_error: "Sale price must be a number"}).min(0, "Sale price cannot be negative").optional().nullable()
     ),
     salePriceCurrency: z.string().length(3, "Currency code must be 3 letters").optional().default("NOK"),
     costPriceAmount: z.preprocess(
-        (val) => (val === "" ? undefined : val), 
+        (val) => (val === "" || val === null || val === undefined ? undefined : val), 
         z.coerce.number({invalid_type_error: "Cost price must be a number"}).min(0, "Cost price cannot be negative").optional().nullable()
     ),
     costPriceCurrency: z.string().length(3, "Currency code must be 3 letters").optional().default("NOK"),
@@ -296,8 +296,10 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
           images: (data.media.images || []).filter(img => {
             if (!img.url || img.url.trim() === '') return false;
             if (img.type === 'image') {
+                // Check if it's a valid HTTP/HTTPS URL or a relative path starting with '/'
                 try { new URL(img.url); return true; } catch (_) { return img.url.startsWith('/'); }
             }
+            // For other types, assume URL is valid if present (can be more specific if needed)
             return true; 
           })
         },
@@ -481,7 +483,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
 
 
   return (
-    <Card className="max-w-6xl mx-auto">
+    <Card className="mx-auto">
       <CardHeader>
         <CardTitle className="text-2xl font-bold text-primary flex items-center gap-2">
           {existingProduct ? <Edit className="h-7 w-7"/> : <Package className="h-7 w-7"/>}
@@ -1020,6 +1022,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                   <div className="space-y-3 max-h-[calc(100vh-10rem)] overflow-y-auto p-2 rounded-md border bg-muted/10">
                     {watchedImages.filter(img => {
                         if (img.type !== 'image' || !img.url || img.url.trim() === '') return false;
+                        // Check if it's a valid HTTP/HTTPS URL or a relative path starting with '/'
                         try { new URL(img.url); return true; } catch (_) { return img.url.startsWith('/'); }
                     }).map((image, index) => (
                       <div key={image.id || index} className="border p-3 rounded-lg shadow-sm bg-card">
@@ -1031,8 +1034,11 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                             objectFit="contain"
                             data-ai-hint="product form image"
                             onError={(e) => {
-                              e.currentTarget.src = 'https://placehold.co/300x200.png?text=Invalid+URL';
-                              e.currentTarget.alt = 'Invalid image URL';
+                              // Attempt to prevent cycles in error handling
+                              if (!e.currentTarget.src.includes('placehold.co')) {
+                                e.currentTarget.src = 'https://placehold.co/300x200.png?text=Invalid+URL';
+                                e.currentTarget.alt = 'Invalid image URL';
+                              }
                             }}
                           />
                         </div>
@@ -1069,4 +1075,5 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     
 
     
+
 
