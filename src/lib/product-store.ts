@@ -1,7 +1,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { Product, PriceEntry } from '@/types/product'; 
+import type { Product, PriceEntry, ProductOption, ProductVariant } from '@/types/product';
 import { initialProductData, defaultMultilingualString } from '@/types/product';
 import { v4 as uuidv4 } from 'uuid';
 import { getCurrentTenantId } from './tenant';
@@ -25,21 +25,40 @@ const getProductStorageName = () => {
 export const useProductStore = create<ProductState>()(
   persist(
     (set, get) => ({
-      products: [], 
-      addProduct: (productData, aiSummary) => {
+      products: [],
+      addProduct: (productDataWithoutMeta, aiSummaryArgument) => {
         const newProduct: Product = {
+          // Start with initialProductData for all defaults
           ...initialProductData,
-          ...productData, 
-          id: productData.basicInfo.sku || uuidv4(),
-          aiSummary: aiSummary || { ...defaultMultilingualString },
-          pricingAndStock: productData.pricingAndStock ? {
-            standardPrice: productData.pricingAndStock.standardPrice || [],
-            salePrice: productData.pricingAndStock.salePrice || [],
-            costPrice: productData.pricingAndStock.costPrice || [],
-          } : { ...initialProductData.pricingAndStock },
+
+          // Explicitly spread known top-level sections from productDataWithoutMeta
+          basicInfo: productDataWithoutMeta.basicInfo,
+          attributesAndSpecs: productDataWithoutMeta.attributesAndSpecs,
+          media: productDataWithoutMeta.media,
+          marketingSEO: productDataWithoutMeta.marketingSEO,
+
+          // Handle pricingAndStock carefully (it's optional on Product)
+          pricingAndStock: productDataWithoutMeta.pricingAndStock ? {
+            standardPrice: productDataWithoutMeta.pricingAndStock.standardPrice || [],
+            salePrice: productDataWithoutMeta.pricingAndStock.salePrice || [],
+            costPrice: productDataWithoutMeta.pricingAndStock.costPrice || [],
+          } : { ...(initialProductData.pricingAndStock || { standardPrice: [], salePrice: [], costPrice: [] }) }, // Ensure fallback has arrays
+
+          // Crucially, include options and variants from productDataWithoutMeta
+          options: productDataWithoutMeta.options || [], // Ensure it's an array
+          variants: productDataWithoutMeta.variants || [], // Ensure it's an array
+
+          // Relations are not yet in the form, but good practice to include if they were
+          relations: productDataWithoutMeta.relations || initialProductData.relations,
+          localizationNorway: productDataWithoutMeta.localizationNorway || initialProductData.localizationNorway,
+
+          // Now set the metadata
+          id: productDataWithoutMeta.basicInfo.sku || uuidv4(), // Use SKU or generate new ID
+          aiSummary: aiSummaryArgument || { ...defaultMultilingualString }, // Use passed aiSummary
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
+
         const updatedProducts = [...get().products, newProduct];
         set({ products: updatedProducts });
         return newProduct;
@@ -47,9 +66,9 @@ export const useProductStore = create<ProductState>()(
       updateProduct: (productId, productUpdate) => {
         set(state => ({
           products: state.products.map(p =>
-            p.id === productId ? { 
-              ...p, 
-              ...productUpdate, 
+            p.id === productId ? {
+              ...p,
+              ...productUpdate,
               pricingAndStock: productUpdate.pricingAndStock ? {
                   ...p.pricingAndStock,
                   ...productUpdate.pricingAndStock,
@@ -57,7 +76,10 @@ export const useProductStore = create<ProductState>()(
                   salePrice: productUpdate.pricingAndStock.salePrice || p.pricingAndStock?.salePrice || [],
                   costPrice: productUpdate.pricingAndStock.costPrice || p.pricingAndStock?.costPrice || [],
               } : p.pricingAndStock,
-              updatedAt: new Date().toISOString() 
+              // Ensure options and variants are arrays if present in productUpdate, or keep existing
+              options: productUpdate.options ? [...productUpdate.options] : p.options || [],
+              variants: productUpdate.variants ? [...productUpdate.variants] : p.variants || [],
+              updatedAt: new Date().toISOString()
             } : p
           )
         }));
@@ -79,23 +101,25 @@ export const useProductStore = create<ProductState>()(
         const productMap = new Map(existingProducts.map(p => [p.id, p]));
 
         newProducts.forEach(np => {
-          const id = np.id || np.basicInfo?.sku || uuidv4(); 
+          const id = np.id || np.basicInfo?.sku || uuidv4();
           const existingP = productMap.get(id);
-          productMap.set(id, { 
-            ...initialProductData, 
-            ...existingP, 
-            ...np, 
-            id, 
+          productMap.set(id, {
+            ...initialProductData,
+            ...existingP,
+            ...np,
+            id,
             pricingAndStock: np.pricingAndStock ? {
                 standardPrice: np.pricingAndStock.standardPrice || existingP?.pricingAndStock?.standardPrice || [],
                 salePrice: np.pricingAndStock.salePrice || existingP?.pricingAndStock?.salePrice || [],
                 costPrice: np.pricingAndStock.costPrice || existingP?.pricingAndStock?.costPrice || [],
-            } : (existingP?.pricingAndStock || initialProductData.pricingAndStock),
+            } : (existingP?.pricingAndStock || { ...(initialProductData.pricingAndStock || { standardPrice: [], salePrice: [], costPrice: [] }) }),
+             options: np.options || existingP?.options || [],
+             variants: np.variants || existingP?.variants || [],
             updatedAt: new Date().toISOString(),
-            createdAt: existingP?.createdAt || new Date().toISOString() 
+            createdAt: existingP?.createdAt || new Date().toISOString()
           });
         });
-        
+
         const updatedProducts = Array.from(productMap.values());
         set({ products: updatedProducts });
       },
@@ -105,15 +129,7 @@ export const useProductStore = create<ProductState>()(
     }),
     {
       name: getProductStorageName(), // Use dynamic name
-      storage: createJSONStorage(() => localStorage), 
-      // onRehydrateStorage: () => { // Optional: useful for debugging
-      //   console.log(`Product store for tenant "${getCurrentTenantId()}" rehydrated.`);
-      //   return (state, error) => {
-      //     if (error) {
-      //       console.error(`An error occurred during product store rehydration for tenant "${getCurrentTenantId()}":`, error);
-      //     }
-      //   };
-      // }
+      storage: createJSONStorage(() => localStorage),
     }
   )
 );
@@ -124,13 +140,20 @@ if (typeof window !== 'undefined') {
   const tenantId = getCurrentTenantId();
   const storageName = `products-storage-${tenantId}`;
   const productsInitializedKey = `products_initialized-${tenantId}`;
-  
+
   const productsInitialized = localStorage.getItem(productsInitializedKey);
   const currentProductsRaw = localStorage.getItem(storageName);
-  const currentProducts = currentProductsRaw ? JSON.parse(currentProductsRaw)?.state?.products : [];
+  let currentProducts: Product[] = [];
+  try {
+    currentProducts = currentProductsRaw ? JSON.parse(currentProductsRaw)?.state?.products : [];
+  } catch (e) {
+    console.error("Failed to parse products from localStorage", e);
+    currentProducts = [];
+  }
+
 
   if (!productsInitialized || (!currentProducts || currentProducts.length === 0)) {
-    if (tenantId === 'default_host' || tenantId.startsWith('default_')) { // Only seed for default or localhost for demo
+    if (tenantId === 'default_host' || tenantId.startsWith('default_') || tenantId.startsWith('localhost')) { // Only seed for default or localhost for demo
         const exampleProduct: Product = {
             id: 'EXAMPLE-SKU-001',
             basicInfo: {
@@ -170,6 +193,16 @@ if (typeof window !== 'undefined') {
                 salePrice: [{id: uuidv4(), amount: 8999, currency: 'NOK'}],
                 costPrice: [{id: uuidv4(), amount: 6000, currency: 'NOK'}],
             },
+            options: [
+              { id: uuidv4(), name: "Color", values: ["Silver", "Space Gray"]},
+              { id: uuidv4(), name: "Storage", values: ["256GB", "512GB"]}
+            ],
+            variants: [
+              { id: uuidv4(), sku: "EX-LT-SIL-256", optionValues: {"Color": "Silver", "Storage": "256GB"}, standardPrice: [{id: uuidv4(), amount: 9999, currency: 'NOK'}]},
+              { id: uuidv4(), sku: "EX-LT-SIL-512", optionValues: {"Color": "Silver", "Storage": "512GB"}, standardPrice: [{id: uuidv4(), amount: 10999, currency: 'NOK'}]},
+              { id: uuidv4(), sku: "EX-LT-GRY-256", optionValues: {"Color": "Space Gray", "Storage": "256GB"}, standardPrice: [{id: uuidv4(), amount: 9999, currency: 'NOK'}]},
+              { id: uuidv4(), sku: "EX-LT-GRY-512", optionValues: {"Color": "Space Gray", "Storage": "512GB"}, standardPrice: [{id: uuidv4(), amount: 10999, currency: 'NOK'}]}
+            ],
             aiSummary: { en: 'A high-performance Silver laptop with 16GB RAM and 512GB SSD.', no: 'En høytytende sølvfarget bærbar PC med 16 GB RAM og 512 GB SSD.' },
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
