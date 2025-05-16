@@ -18,8 +18,8 @@ export default function HomePage() {
           </svg>
           <span className="text-xl font-semibold text-primary">Pimify</span>
         </Link>
-        <Link href="/products" passHref>
-          <Button size="md"> {/* Changed variant and removed custom classes */}
+        <Link href="/dashboard" passHref> {/* Changed from /products to /dashboard */}
+          <Button size="md">
             <LogIn className="mr-2 h-4 w-4" /> Login
           </Button>
         </Link>
@@ -37,7 +37,7 @@ export default function HomePage() {
         <p className="text-xl text-foreground/80 mb-8 max-w-2xl">
           Your intuitive Product Information Management (PIM) system designed to streamline your product data and enhance your workflow.
         </p>
-        <Link href="/products" passHref>
+        <Link href="/dashboard" passHref> {/* Changed from /products to /dashboard */}
           <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground">
             Go to Products
           </Button>

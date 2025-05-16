@@ -46,7 +46,7 @@ export function AppShell({ children }: AppShellProps) {
   const sidebarContent = (
     <>
       <SidebarHeader className="p-4">
-        <Link href="/products" className="flex items-center gap-2">
+        <Link href="/dashboard" className="flex items-center gap-2"> {/* Changed from /products to /dashboard */}
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-8 w-8 text-primary">
             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
           </svg>
@@ -86,7 +86,7 @@ export function AppShell({ children }: AppShellProps) {
       {isMobile ? (
         <div className="flex flex-col min-h-screen">
           <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-card px-4">
-            <Link href="/products" className="flex items-center gap-2">
+            <Link href="/dashboard" className="flex items-center gap-2"> {/* Changed from /products to /dashboard */}
                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-7 w-7 text-primary">
                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
                </svg>
@@ -118,3 +118,4 @@ export function AppShell({ children }: AppShellProps) {
     </SidebarProvider>
   );
 }
+
