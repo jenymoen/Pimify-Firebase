@@ -28,33 +28,11 @@ export const useProductStore = create<ProductState>()(
       products: [],
       addProduct: (productDataWithoutMeta, aiSummaryArgument) => {
         const newProduct: Product = {
-          // Start with initialProductData for all defaults
-          ...initialProductData,
-
-          // Explicitly spread known top-level sections from productDataWithoutMeta
-          basicInfo: productDataWithoutMeta.basicInfo,
-          attributesAndSpecs: productDataWithoutMeta.attributesAndSpecs,
-          media: productDataWithoutMeta.media,
-          marketingSEO: productDataWithoutMeta.marketingSEO,
-
-          // Handle pricingAndStock carefully (it's optional on Product)
-          pricingAndStock: productDataWithoutMeta.pricingAndStock ? {
-            standardPrice: productDataWithoutMeta.pricingAndStock.standardPrice || [],
-            salePrice: productDataWithoutMeta.pricingAndStock.salePrice || [],
-            costPrice: productDataWithoutMeta.pricingAndStock.costPrice || [],
-          } : { ...(initialProductData.pricingAndStock || { standardPrice: [], salePrice: [], costPrice: [] }) }, // Ensure fallback has arrays
-
-          // Crucially, include options and variants from productDataWithoutMeta
-          options: productDataWithoutMeta.options || [], // Ensure it's an array
-          variants: productDataWithoutMeta.variants || [], // Ensure it's an array
-
-          // Relations are not yet in the form, but good practice to include if they were
-          relations: productDataWithoutMeta.relations || initialProductData.relations,
-          localizationNorway: productDataWithoutMeta.localizationNorway || initialProductData.localizationNorway,
-
-          // Now set the metadata
-          id: productDataWithoutMeta.basicInfo.sku || uuidv4(), // Use SKU or generate new ID
-          aiSummary: aiSummaryArgument || { ...defaultMultilingualString }, // Use passed aiSummary
+          ...initialProductData, // Base defaults
+          // Spread all fields from productDataWithoutMeta, which includes options and variants
+          ...productDataWithoutMeta, 
+          id: productDataWithoutMeta.basicInfo.sku || uuidv4(), 
+          aiSummary: aiSummaryArgument || { ...defaultMultilingualString }, 
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
@@ -63,25 +41,39 @@ export const useProductStore = create<ProductState>()(
         set({ products: updatedProducts });
         return newProduct;
       },
-      updateProduct: (productId, productUpdate) => {
+      updateProduct: (productId, productUpdateData) => {
         set(state => ({
-          products: state.products.map(p =>
-            p.id === productId ? {
-              ...p,
-              ...productUpdate,
-              pricingAndStock: productUpdate.pricingAndStock ? {
+          products: state.products.map(p => {
+            if (p.id === productId) {
+              // Create a new product object by merging
+              const updatedProduct: Product = {
+                ...p, // Start with the old product
+                ...productUpdateData, // Spread the general updates
+                
+                // Explicitly handle potentially nested or complex fields if productUpdateData might only partially define them
+                basicInfo: { ...p.basicInfo, ...productUpdateData.basicInfo },
+                attributesAndSpecs: { ...p.attributesAndSpecs, ...productUpdateData.attributesAndSpecs },
+                media: productUpdateData.media ? { ...p.media, ...productUpdateData.media } : p.media,
+                marketingSEO: { ...p.marketingSEO, ...productUpdateData.marketingSEO },
+                
+                pricingAndStock: productUpdateData.pricingAndStock ? {
                   ...p.pricingAndStock,
-                  ...productUpdate.pricingAndStock,
-                  standardPrice: productUpdate.pricingAndStock.standardPrice || p.pricingAndStock?.standardPrice || [],
-                  salePrice: productUpdate.pricingAndStock.salePrice || p.pricingAndStock?.salePrice || [],
-                  costPrice: productUpdate.pricingAndStock.costPrice || p.pricingAndStock?.costPrice || [],
-              } : p.pricingAndStock,
-              // Ensure options and variants are arrays if present in productUpdate, or keep existing
-              options: productUpdate.options ? [...productUpdate.options] : p.options || [],
-              variants: productUpdate.variants ? [...productUpdate.variants] : p.variants || [],
-              updatedAt: new Date().toISOString()
-            } : p
-          )
+                  ...productUpdateData.pricingAndStock,
+                  standardPrice: productUpdateData.pricingAndStock.standardPrice !== undefined ? productUpdateData.pricingAndStock.standardPrice : p.pricingAndStock?.standardPrice || [],
+                  salePrice: productUpdateData.pricingAndStock.salePrice !== undefined ? productUpdateData.pricingAndStock.salePrice : p.pricingAndStock?.salePrice || [],
+                  costPrice: productUpdateData.pricingAndStock.costPrice !== undefined ? productUpdateData.pricingAndStock.costPrice : p.pricingAndStock?.costPrice || [],
+                } : p.pricingAndStock,
+                
+                options: productUpdateData.options !== undefined ? [...productUpdateData.options] : p.options || [],
+                variants: productUpdateData.variants !== undefined ? [...productUpdateData.variants] : p.variants || [],
+                
+                aiSummary: productUpdateData.aiSummary ? { ...p.aiSummary, ...productUpdateData.aiSummary } : p.aiSummary,
+                updatedAt: new Date().toISOString(),
+              };
+              return updatedProduct;
+            }
+            return p;
+          })
         }));
       },
       deleteProduct: (productId) => {
@@ -128,14 +120,12 @@ export const useProductStore = create<ProductState>()(
       }
     }),
     {
-      name: getProductStorageName(), // Use dynamic name
+      name: getProductStorageName(), 
       storage: createJSONStorage(() => localStorage),
     }
   )
 );
 
-// Initialize with example product only for a specific tenant or if no products exist for the current tenant
-// This logic runs when the module is first loaded.
 if (typeof window !== 'undefined') {
   const tenantId = getCurrentTenantId();
   const storageName = `products-storage-${tenantId}`;
@@ -143,17 +133,17 @@ if (typeof window !== 'undefined') {
 
   const productsInitialized = localStorage.getItem(productsInitializedKey);
   const currentProductsRaw = localStorage.getItem(storageName);
-  let currentProducts: Product[] = [];
+  let currentProductsState: { state?: { products: Product[] } } = {};
   try {
-    currentProducts = currentProductsRaw ? JSON.parse(currentProductsRaw)?.state?.products : [];
+    currentProductsState = currentProductsRaw ? JSON.parse(currentProductsRaw) : {};
   } catch (e) {
-    console.error("Failed to parse products from localStorage", e);
-    currentProducts = [];
+    console.error("Failed to parse products from localStorage during initial check", e);
   }
+  const currentProducts = currentProductsState?.state?.products || [];
 
 
-  if (!productsInitialized || (!currentProducts || currentProducts.length === 0)) {
-    if (tenantId === 'default_host' || tenantId.startsWith('default_') || tenantId.startsWith('localhost')) { // Only seed for default or localhost for demo
+  if (!productsInitialized || currentProducts.length === 0) {
+    if (tenantId === 'default_host' || tenantId.startsWith('default_') || tenantId.startsWith('localhost')) { 
         const exampleProduct: Product = {
             id: 'EXAMPLE-SKU-001',
             basicInfo: {
@@ -198,22 +188,26 @@ if (typeof window !== 'undefined') {
               { id: uuidv4(), name: "Storage", values: ["256GB", "512GB"]}
             ],
             variants: [
-              { id: uuidv4(), sku: "EX-LT-SIL-256", optionValues: {"Color": "Silver", "Storage": "256GB"}, standardPrice: [{id: uuidv4(), amount: 9999, currency: 'NOK'}]},
-              { id: uuidv4(), sku: "EX-LT-SIL-512", optionValues: {"Color": "Silver", "Storage": "512GB"}, standardPrice: [{id: uuidv4(), amount: 10999, currency: 'NOK'}]},
-              { id: uuidv4(), sku: "EX-LT-GRY-256", optionValues: {"Color": "Space Gray", "Storage": "256GB"}, standardPrice: [{id: uuidv4(), amount: 9999, currency: 'NOK'}]},
-              { id: uuidv4(), sku: "EX-LT-GRY-512", optionValues: {"Color": "Space Gray", "Storage": "512GB"}, standardPrice: [{id: uuidv4(), amount: 10999, currency: 'NOK'}]}
+              { id: uuidv4(), sku: "EX-LT-SIL-256", optionValues: {"Color": "Silver", "Storage": "256GB"}, standardPrice: [{id: uuidv4(), amount: 9999, currency: 'NOK'}], salePrice: []},
+              { id: uuidv4(), sku: "EX-LT-SIL-512", optionValues: {"Color": "Silver", "Storage": "512GB"}, standardPrice: [{id: uuidv4(), amount: 10999, currency: 'NOK'}], salePrice: []},
+              { id: uuidv4(), sku: "EX-LT-GRY-256", optionValues: {"Color": "Space Gray", "Storage": "256GB"}, standardPrice: [{id: uuidv4(), amount: 9999, currency: 'NOK'}], salePrice: []},
+              { id: uuidv4(), sku: "EX-LT-GRY-512", optionValues: {"Color": "Space Gray", "Storage": "512GB"}, standardPrice: [{id: uuidv4(), amount: 10999, currency: 'NOK'}], salePrice: []}
             ],
             aiSummary: { en: 'A high-performance Silver laptop with 16GB RAM and 512GB SSD.', no: 'En høytytende sølvfarget bærbar PC med 16 GB RAM og 512 GB SSD.' },
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         };
-        useProductStore.setState({ products: [exampleProduct] }); // Directly set state for initial seed
-        localStorage.setItem(productsInitializedKey, 'true');
-        console.log(`Seeded example product for tenant: ${tenantId}`);
+        // Use a timeout to ensure the store is initialized before setting state
+        // This can help if the persist middleware is still rehydrating
+        setTimeout(() => {
+             useProductStore.setState({ products: [exampleProduct] });
+             localStorage.setItem(productsInitializedKey, 'true');
+             console.log(`Seeded example product for tenant: ${tenantId}`);
+        }, 0);
     } else {
-        // For other tenants, just mark as initialized without seeding, or seed with tenant-specific examples if desired
         localStorage.setItem(productsInitializedKey, 'true');
         console.log(`Initialized (no seed) for new tenant: ${tenantId}`);
     }
   }
 }
+

@@ -58,7 +58,7 @@ const requiredMultilingualStringSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "At least one language (English or Norwegian) is required.",
-      path: ['en'], // Or provide a path to a general field or the object itself
+      path: ['en'], 
     });
   }
 });
@@ -78,15 +78,16 @@ const keyValueEntrySchema = z.object({
 const mediaEntrySchema = z.object({
   id: z.string(),
   url: z.string().refine(val => {
-    if (val === '' || val === undefined) return true;
+    if (val === '' || val === undefined) return true; // Allow empty URL for removal
     try {
       const url = new URL(val);
       return url.protocol === "http:" || url.protocol === "https:";
     } catch (_) {
-      return val.startsWith('/');
+      // Allow relative paths starting with '/'
+      return val.startsWith('/'); 
     }
   }, {
-    message: "Must be a valid HTTP/HTTPS URL or a relative path starting with '/'.",
+    message: "Must be a valid HTTP/HTTPS URL or a relative path starting with '/'. Leave empty to remove image.",
   }).optional(),
   altText: baseMultilingualStringSchema.optional(),
   type: z.enum(['image', 'video', '3d_model', 'manual', 'certificate']),
@@ -104,14 +105,14 @@ const productVariantSchema = z.object({
     id: z.string(),
     sku: z.string().min(1, "Variant SKU is required."),
     gtin: z.string().optional(),
-    optionValues: z.record(z.string()), // e.g., { "Color": "Red", "Size": "M" }
+    optionValues: z.record(z.string()), 
     standardPriceAmount: z.preprocess(
-        (val) => (val === "" || val === null || val === undefined ? undefined : val),
+        (val) => (String(val).trim() === "" || val === null || val === undefined ? undefined : val),
         z.coerce.number({invalid_type_error: "Price must be a number"}).min(0, "Price cannot be negative").optional().nullable()
     ),
     standardPriceCurrency: z.string().length(3, "Currency code must be 3 letters").optional().default("NOK"),
     salePriceAmount: z.preprocess(
-        (val) => (val === "" || val === null || val === undefined ? undefined : val),
+        (val) => (String(val).trim() === "" || val === null || val === undefined ? undefined : val),
         z.coerce.number({invalid_type_error: "Sale price must be a number"}).min(0, "Sale price cannot be negative").optional().nullable()
     ),
     salePriceCurrency: z.string().length(3, "Currency code must be 3 letters").optional().default("NOK"),
@@ -146,17 +147,17 @@ const productFormSchema = z.object({
   }),
   pricingAndStock: z.object({
     standardPriceAmount: z.preprocess(
-        (val) => (val === "" || val === null || val === undefined ? undefined : val),
+        (val) => (String(val).trim() === "" || val === null || val === undefined ? undefined : val),
         z.coerce.number({ required_error: "Original price amount is required.", invalid_type_error: "Original price must be a number"}).min(0, "Original price cannot be negative")
     ),
     standardPriceCurrency: z.string().length(3, "Currency code must be 3 letters").default("NOK"),
     salePriceAmount: z.preprocess(
-        (val) => (val === "" || val === null || val === undefined ? undefined : val),
+        (val) => (String(val).trim() === "" || val === null || val === undefined ? undefined : val),
         z.coerce.number({invalid_type_error: "Sale price must be a number"}).min(0, "Sale price cannot be negative").optional().nullable()
     ),
     salePriceCurrency: z.string().length(3, "Currency code must be 3 letters").optional().default("NOK"),
     costPriceAmount: z.preprocess(
-        (val) => (val === "" || val === null || val === undefined ? undefined : val),
+        (val) => (String(val).trim() === "" || val === null || val === undefined ? undefined : val),
         z.coerce.number({invalid_type_error: "Cost price must be a number"}).min(0, "Cost price cannot be negative").optional().nullable()
     ),
     costPriceCurrency: z.string().length(3, "Currency code must be 3 letters").optional().default("NOK"),
@@ -217,9 +218,13 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         costPriceAmount: existingProduct.pricingAndStock?.costPrice?.[0]?.amount,
         costPriceCurrency: existingProduct.pricingAndStock?.costPrice?.[0]?.currency || "NOK",
       },
-      options: (existingProduct.options || []).map(opt => ({...opt, values: Array.isArray(opt.values) ? opt.values.join(',') : ''})),
+      options: (existingProduct.options || []).map(opt => ({
+        id: opt.id,
+        name: opt.name,
+        values: opt.values.join(','), // store has string[], form has string
+      })),
       variants: (existingProduct.variants || []).map(v => {
-        return {
+        return { 
             id: v.id,
             sku: v.sku,
             gtin: v.gtin || '',
@@ -305,44 +310,48 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
           images: (data.media.images || []).filter(img => {
             if (!img.url || img.url.trim() === '') return false;
              try {
-                const url = new URL(img.url);
+                const url = new URL(img.url); // This will throw if img.url is not a valid absolute URL
                 return url.protocol === "http:" || url.protocol === "https:";
               } catch (_) {
+                // If it's not an absolute URL, check if it's a valid relative path
                 return img.url.startsWith('/');
               }
           })
         },
         marketingSEO: data.marketingSEO,
         aiSummary: data.aiSummary,
-        pricingAndStock: {
+        pricingAndStock: { // Base pricing
             standardPrice: [],
             salePrice: [],
             costPrice: [],
         },
-        options: (data.options || []).map(opt => ({
-            ...opt,
+        options: (data.options || []).map(opt => ({ // Map form options back to store structure
+            id: opt.id,
+            name: opt.name,
             values: Array.isArray(opt.values) ? opt.values : (typeof opt.values === 'string' ? opt.values.split(',').map(v => v.trim()).filter(v => v) : []),
         })),
         variants: (data.variants || []).map(vFormData => {
-          const stdPriceEntries = (vFormData.standardPriceAmount !== undefined && vFormData.standardPriceAmount !== null)
+          const stdPriceEntries: PriceEntry[] = (vFormData.standardPriceAmount !== undefined && vFormData.standardPriceAmount !== null)
               ? [{ id: uuidv4(), amount: Number(vFormData.standardPriceAmount), currency: vFormData.standardPriceCurrency || "NOK" }]
-              : undefined;
-          const slPriceEntries = (vFormData.salePriceAmount !== undefined && vFormData.salePriceAmount !== null)
+              : []; // Use empty array if no price
+          const slPriceEntries: PriceEntry[] = (vFormData.salePriceAmount !== undefined && vFormData.salePriceAmount !== null)
               ? [{ id: uuidv4(), amount: Number(vFormData.salePriceAmount), currency: vFormData.salePriceCurrency || "NOK" }]
-              : undefined;
+              : []; // Use empty array if no price
 
           const variantForPayload: ProductVariant = {
             id: vFormData.id,
             sku: vFormData.sku,
             optionValues: vFormData.optionValues,
+            standardPrice: stdPriceEntries,
+            salePrice: slPriceEntries,
+            // costPrice is not in variant form schema currently
           };
           if (vFormData.gtin) variantForPayload.gtin = vFormData.gtin;
-          if (stdPriceEntries) variantForPayload.standardPrice = stdPriceEntries;
-          if (slPriceEntries) variantForPayload.salePrice = slPriceEntries;
           return variantForPayload;
         }),
       };
 
+      // Populate base pricingAndStock from form
       if (data.pricingAndStock) {
         if (data.pricingAndStock.standardPriceAmount !== undefined && data.pricingAndStock.standardPriceAmount !== null) {
             productPayloadForSave.pricingAndStock!.standardPrice = [{
@@ -371,14 +380,14 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       if (existingProduct) {
         const {id, createdAt, updatedAt, ...updatePayload} = productPayloadForSave;
         storeUpdateProduct(existingProduct.id, updatePayload);
-        toast({ title: "Product Updated", description: `"${data.basicInfo.name.en || data.basicInfo.name.no}" has been successfully updated.` });
+        toast({ title: "Product Updated", description: `"${data.basicInfo.name.en || data.basicInfo.name.no || data.basicInfo.sku}" has been successfully updated.` });
       } else {
         const { id, createdAt, updatedAt, aiSummary: _aiSummaryFromPayload, ...productDataForStore } = productPayloadForSave;
         const newProd = addProduct(productDataForStore, productPayloadForSave.aiSummary);
-        toast({ title: "Product Created", description: `"${newProd.basicInfo.name.en || newProd.basicInfo.name.no}" has been successfully created.` });
+        toast({ title: "Product Created", description: `"${newProd.basicInfo.name.en || newProd.basicInfo.name.no || newProd.basicInfo.sku}" has been successfully created.` });
       }
       router.push("/products");
-      router.refresh();
+      router.refresh(); // ensures data is re-fetched on the product list page if it uses server components
     } catch (error) {
       console.error("Submission error:", error);
       toast({ title: "Error", description: "Failed to save product. Please try again.", variant: "destructive" });
@@ -423,7 +432,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
 
       if (result.summary) {
         form.setValue("aiSummary.en", result.summary, { shouldValidate: true, shouldDirty: true });
-        form.setValue("aiSummary.no", result.summary + " (automatisk oppsummert)", { shouldValidate: true, shouldDirty: true });
+        form.setValue("aiSummary.no", result.summary + " (automatisk oppsummert)", { shouldValidate: true, shouldDirty: true }); // Example for Norwegian
         toast({ title: "AI Summary Generated", description: "Summary has been populated." });
       } else {
         toast({ title: "AI Summary Failed", description: "Could not generate summary.", variant: "destructive" });
@@ -465,7 +474,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
 
     const parsedOptions = validOptions.map(opt => ({
         name: opt.name,
-        values: Array.isArray(opt.values) ? opt.values : (typeof opt.values === 'string' ? opt.values.split(',').map(v => v.trim()).filter(v => v) : [])
+        // opt.values is already string[] here due to Zod transform on productOptionSchema
+        values: Array.isArray(opt.values) ? opt.values : [], 
     }));
 
 
@@ -774,7 +784,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                                 <FormField control={form.control} name={`variants.${index}.gtin`} render={({ field }) => ( <Input {...field} value={field.value || ''} placeholder="Variant GTIN" /> )} />
                                             </TableCell>
                                             <TableCell>
-                                                <FormField control={form.control} name={`variants.${index}.standardPriceAmount`} render={({ field }) => ( <Input type="number" {...field} value={field.value ?? ''} placeholder="Amount"/> )} />
+                                                <FormField control={form.control} name={`variants.${index}.standardPriceAmount`} render={({ field }) => ( <Input type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))} placeholder="Amount"/> )} />
                                                  <FormMessage>{form.formState.errors.variants?.[index]?.standardPriceAmount?.message}</FormMessage>
                                             </TableCell>
                                             <TableCell>
@@ -782,7 +792,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                                  <FormMessage>{form.formState.errors.variants?.[index]?.standardPriceCurrency?.message}</FormMessage>
                                             </TableCell>
                                             <TableCell>
-                                                <FormField control={form.control} name={`variants.${index}.salePriceAmount`} render={({ field }) => ( <Input type="number" {...field} value={field.value ?? ''} placeholder="Amount"/> )} />
+                                                <FormField control={form.control} name={`variants.${index}.salePriceAmount`} render={({ field }) => ( <Input type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))} placeholder="Amount"/> )} />
                                                  <FormMessage>{form.formState.errors.variants?.[index]?.salePriceAmount?.message}</FormMessage>
                                             </TableCell>
                                             <TableCell>
@@ -1108,3 +1118,4 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     </Card>
   );
 }
+
