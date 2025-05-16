@@ -23,14 +23,14 @@ interface ShopifyVariantShopify {
   id: number;
   product_id: number;
   title: string;
-  price: string; // This is usually the current selling price
-  compare_at_price: string | null; // This is often the "original" or "strikethrough" price
+  price: string; 
+  compare_at_price: string | null; 
   sku: string | null;
   barcode: string | null; // GTIN
   inventory_quantity: number;
-  // available_for_sale: boolean; // useful
-  // option1: string | null; // e.g., Color
-  // option2: string | null; // e.g., Size
+  // available_for_sale: boolean; 
+  // option1: string | null; 
+  // option2: string | null; 
   // option3: string | null;
   // presentment_prices: Array<{ price: { amount: string; currency_code: string }, compare_at_price: { amount: string; currency_code: string } | null }>;
 }
@@ -78,32 +78,30 @@ function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify): Product 
 
   const standardPrice: PriceEntry[] = [];
   const salePrice: PriceEntry[] = [];
+  
+  // Default currency; ideally, extract from Shopify if consistently available per price
+  const shopifyCurrency = "USD"; // Placeholder: Shopify might return currency with prices. Adjust if needed.
 
   if (firstVariant) {
-    const shopifyCurrency = "USD"; // Shopify API might return currency per variant/price, for now default or extract if available
-                                   // Example: firstVariant.presentment_prices[0].price.currency_code
-    
     const currentPrice = parseFloat(firstVariant.price);
     const originalPrice = firstVariant.compare_at_price ? parseFloat(firstVariant.compare_at_price) : null;
 
     if (originalPrice && originalPrice > currentPrice) {
-      // We have a sale price scenario
       standardPrice.push({
         id: uuidv4(),
         amount: originalPrice,
-        currency: shopifyCurrency, // Placeholder, ideally get from Shopify
+        currency: shopifyCurrency, 
       });
       salePrice.push({
         id: uuidv4(),
         amount: currentPrice,
-        currency: shopifyCurrency, // Placeholder
+        currency: shopifyCurrency,
       });
     } else {
-      // No sale, or compare_at_price is not higher
       standardPrice.push({
         id: uuidv4(),
         amount: currentPrice,
-        currency: shopifyCurrency, // Placeholder
+        currency: shopifyCurrency,
       });
     }
   }
@@ -153,9 +151,29 @@ function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify): Product 
   };
 }
 
+function parseLinkHeader(linkHeader: string | null): string | null {
+  if (!linkHeader) return null;
+  const links = linkHeader.split(',');
+  const nextLink = links.find(link => link.includes('rel="next"'));
+  if (nextLink) {
+    const match = nextLink.match(/<([^>]+)>/);
+    if (match && match[1]) {
+      try {
+        const url = new URL(match[1]);
+        return url.searchParams.get('page_info');
+      } catch (e) {
+        console.error("Error parsing next link URL for page_info:", e);
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
+
 export async function POST(request: NextRequest) {
   try {
-    const { storeUrl, apiKey } = await request.json();
+    const { storeUrl, apiKey, pageInfo } = await request.json();
 
     if (!storeUrl) {
       return NextResponse.json({ error: 'Shopify store URL is required.' }, { status: 400 });
@@ -164,7 +182,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Shopify Admin API Access Token is required.' }, { status: 400 });
     }
 
-    const shopifyApiUrl = `https://${storeUrl.replace(/^https?:\/\//, '')}/admin/api/2024-04/products.json?limit=50`; 
+    let shopifyApiUrl = `https://${storeUrl.replace(/^https?:\/\//, '')}/admin/api/2024-04/products.json?limit=50`; 
+    if (pageInfo) {
+      shopifyApiUrl += `&page_info=${pageInfo}`;
+    }
+
 
     const shopifyResponse = await fetch(shopifyApiUrl, {
       method: 'GET',
@@ -187,11 +209,17 @@ export async function POST(request: NextRequest) {
     }
 
     const productsToImport = shopifyData.products.map((product: ShopifyProductShopify) => mapShopifyToPimProduct(product));
+    const nextPageCursor = parseLinkHeader(shopifyResponse.headers.get('Link'));
 
-    return NextResponse.json({ products: productsToImport, message: `${productsToImport.length} products imported from ${storeUrl}.` });
+    return NextResponse.json({ 
+      products: productsToImport, 
+      message: `${productsToImport.length} products imported from ${storeUrl}. ${nextPageCursor ? 'More products available.' : 'All products imported.'}`,
+      nextPageCursor 
+    });
 
   } catch (error: any) {
     console.error('Shopify Import API Error:', error);
     return NextResponse.json({ error: error.message || 'An internal server error occurred during Shopify import.' }, { status: 500 });
   }
 }
+

@@ -31,19 +31,18 @@ export default function ImportExportPage() {
 
   const [localStoreUrl, setLocalStoreUrl] = useState('');
   const [localApiKey, setLocalApiKey] = useState('');
-  const [clientShopifyReady, setClientShopifyReady] = useState(false); // For client-side readiness
+  const [clientShopifyReady, setClientShopifyReady] = useState(false); 
 
   const [isImportingFromShopify, setIsImportingFromShopify] = useState(false);
   const [isExportingToShopify, setIsExportingToShopify] = useState(false);
+  const [nextPageCursor, setNextPageCursor] = useState<string | null>(null);
 
   useEffect(() => {
-    // Sync local input state with Zustand store state after hydration
     setLocalStoreUrl(storeUrl);
     setLocalApiKey(apiKey);
   }, [storeUrl, apiKey]);
 
   useEffect(() => {
-    // Determine Shopify readiness on the client after hydration
     setClientShopifyReady(isConfigured());
   }, [isConfigured, storeUrl, apiKey]);
 
@@ -97,7 +96,7 @@ export default function ImportExportPage() {
   const handleSaveShopifyConfig = () => {
     setShopifyStoreUrl(localStoreUrl);
     setShopifyApiKey(localApiKey);
-    // clientShopifyReady will update via its own useEffect
+    setNextPageCursor(null); // Reset pagination on config change
     toast({ title: 'Shopify Configuration Saved', description: 'Your Shopify Store URL and API Key have been saved locally.' });
   };
 
@@ -112,7 +111,7 @@ export default function ImportExportPage() {
       const response = await fetch('/api/shopify/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storeUrl, apiKey }),
+        body: JSON.stringify({ storeUrl, apiKey, pageInfo: nextPageCursor }),
       });
 
       const data = await response.json();
@@ -122,9 +121,11 @@ export default function ImportExportPage() {
       }
       
       storeImportProducts(data.products as Product[]);
+      setNextPageCursor(data.nextPageCursor || null);
       toast({ title: 'Shopify Import Successful', description: data.message });
     } catch (error: any) {
       console.error('Shopify Import Error:', error);
+      setNextPageCursor(null); // Reset cursor on error
       toast({ title: 'Shopify Import Failed', description: error.message || 'An error occurred.', variant: 'destructive' });
     } finally {
       setIsImportingFromShopify(false);
@@ -289,7 +290,9 @@ export default function ImportExportPage() {
               disabled={!clientShopifyReady || isImportingFromShopify || isExportingToShopify}
             >
               {isImportingFromShopify ? <RefreshCw className="mr-2 h-5 w-5 animate-spin" /> : <DownloadCloud className="mr-2 h-5 w-5" />}
-              {isImportingFromShopify ? 'Importing...' : 'Import from Shopify'}
+              {isImportingFromShopify 
+                ? 'Importing...' 
+                : (nextPageCursor ? 'Import Next 50 Products' : 'Import from Shopify')}
             </Button>
             <Button 
               variant="outline" 
