@@ -114,11 +114,18 @@ export default function ImportExportPage() {
         body: JSON.stringify({ storeUrl, apiKey, pageInfo: nextPageCursor }),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.error || `API request failed: ${response.statusText}`);
+        let errorBody = `API request failed: ${response.status} ${response.statusText}`;
+        try {
+          const errorData = await response.json();
+          errorBody = errorData.error || JSON.stringify(errorData);
+        } catch (e) {
+          errorBody = await response.text(); // Fallback to text if JSON parsing fails
+        }
+        throw new Error(errorBody);
       }
+      
+      const data = await response.json(); // Safe to parse as JSON if response.ok
       
       storeImportProducts(data.products as Product[]);
       setNextPageCursor(data.nextPageCursor || null);
@@ -150,11 +157,18 @@ export default function ImportExportPage() {
         body: JSON.stringify({ storeUrl, apiKey, productsToExport: products }),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.error || `API request failed: ${response.statusText}`);
+        let errorBody = `API request failed: ${response.status} ${response.statusText}`;
+        try {
+          const errorData = await response.json();
+          errorBody = errorData.error || JSON.stringify(errorData);
+        } catch (e) {
+           errorBody = await response.text(); // Fallback to text if JSON parsing fails
+        }
+        throw new Error(errorBody);
       }
+      
+      const data = await response.json(); // Safe to parse as JSON if response.ok
       
       toast({ title: 'Shopify Export Successful', description: data.message });
     } catch (error: any) {

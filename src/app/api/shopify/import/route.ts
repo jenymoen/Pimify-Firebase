@@ -197,9 +197,27 @@ export async function POST(request: NextRequest) {
     });
 
     if (!shopifyResponse.ok) {
-      const errorData = await shopifyResponse.json().catch(() => ({ error: shopifyResponse.statusText }));
-      console.error('Shopify API Error (Import):', errorData);
-      return NextResponse.json({ error: errorData.errors || errorData.error || `Shopify API request failed: ${shopifyResponse.statusText}` }, { status: shopifyResponse.status });
+      let errorDetail = `Shopify API request failed (${shopifyResponse.status}): ${shopifyResponse.statusText}`;
+      try {
+        const contentType = shopifyResponse.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          const errorData = await shopifyResponse.json();
+          errorDetail = errorData.errors || errorData.error || JSON.stringify(errorData);
+        } else {
+          errorDetail = await shopifyResponse.text(); 
+        }
+      } catch (e) {
+        errorDetail = await shopifyResponse.text().catch(() => `Failed to get error details, status: ${shopifyResponse.status}`);
+      }
+      console.error('Shopify API Error (Import):', errorDetail.substring(0, 500));
+      return NextResponse.json({ error: errorDetail }, { status: shopifyResponse.status });
+    }
+    
+    const contentType = shopifyResponse.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+        const textResponse = await shopifyResponse.text();
+        console.error('Shopify API Error (Import): Expected JSON for successful response, got different content type.', textResponse.substring(0, 500));
+        return NextResponse.json({ error: 'Invalid success response format from Shopify. Expected JSON.', details: textResponse.substring(0,500) }, { status: 502 });
     }
     
     const shopifyData = await shopifyResponse.json();

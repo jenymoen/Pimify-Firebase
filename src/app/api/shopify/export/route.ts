@@ -117,9 +117,20 @@ export async function POST(request: NextRequest) {
       });
 
       if (!shopifyResponse.ok) {
-        const errorData = await shopifyResponse.json().catch(() => ({ error: shopifyResponse.statusText }));
-        const errorMessage = `Failed to export product "${product.basicInfo.name.en || product.basicInfo.sku}": ${JSON.stringify(errorData.errors || errorData.error || shopifyResponse.statusText)}`;
-        console.error(errorMessage);
+        let errorDetail = `Shopify API request failed (${shopifyResponse.status}): ${shopifyResponse.statusText}`;
+        try {
+            const contentType = shopifyResponse.headers.get("content-type");
+            if (contentType && contentType.includes("application/json")) {
+                const errorData = await shopifyResponse.json();
+                errorDetail = errorData.errors || errorData.error || JSON.stringify(errorData);
+            } else {
+                errorDetail = await shopifyResponse.text();
+            }
+        } catch (e) {
+            errorDetail = await shopifyResponse.text().catch(() => `Failed to retrieve error details for product, status: ${shopifyResponse.status}`);
+        }
+        const errorMessage = `Failed to export product "${product.basicInfo.name.en || product.basicInfo.sku}": ${errorDetail}`;
+        console.error(errorMessage.substring(0,1000));
         errors.push(errorMessage);
         continue;
       }
