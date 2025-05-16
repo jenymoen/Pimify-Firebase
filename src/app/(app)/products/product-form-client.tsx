@@ -58,7 +58,7 @@ const requiredMultilingualStringSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "At least one language (English or Norwegian) is required.",
-      path: ['en'],
+      path: ['en'], // Or provide a path to a general field or the object itself
     });
   }
 });
@@ -78,15 +78,15 @@ const keyValueEntrySchema = z.object({
 const mediaEntrySchema = z.object({
   id: z.string(),
   url: z.string().refine(val => {
-    if (val === '' || val === undefined) return true; // Allow empty string
+    if (val === '' || val === undefined) return true; 
     try {
-      new URL(val); // Check if it's an absolute URL
-      return true;
+      const url = new URL(val);
+      return url.protocol === "http:" || url.protocol === "https:";
     } catch (_) {
-      return val.startsWith('/'); // Or if it's a relative path
+      return val.startsWith('/'); 
     }
   }, {
-    message: "Must be a valid HTTP/HTTPS URL, a relative path starting with '/', or empty.",
+    message: "Must be a valid HTTP/HTTPS URL or a relative path starting with '/'.",
   }).optional(),
   altText: baseMultilingualStringSchema.optional(),
   type: z.enum(['image', 'video', '3d_model', 'manual', 'certificate']),
@@ -104,11 +104,11 @@ const productVariantSchema = z.object({
     id: z.string(),
     sku: z.string().min(1, "Variant SKU is required."),
     gtin: z.string().optional(),
-    optionValues: z.record(z.string()),
+    optionValues: z.record(z.string()), // e.g., { "Color": "Red", "Size": "M" }
     standardPriceAmount: z.coerce.number({invalid_type_error: "Price must be a number"}).min(0, "Price cannot be negative").optional().nullable(),
     standardPriceCurrency: z.string().length(3, "Currency code must be 3 letters").optional().default("NOK"),
     salePriceAmount: z.preprocess(
-        (val) => (val === "" ? undefined : val),
+        (val) => (val === "" ? undefined : val), // Treat empty string as undefined for optional number
         z.coerce.number({invalid_type_error: "Sale price must be a number"}).min(0, "Sale price cannot be negative").optional().nullable()
     ),
     salePriceCurrency: z.string().length(3, "Currency code must be 3 letters").optional().default("NOK"),
@@ -211,14 +211,20 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         costPriceAmount: existingProduct.pricingAndStock?.costPrice?.[0]?.amount,
         costPriceCurrency: existingProduct.pricingAndStock?.costPrice?.[0]?.currency || "NOK",
       },
-      options: (existingProduct.options || []).map(opt => ({...opt, values: opt.values.join(',')})),
-      variants: (existingProduct.variants || []).map(v => ({
-          ...v,
-          standardPriceAmount: v.standardPrice?.[0]?.amount,
-          standardPriceCurrency: v.standardPrice?.[0]?.currency || "NOK",
-          salePriceAmount: v.salePrice?.[0]?.amount,
-          salePriceCurrency: v.salePrice?.[0]?.currency || "NOK",
-      })),
+      options: (existingProduct.options || []).map(opt => ({...opt, values: opt.values.join(',')})), // values from array to string for form
+      variants: (existingProduct.variants || []).map(v => {
+        // Ensure only fields defined in productVariantSchema (form schema for variants) are mapped.
+        return {
+            id: v.id,
+            sku: v.sku,
+            gtin: v.gtin || '', // Ensure string for controlled input
+            optionValues: v.optionValues, // This should be fine as it's Record<string, string>
+            standardPriceAmount: v.standardPrice?.[0]?.amount,
+            standardPriceCurrency: v.standardPrice?.[0]?.currency || "NOK",
+            salePriceAmount: v.salePrice?.[0]?.amount,
+            salePriceCurrency: v.salePrice?.[0]?.currency || "NOK",
+        };
+      }),
       aiSummary: existingProduct.aiSummary || { ...defaultMultilingualString },
     } : {
     basicInfo: {
@@ -245,7 +251,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       keywords: [],
     },
     pricingAndStock: {
-        standardPriceAmount: undefined,
+        standardPriceAmount: undefined, // Will be coerced or handled by ?? '' in input
         standardPriceCurrency: "NOK",
         salePriceAmount: undefined,
         salePriceCurrency: "NOK",
@@ -261,7 +267,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
   const form = useForm<ProductFormData>({
     resolver: zodResolver(productFormSchema),
     defaultValues,
-    mode: "onChange",
+    mode: "onChange", // Or "onBlur" or "onSubmit"
   });
 
   const { fields: optionsFields, append: appendOption, remove: removeOption } = useFieldArray({
@@ -293,44 +299,49 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         media: {
           images: (data.media.images || []).filter(img => {
             if (!img.url || img.url.trim() === '') return false;
-            if (img.type === 'image') {
-                try { new URL(img.url); return true; } catch (_) { return img.url.startsWith('/'); }
-            }
-            return true;
+             try {
+                const url = new URL(img.url);
+                return url.protocol === "http:" || url.protocol === "https:";
+              } catch (_) {
+                return img.url.startsWith('/');
+              }
           })
         },
         marketingSEO: data.marketingSEO,
         aiSummary: data.aiSummary,
-        pricingAndStock: {
+        pricingAndStock: { // Initialize with empty arrays
             standardPrice: [],
             salePrice: [],
             costPrice: [],
         },
         options: (data.options || []).map(opt => ({
-            ...opt,
-            values: typeof opt.values === 'string' ? opt.values.split(',').map(v => v.trim()).filter(v => v) : opt.values,
+            ...opt, // includes id and name
+            values: typeof opt.values === 'string' ? opt.values.split(',').map(v => v.trim()).filter(v => v) : opt.values, // ensure values is string[]
         })),
         variants: (data.variants || []).map(v => {
-          const stdPrice = (v.standardPriceAmount !== undefined && v.standardPriceAmount !== null)
+          // v is from form data (ProductFormData['variants'][number])
+          const stdPriceEntries = (v.standardPriceAmount !== undefined && v.standardPriceAmount !== null)
               ? [{ id: uuidv4(), amount: Number(v.standardPriceAmount), currency: v.standardPriceCurrency || "NOK" }]
               : undefined;
-          const slPrice = (v.salePriceAmount !== undefined && v.salePriceAmount !== null)
+          const slPriceEntries = (v.salePriceAmount !== undefined && v.salePriceAmount !== null)
               ? [{ id: uuidv4(), amount: Number(v.salePriceAmount), currency: v.salePriceCurrency || "NOK" }]
               : undefined;
 
+          // Construct the variant object matching the ProductVariant type from product.ts
           const variantForPayload: ProductVariant = {
             id: v.id,
             sku: v.sku,
             optionValues: v.optionValues,
           };
           if (v.gtin) variantForPayload.gtin = v.gtin;
-          if (stdPrice) variantForPayload.standardPrice = stdPrice;
-          if (slPrice) variantForPayload.salePrice = slPrice;
-          // costPrice and imageIds are not yet handled in the variant form fields
+          if (stdPriceEntries) variantForPayload.standardPrice = stdPriceEntries;
+          if (slPriceEntries) variantForPayload.salePrice = slPriceEntries;
+          // costPrice is not currently in the variant form, can be added if needed
           return variantForPayload;
         }),
       };
 
+      // Populate base pricingAndStock if it exists and data is provided
       if (data.pricingAndStock) {
         if (data.pricingAndStock.standardPriceAmount !== undefined && data.pricingAndStock.standardPriceAmount !== null) {
             productPayload.pricingAndStock!.standardPrice = [{
@@ -364,7 +375,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         toast({ title: "Product Created", description: `"${newProd.basicInfo.name.en || newProd.basicInfo.name.no}" has been successfully created.` });
       }
       router.push("/products");
-      router.refresh();
+      router.refresh(); // ensure product list page re-fetches potentially updated data
     } catch (error) {
       console.error("Submission error:", error);
       toast({ title: "Error", description: "Failed to save product. Please try again.", variant: "destructive" });
@@ -422,26 +433,30 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     }
   };
 
+  // For handling comma-separated keywords input
   const keywords = form.watch("marketingSEO.keywords") || [];
   const handleKeywordsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newKeywords = e.target.value.split(',').map(k => k.trim()).filter(k => k !== "");
     form.setValue("marketingSEO.keywords", newKeywords, { shouldValidate: true, shouldDirty: true });
   };
 
+  // For handling comma-separated categories input
   const categories = form.watch("attributesAndSpecs.categories") || [];
   const handleCategoriesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newCategories = e.target.value.split(',').map(c => c.trim()).filter(c => c !== "");
     form.setValue("attributesAndSpecs.categories", newCategories, { shouldValidate: true, shouldDirty: true });
   };
 
+  // Function to generate variant combinations
   const generateVariants = () => {
     const options = form.getValues("options");
     if (!options || options.length === 0) {
         toast({ title: "No Options Defined", description: "Please define at least one option to generate variants.", variant: "destructive" });
-        replaceVariants([]);
+        replaceVariants([]); // Clear existing variants
         return;
     }
 
+    // Filter out options that don't have a name or values
     const validOptions = options.filter(opt => opt.name && opt.values);
     if (validOptions.length === 0) {
         toast({ title: "Incomplete Options", description: "Ensure all defined options have a name and values.", variant: "destructive" });
@@ -449,11 +464,14 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         return;
     }
 
+    // Ensure values are arrays (they are already from Zod transform)
     const parsedOptions = validOptions.map(opt => ({
         name: opt.name,
-        values: typeof opt.values === 'string' ? opt.values.split(',').map(v => v.trim()).filter(v => v) : opt.values
+        values: Array.isArray(opt.values) ? opt.values : (typeof opt.values === 'string' ? opt.values.split(',').map(v => v.trim()).filter(v => v) : [])
     }));
 
+
+    // Check if any option still has no values after parsing (should be caught by Zod, but good to double check)
     if (parsedOptions.some(opt => opt.values.length === 0)) {
         toast({ title: "Empty Option Values", description: "One or more options have no values defined after parsing.", variant: "destructive" });
         replaceVariants([]);
@@ -470,19 +488,20 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         let variantSkuSuffixParts: string[] = [];
         parsedOptions.forEach((opt, i) => {
             optionValues[opt.name] = combo[i];
+            // Create a SKU-friendly part from the option value
             variantSkuSuffixParts.push(combo[i].replace(/[^a-zA-Z0-9]/g, '').substring(0, 3).toUpperCase());
         });
-        const baseSku = form.getValues("basicInfo.sku") || "VARSKU";
+        const baseSku = form.getValues("basicInfo.sku") || "VARSKU"; // Fallback if base SKU is empty
         const variantSkuSuffix = variantSkuSuffixParts.join('-');
 
         return {
-            id: uuidv4(),
+            id: uuidv4(), // New ID for each variant
             sku: `${baseSku}-${variantSkuSuffix}`,
-            gtin: '',
-            optionValues,
-            standardPriceAmount: form.getValues("pricingAndStock.standardPriceAmount"),
+            gtin: '', // Default empty gtin
+            optionValues, // e.g., { "Color": "Red", "Size": "M" }
+            standardPriceAmount: form.getValues("pricingAndStock.standardPriceAmount"), // Default to base product's price
             standardPriceCurrency: form.getValues("pricingAndStock.standardPriceCurrency") || "NOK",
-            salePriceAmount: form.getValues("pricingAndStock.salePriceAmount"),
+            salePriceAmount: form.getValues("pricingAndStock.salePriceAmount"), // Default to base product's price
             salePriceCurrency: form.getValues("pricingAndStock.salePriceCurrency") || "NOK",
         };
     });
@@ -507,7 +526,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                 <Accordion type="multiple" defaultValue={["basic-info", "options-variants", "attributes-specs", "pricing-stock"]} className="w-full">
 
                   <ProductFormSection title="Basic Information" value="basic-info" icon={Info} description="Core details about the product.">
-                     <FormField
+                    <FormField
                       control={form.control}
                       name="basicInfo.name"
                       render={({ field }) => (
@@ -572,7 +591,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                         </FormItem>
                       )}
                     />
-                     <FormField
+                    <FormField
                       control={form.control}
                       name="basicInfo.descriptionShort"
                       render={({ field }) => (
@@ -732,6 +751,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                             <Table>
                                 <TableHeader>
                                     <TableRow>
+                                        {/* Display table headers based on defined option names */}
                                         {optionsFields.map((optField,idx) => form.getValues(`options.${idx}.name` as any) && (
                                             <TableHead key={optField.id}>{form.getValues(`options.${idx}.name` as any)}</TableHead>
                                         ))}
@@ -746,11 +766,13 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                 <TableBody>
                                     {variantsFields.map((variantField, index) => (
                                         <TableRow key={variantField.id}>
+                                            {/* Display option values for each variant */}
                                             {optionsFields.map((optField, optIdx) => form.getValues(`options.${optIdx}.name` as any) && (
                                                 <TableCell key={`${variantField.id}-${optField.id}`}>
                                                     {form.getValues(`variants.${index}.optionValues.${form.getValues(`options.${optIdx}.name` as any)}`)}
                                                 </TableCell>
                                             ))}
+                                            {/* Input fields for variant-specific data */}
                                             <TableCell>
                                                 <FormField control={form.control} name={`variants.${index}.sku`} render={({ field }) => ( <Input {...field} placeholder="Variant SKU" /> )} />
                                                 <FormMessage>{form.formState.errors.variants?.[index]?.sku?.message}</FormMessage>
@@ -775,6 +797,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                 </TableBody>
                             </Table>
                             </div>
+                             {/* Display general error message for variants array if any */}
                              {form.formState.errors.variants && <FormMessage>Errors in variants list.</FormMessage>}
                         </div>
                     )}
@@ -857,8 +880,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                     type="number"
                                     placeholder="e.g., 999.99"
                                     {...field}
-                                    value={field.value ?? ''}
-                                    onChange={e => field.onChange(e.target.value)}
+                                    value={field.value ?? ''} // Ensure controlled input
+                                    onChange={e => field.onChange(e.target.value)} // Pass string for Zod coercion
                                 /></FormControl>
                                 <FormMessage />
                                 </FormItem>
@@ -885,8 +908,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                     type="number"
                                     placeholder="e.g., 799.99"
                                     {...field}
-                                    value={field.value ?? ''}
-                                    onChange={e => field.onChange(e.target.value)}
+                                    value={field.value ?? ''} // Ensure controlled input
+                                    onChange={e => field.onChange(e.target.value)} // Pass string for Zod coercion
                                 /></FormControl>
                                 <FormDescription>Optional. If set, this is the active selling price.</FormDescription>
                                 <FormMessage />
@@ -914,8 +937,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                     type="number"
                                     placeholder="e.g., 499.99"
                                     {...field}
-                                    value={field.value ?? ''}
-                                    onChange={e => field.onChange(e.target.value)}
+                                    value={field.value ?? ''} // Ensure controlled input
+                                    onChange={e => field.onChange(e.target.value)} // Pass string for Zod coercion
                                 /></FormControl>
                                 <FormDescription>Optional. Internal cost price.</FormDescription>
                                 <FormMessage />
@@ -1018,9 +1041,9 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                               id="aiSummary"
                               label=""
                               type="textarea"
-                              disabled={true}
+                              disabled={true} // AI summary is not directly editable by user
                               value={field.value || defaultMultilingualString}
-                              onChange={field.onChange}
+                              onChange={field.onChange} // Still needed for RHF
                             />
                           </FormControl>
                            <FormMessage />
@@ -1033,24 +1056,30 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
 
               <div className="lg:col-span-1 space-y-4 sticky top-6 self-start">
                 <h3 className="text-lg font-semibold text-foreground">Image Preview</h3>
-                {watchedImages && watchedImages.length > 0 && watchedImages.some(img => img.type === 'image' && img.url && img.url.trim() !== '' && (img.url.startsWith('http') || img.url.startsWith('/'))) ? (
+                {watchedImages && watchedImages.length > 0 && watchedImages.some(img => {
+                  if (img.type !== 'image' || !img.url || img.url.trim() === '') return false;
+                  try { new URL(img.url); return true; } catch (_) { return img.url.startsWith('/'); }
+                }) ? (
                   <div className="space-y-3 max-h-[calc(100vh-10rem)] overflow-y-auto p-2 rounded-md border bg-muted/10">
                     {watchedImages.filter(img => {
                         if (img.type !== 'image' || !img.url || img.url.trim() === '') return false;
+                        // Check if it's a valid absolute URL or a relative path
                         try { new URL(img.url); return true; } catch (_) { return img.url.startsWith('/'); }
                     }).map((image, index) => (
                       <div key={image.id || index} className="border p-3 rounded-lg shadow-sm bg-card">
                         <div className="relative aspect-video w-full rounded-md overflow-hidden border mb-2">
                           <Image
-                            src={image.url!}
+                            src={image.url!} // Assert url is not null/undefined due to filter
                             alt={image.altText?.en || `Product image ${index + 1}`}
                             layout="fill"
                             objectFit="contain"
                             data-ai-hint="product form image"
                             onError={(e) => {
-                              if (!e.currentTarget.src.includes('placehold.co')) {
-                                e.currentTarget.src = 'https://placehold.co/300x200.png?text=Invalid+URL';
-                                e.currentTarget.alt = 'Invalid image URL';
+                              // Fallback for broken images, e.g., if URL becomes invalid after input
+                              const target = e.target as HTMLImageElement;
+                              if (!target.src.includes('placehold.co')) { // Avoid loop if placeholder itself fails
+                                target.src = 'https://placehold.co/300x200.png?text=Invalid+URL';
+                                target.alt = 'Invalid image URL';
                               }
                             }}
                           />
@@ -1085,3 +1114,4 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     </Card>
   );
 }
+
