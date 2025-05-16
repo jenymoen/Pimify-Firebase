@@ -45,9 +45,15 @@ import { v4 as uuidv4 } from 'uuid';
 import { useEffect, useState } from "react";
 import Image from "next/image";
 
-const multilingualStringSchema = z.object({
+const requiredMultilingualStringSchema = z.object({
   en: z.string().min(1, "English version is required"),
   no: z.string().min(1, "Norwegian version is required"),
+}).catchall(z.string());
+
+// Schema for multilingual strings where content can be empty (e.g., for AI summary before generation)
+const baseMultilingualStringSchema = z.object({
+  en: z.string(), // Allows empty string
+  no: z.string(), // Allows empty string
 }).catchall(z.string());
 
 const keyValueEntrySchema = z.object({
@@ -58,9 +64,8 @@ const keyValueEntrySchema = z.object({
 
 const mediaEntrySchema = z.object({
   id: z.string(),
-  // URL is optional for the entry itself, but if present, it must be a valid format or empty
   url: z.string().refine(val => {
-    if (val === '') return true; // Allow empty string
+    if (val === '' || val === undefined) return true; // Allow empty or undefined string for optional URLs
     try {
       const url = new URL(val);
       return url.protocol === 'http:' || url.protocol === 'https:';
@@ -70,7 +75,7 @@ const mediaEntrySchema = z.object({
   }, {
     message: "Must be a valid HTTP/HTTPS URL, a relative path starting with '/', or empty.",
   }).optional(),
-  altText: multilingualStringSchema.optional(),
+  altText: baseMultilingualStringSchema.optional(), // Alt text can be empty
   type: z.enum(['image', 'video', '3d_model', 'manual', 'certificate']),
   language: z.string().optional(),
   title: z.string().optional(),
@@ -78,11 +83,11 @@ const mediaEntrySchema = z.object({
 
 const productFormSchema = z.object({
   basicInfo: z.object({
-    name: multilingualStringSchema,
+    name: requiredMultilingualStringSchema,
     sku: z.string().min(1, "SKU is required"),
     gtin: z.string().optional(),
-    descriptionShort: multilingualStringSchema,
-    descriptionLong: multilingualStringSchema,
+    descriptionShort: requiredMultilingualStringSchema,
+    descriptionLong: requiredMultilingualStringSchema,
     brand: z.string().min(1, "Brand is required"),
     status: z.enum(['active', 'inactive', 'development', 'discontinued']),
     launchDate: z.date().optional(),
@@ -98,11 +103,11 @@ const productFormSchema = z.object({
     images: z.array(mediaEntrySchema).optional(),
   }),
   marketingSEO: z.object({
-    seoTitle: multilingualStringSchema,
-    seoDescription: multilingualStringSchema,
+    seoTitle: requiredMultilingualStringSchema,
+    seoDescription: requiredMultilingualStringSchema,
     keywords: z.array(z.string()).optional(),
   }),
-  aiSummary: multilingualStringSchema.optional(),
+  aiSummary: baseMultilingualStringSchema.optional(),
 });
 
 type ProductFormData = z.infer<typeof productFormSchema>;
@@ -121,6 +126,9 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
   const defaultValues: ProductFormData = existingProduct ? {
       basicInfo: {
         ...existingProduct.basicInfo,
+        name: existingProduct.basicInfo.name || {...defaultMultilingualString},
+        descriptionShort: existingProduct.basicInfo.descriptionShort || {...defaultMultilingualString},
+        descriptionLong: existingProduct.basicInfo.descriptionLong || {...defaultMultilingualString},
         gtin: existingProduct.basicInfo.gtin || '',
         launchDate: existingProduct.basicInfo.launchDate ? parseISO(existingProduct.basicInfo.launchDate) : undefined,
         endDate: existingProduct.basicInfo.endDate ? parseISO(existingProduct.basicInfo.endDate) : undefined,
@@ -133,13 +141,18 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         technicalSpecs: existingProduct.attributesAndSpecs.technicalSpecs || [],
       },
       media: {
-        images: existingProduct.media.images || [],
+        images: (existingProduct.media.images || []).map(img => ({
+          ...img,
+          altText: img.altText || {...defaultMultilingualString}
+        })),
       },
       marketingSEO: {
         ...existingProduct.marketingSEO,
+        seoTitle: existingProduct.marketingSEO.seoTitle || {...defaultMultilingualString},
+        seoDescription: existingProduct.marketingSEO.seoDescription || {...defaultMultilingualString},
         keywords: existingProduct.marketingSEO.keywords || [],
       },
-      aiSummary: existingProduct.aiSummary || defaultMultilingualString,
+      aiSummary: existingProduct.aiSummary || { ...defaultMultilingualString },
     } : {
     basicInfo: {
       name: { ...defaultMultilingualString },
@@ -202,17 +215,16 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         attributesAndSpecs: data.attributesAndSpecs,
         media: {
           images: (data.media.images || []).filter(img => {
-            if (!img.url || img.url.trim() === '') return false; // Filter out if URL is empty or undefined
-             // For image type, ensure it's a valid looking URL for rendering
+            if (!img.url || img.url.trim() === '') return false;
             if (img.type === 'image') {
                 try {
-                    new URL(img.url); // Check if it's an absolute URL
+                    new URL(img.url);
                     return true;
                 } catch (_) {
-                    return img.url.startsWith('/'); // Or a relative path
+                    return img.url.startsWith('/');
                 }
             }
-            return true; // For other media types, accept any non-empty URL for now
+            return true; 
           })
         },
         marketingSEO: data.marketingSEO,
@@ -316,7 +328,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       name="basicInfo.name"
                       render={({ field }) => (
                         <FormItem>
-                          <FormControl>
+                           <FormControl>
                             <MultilingualInput id="name" label="Product Name" required {...field} />
                           </FormControl>
                           <FormMessage />
@@ -611,7 +623,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       <Sparkles className="mr-2 h-4 w-4" />
                       {isGeneratingSummary ? "Generating..." : "Generate AI Summary (EN)"}
                     </Button>
-                    <FormField
+                     <FormField
                       control={form.control}
                       name="aiSummary"
                       render={({ field }) => (
@@ -621,9 +633,9 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                               id="aiSummary"
                               label="AI Generated Summary"
                               type="textarea"
-                              disabled={true} /* AI summary is read-only */
+                              disabled={true}
                               value={field.value || defaultMultilingualString}
-                              onChange={field.onChange} /* onChange is needed by Controller but won't be used due to disabled */
+                              onChange={field.onChange}
                             />
                           </FormControl>
                           <FormMessage />
@@ -636,25 +648,25 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
 
               <div className="lg:col-span-1 space-y-4 sticky top-6 self-start">
                 <h3 className="text-lg font-semibold text-foreground">Image Preview</h3>
-                {watchedImages && watchedImages.length > 0 ? (
+                {watchedImages && watchedImages.length > 0 && watchedImages.some(img => img.type === 'image' && img.url && img.url.trim() !== '' && (img.url.startsWith('http') || img.url.startsWith('/'))) ? (
                   <div className="space-y-3 max-h-[calc(100vh-10rem)] overflow-y-auto p-2 rounded-md border bg-muted/10">
                     {watchedImages.filter(img => {
                         if (img.type !== 'image' || !img.url || img.url.trim() === '') return false;
-                        try {
-                            new URL(img.url); // Check if it's an absolute URL
-                            return true;
-                        } catch (_) {
-                            return img.url.startsWith('/'); // Or a relative path
-                        }
+                        // Basic URL validation for preview
+                        return img.url.startsWith('http://') || img.url.startsWith('https://') || img.url.startsWith('/');
                     }).map((image, index) => (
                       <div key={image.id || index} className="border p-3 rounded-lg shadow-sm bg-card">
                         <div className="relative aspect-video w-full rounded-md overflow-hidden border mb-2">
                           <Image
-                            src={image.url!} // Assert non-null as it's filtered
+                            src={image.url!} 
                             alt={image.altText?.en || `Product image ${index + 1}`}
                             layout="fill"
                             objectFit="contain"
                             data-ai-hint="product form image"
+                            onError={(e) => {
+                              // Optionally handle image loading errors for preview, e.g., show placeholder
+                              e.currentTarget.src = 'https://placehold.co/300x200.png?text=Invalid+URL';
+                            }}
                           />
                         </div>
                         <p className="text-xs text-muted-foreground truncate" title={image.url}>{image.url}</p>
@@ -665,8 +677,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                 ) : (
                   <div className="flex flex-col items-center justify-center h-48 border-2 border-dashed rounded-lg text-muted-foreground bg-card p-4" data-ai-hint="product image placeholder">
                     <ImageIconLucide className="h-16 w-16 mb-3" />
-                    <p className="text-sm text-center">No images uploaded yet for preview.</p>
-                    <p className="text-xs text-center mt-1">Add images in the "Media" section.</p>
+                    <p className="text-sm text-center">No valid images uploaded yet for preview.</p>
+                    <p className="text-xs text-center mt-1">Add image URLs in the "Media" section.</p>
                   </div>
                 )}
               </div>
