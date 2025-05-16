@@ -39,7 +39,7 @@ import { summarizeProductInformation } from "@/ai/flows/summarize-product-inform
 import { Info, Package, Tag, Image as ImageIconLucide, BarChart3, Brain, CalendarDays, CheckCircle, Save, Trash2, Sparkles, Languages, Edit, DollarSign, ListPlus, Cog } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Label } from "@/components/ui/label"; // Added import
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
 import { v4 as uuidv4 } from 'uuid';
@@ -48,8 +48,8 @@ import Image from "next/image";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const requiredMultilingualStringSchema = z.object({
-  en: z.string().optional(), 
-  no: z.string().optional(), 
+  en: z.string().optional(),
+  no: z.string().optional(),
 }).catchall(z.string().optional())
 .superRefine((data, ctx) => {
   const enEmpty = !data.en || data.en.trim() === "";
@@ -58,7 +58,7 @@ const requiredMultilingualStringSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "At least one language (English or Norwegian) is required.",
-      path: ['en'], 
+      path: ['en'],
     });
   }
 });
@@ -88,17 +88,16 @@ const mediaEntrySchema = z.object({
   }, {
     message: "Must be a valid HTTP/HTTPS URL, a relative path starting with '/', or empty.",
   }).optional(),
-  altText: baseMultilingualStringSchema.optional(), 
+  altText: baseMultilingualStringSchema.optional(),
   type: z.enum(['image', 'video', '3d_model', 'manual', 'certificate']),
   language: z.string().optional(),
   title: z.string().optional(),
 });
 
-const productOptionValueSchema = z.string().min(1, "Option value cannot be empty.");
 const productOptionSchema = z.object({
   id: z.string(),
   name: z.string().min(1, "Option name is required."),
-  values: z.string().min(1, "Option values are required (comma-separated).").transform(val => val.split(',').map(v => v.trim()).filter(v => v)), //Stored as string, converted to array
+  values: z.string().min(1, "Option values are required (comma-separated).").transform(val => val.split(',').map(v => v.trim()).filter(v => v)),
 });
 
 const productVariantSchema = z.object({
@@ -113,7 +112,6 @@ const productVariantSchema = z.object({
         z.coerce.number({invalid_type_error: "Sale price must be a number"}).min(0, "Sale price cannot be negative").optional().nullable()
     ),
     salePriceCurrency: z.string().length(3, "Currency code must be 3 letters").optional().default("NOK"),
-    // costPriceAmount and imageIds can be added later
 });
 
 
@@ -147,12 +145,12 @@ const productFormSchema = z.object({
     standardPriceAmount: z.coerce.number({ required_error: "Original price amount is required.", invalid_type_error: "Original price must be a number"}).min(0, "Original price cannot be negative"),
     standardPriceCurrency: z.string().length(3, "Currency code must be 3 letters").default("NOK"),
     salePriceAmount: z.preprocess(
-        (val) => (val === "" || val === null || val === undefined ? undefined : val), 
+        (val) => (val === "" || val === null || val === undefined ? undefined : val),
         z.coerce.number({invalid_type_error: "Sale price must be a number"}).min(0, "Sale price cannot be negative").optional().nullable()
     ),
     salePriceCurrency: z.string().length(3, "Currency code must be 3 letters").optional().default("NOK"),
     costPriceAmount: z.preprocess(
-        (val) => (val === "" || val === null || val === undefined ? undefined : val), 
+        (val) => (val === "" || val === null || val === undefined ? undefined : val),
         z.coerce.number({invalid_type_error: "Cost price must be a number"}).min(0, "Cost price cannot be negative").optional().nullable()
     ),
     costPriceCurrency: z.string().length(3, "Currency code must be 3 letters").optional().default("NOK"),
@@ -296,11 +294,9 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
           images: (data.media.images || []).filter(img => {
             if (!img.url || img.url.trim() === '') return false;
             if (img.type === 'image') {
-                // Check if it's a valid HTTP/HTTPS URL or a relative path starting with '/'
                 try { new URL(img.url); return true; } catch (_) { return img.url.startsWith('/'); }
             }
-            // For other types, assume URL is valid if present (can be more specific if needed)
-            return true; 
+            return true;
           })
         },
         marketingSEO: data.marketingSEO,
@@ -314,11 +310,25 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
             ...opt,
             values: typeof opt.values === 'string' ? opt.values.split(',').map(v => v.trim()).filter(v => v) : opt.values,
         })),
-        variants: (data.variants || []).map(v => ({
-            ...v,
-            standardPrice: v.standardPriceAmount !== undefined && v.standardPriceAmount !== null ? [{ id: uuidv4(), amount: Number(v.standardPriceAmount), currency: v.standardPriceCurrency || "NOK" }] : [],
-            salePrice: v.salePriceAmount !== undefined && v.salePriceAmount !== null ? [{ id: uuidv4(), amount: Number(v.salePriceAmount), currency: v.salePriceCurrency || "NOK" }] : [],
-        })),
+        variants: (data.variants || []).map(v => {
+          const stdPrice = (v.standardPriceAmount !== undefined && v.standardPriceAmount !== null)
+              ? [{ id: uuidv4(), amount: Number(v.standardPriceAmount), currency: v.standardPriceCurrency || "NOK" }]
+              : undefined;
+          const slPrice = (v.salePriceAmount !== undefined && v.salePriceAmount !== null)
+              ? [{ id: uuidv4(), amount: Number(v.salePriceAmount), currency: v.salePriceCurrency || "NOK" }]
+              : undefined;
+
+          const variantForPayload: ProductVariant = {
+            id: v.id,
+            sku: v.sku,
+            optionValues: v.optionValues,
+          };
+          if (v.gtin) variantForPayload.gtin = v.gtin;
+          if (stdPrice) variantForPayload.standardPrice = stdPrice;
+          if (slPrice) variantForPayload.salePrice = slPrice;
+          // costPrice and imageIds are not yet handled in the variant form fields
+          return variantForPayload;
+        }),
       };
 
       if (data.pricingAndStock) {
@@ -399,7 +409,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
 
       if (result.summary) {
         form.setValue("aiSummary.en", result.summary, { shouldValidate: true, shouldDirty: true });
-        form.setValue("aiSummary.no", result.summary + " (automatisk oppsummert)", { shouldValidate: true, shouldDirty: true }); 
+        form.setValue("aiSummary.no", result.summary + " (automatisk oppsummert)", { shouldValidate: true, shouldDirty: true });
         toast({ title: "AI Summary Generated", description: "Summary has been populated." });
       } else {
         toast({ title: "AI Summary Failed", description: "Could not generate summary.", variant: "destructive" });
@@ -428,7 +438,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     const options = form.getValues("options");
     if (!options || options.length === 0) {
         toast({ title: "No Options Defined", description: "Please define at least one option to generate variants.", variant: "destructive" });
-        replaceVariants([]); // Clear existing variants if any
+        replaceVariants([]);
         return;
     }
 
@@ -438,7 +448,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         replaceVariants([]);
         return;
     }
-    
+
     const parsedOptions = validOptions.map(opt => ({
         name: opt.name,
         values: typeof opt.values === 'string' ? opt.values.split(',').map(v => v.trim()).filter(v => v) : opt.values
@@ -450,7 +460,6 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         return;
     }
 
-    // Cartesian product function
     const cartesian = <T,>(...a: T[][]): T[][] => a.reduce((acc, curr) => acc.flatMap(x => curr.map(y => [...x, y])), [[]] as T[][]);
 
     const optionValueArrays = parsedOptions.map(opt => opt.values);
@@ -465,7 +474,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         });
         const baseSku = form.getValues("basicInfo.sku") || "VARSKU";
         const variantSkuSuffix = variantSkuSuffixParts.join('-');
-        
+
         return {
             id: uuidv4(),
             sku: `${baseSku}-${variantSkuSuffix}`,
@@ -498,13 +507,14 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                 <Accordion type="multiple" defaultValue={["basic-info", "options-variants", "attributes-specs", "pricing-stock"]} className="w-full">
 
                   <ProductFormSection title="Basic Information" value="basic-info" icon={Info} description="Core details about the product.">
-                    <FormField
+                     <FormField
                       control={form.control}
                       name="basicInfo.name"
                       render={({ field }) => (
                         <FormItem>
+                          <FormLabel>Product Name <span className="text-destructive">*</span></FormLabel>
                            <FormControl>
-                            <MultilingualInput id="name" label="Product Name" required {...field} />
+                            <MultilingualInput id="name" label="" {...field} value={field.value || defaultMultilingualString} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -562,13 +572,14 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                         </FormItem>
                       )}
                     />
-                    <FormField
+                     <FormField
                       control={form.control}
                       name="basicInfo.descriptionShort"
                       render={({ field }) => (
                          <FormItem>
+                          <FormLabel>Short Description <span className="text-destructive">*</span></FormLabel>
                            <FormControl>
-                            <MultilingualInput id="descriptionShort" label="Short Description" type="textarea" required {...field} />
+                            <MultilingualInput id="descriptionShort" label="" type="textarea" {...field} value={field.value || defaultMultilingualString} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -579,8 +590,9 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       name="basicInfo.descriptionLong"
                       render={({ field }) => (
                         <FormItem>
+                          <FormLabel>Long Description <span className="text-destructive">*</span></FormLabel>
                            <FormControl>
-                            <MultilingualInput id="descriptionLong" label="Long Description" type="textarea" required {...field} />
+                            <MultilingualInput id="descriptionLong" label="" type="textarea" {...field} value={field.value || defaultMultilingualString} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -708,7 +720,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                         )}
                         {form.formState.errors.options && <FormMessage>{typeof form.formState.errors.options === 'string' ? form.formState.errors.options : form.formState.errors.options.message}</FormMessage>}
                     </div>
-                    
+
                     <Button type="button" onClick={generateVariants} className="mt-4" disabled={optionsFields.length === 0}>
                         <Sparkles className="mr-2 h-4 w-4" /> Generate Variants
                     </Button>
@@ -720,7 +732,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        {optionsFields.map((optField,idx) => form.getValues(`options.${idx}.name` as any) && ( 
+                                        {optionsFields.map((optField,idx) => form.getValues(`options.${idx}.name` as any) && (
                                             <TableHead key={optField.id}>{form.getValues(`options.${idx}.name` as any)}</TableHead>
                                         ))}
                                         <TableHead>SKU</TableHead>
@@ -841,10 +853,10 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                             render={({ field }) => (
                                 <FormItem>
                                 <FormLabel>Original Price Amount <span className="text-destructive">*</span></FormLabel>
-                                <FormControl><Input 
-                                    type="number" 
-                                    placeholder="e.g., 999.99" 
-                                    {...field} 
+                                <FormControl><Input
+                                    type="number"
+                                    placeholder="e.g., 999.99"
+                                    {...field}
                                     value={field.value ?? ''}
                                     onChange={e => field.onChange(e.target.value)}
                                 /></FormControl>
@@ -869,10 +881,10 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                             render={({ field }) => (
                                 <FormItem>
                                 <FormLabel>Sales Price Amount</FormLabel>
-                                <FormControl><Input 
-                                    type="number" 
-                                    placeholder="e.g., 799.99" 
-                                    {...field} 
+                                <FormControl><Input
+                                    type="number"
+                                    placeholder="e.g., 799.99"
+                                    {...field}
                                     value={field.value ?? ''}
                                     onChange={e => field.onChange(e.target.value)}
                                 /></FormControl>
@@ -898,10 +910,10 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                             render={({ field }) => (
                                 <FormItem>
                                 <FormLabel>Cost Price Amount</FormLabel>
-                                <FormControl><Input 
-                                    type="number" 
-                                    placeholder="e.g., 499.99" 
-                                    {...field} 
+                                <FormControl><Input
+                                    type="number"
+                                    placeholder="e.g., 499.99"
+                                    {...field}
                                     value={field.value ?? ''}
                                     onChange={e => field.onChange(e.target.value)}
                                 /></FormControl>
@@ -944,13 +956,14 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                   </ProductFormSection>
 
                   <ProductFormSection title="Marketing & SEO" value="marketing-seo" icon={BarChart3} description="Optimize product visibility for search engines and marketing campaigns.">
-                    <FormField
+                     <FormField
                       control={form.control}
                       name="marketingSEO.seoTitle"
                       render={({ field }) => (
                          <FormItem>
+                           <FormLabel>SEO Title <span className="text-destructive">*</span></FormLabel>
                            <FormControl>
-                            <MultilingualInput id="seoTitle" label="SEO Title" required {...field} />
+                            <MultilingualInput id="seoTitle" label="" {...field} value={field.value || defaultMultilingualString} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -961,8 +974,9 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       name="marketingSEO.seoDescription"
                       render={({ field }) => (
                         <FormItem>
+                           <FormLabel>SEO Meta Description <span className="text-destructive">*</span></FormLabel>
                           <FormControl>
-                            <MultilingualInput id="seoDescription" label="SEO Meta Description" type="textarea" required {...field} />
+                            <MultilingualInput id="seoDescription" label="" type="textarea" {...field} value={field.value || defaultMultilingualString} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -998,14 +1012,15 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       name="aiSummary"
                       render={({ field }) => (
                         <FormItem>
+                          <FormLabel>AI Generated Summary</FormLabel>
                           <FormControl>
                             <MultilingualInput
                               id="aiSummary"
-                              label="AI Generated Summary"
+                              label=""
                               type="textarea"
-                              disabled={true} 
+                              disabled={true}
                               value={field.value || defaultMultilingualString}
-                              onChange={field.onChange} 
+                              onChange={field.onChange}
                             />
                           </FormControl>
                            <FormMessage />
@@ -1022,19 +1037,17 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                   <div className="space-y-3 max-h-[calc(100vh-10rem)] overflow-y-auto p-2 rounded-md border bg-muted/10">
                     {watchedImages.filter(img => {
                         if (img.type !== 'image' || !img.url || img.url.trim() === '') return false;
-                        // Check if it's a valid HTTP/HTTPS URL or a relative path starting with '/'
                         try { new URL(img.url); return true; } catch (_) { return img.url.startsWith('/'); }
                     }).map((image, index) => (
                       <div key={image.id || index} className="border p-3 rounded-lg shadow-sm bg-card">
                         <div className="relative aspect-video w-full rounded-md overflow-hidden border mb-2">
                           <Image
-                            src={image.url!} 
+                            src={image.url!}
                             alt={image.altText?.en || `Product image ${index + 1}`}
                             layout="fill"
                             objectFit="contain"
                             data-ai-hint="product form image"
                             onError={(e) => {
-                              // Attempt to prevent cycles in error handling
                               if (!e.currentTarget.src.includes('placehold.co')) {
                                 e.currentTarget.src = 'https://placehold.co/300x200.png?text=Invalid+URL';
                                 e.currentTarget.alt = 'Invalid image URL';
@@ -1072,8 +1085,3 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     </Card>
   );
 }
-    
-
-    
-
-
