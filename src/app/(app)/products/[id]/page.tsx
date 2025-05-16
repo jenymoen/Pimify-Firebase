@@ -129,7 +129,7 @@ export default function ProductDetailsPage() {
     );
   }
 
-  const { basicInfo, attributesAndSpecs, media, marketingSEO, pricingAndStock, aiSummary } = product;
+  const { basicInfo, attributesAndSpecs, media, marketingSEO, pricingAndStock } = product;
 
   return (
     <div className="container mx-auto py-8 px-4 md:px-6 lg:px-8">
@@ -159,11 +159,11 @@ export default function ProductDetailsPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
             <div className="md:col-span-1">
               {media.images && media.images.length > 0 && media.images[0].url ? (
-                <div className="relative aspect-[4/3] rounded-lg overflow-hidden border shadow-md">
-                  <Image src={media.images[0].url} alt={media.images[0].altText?.en || basicInfo.name.en} layout="fill" objectFit="cover" data-ai-hint="product main image" />
+                <div className="relative aspect-square rounded-lg overflow-hidden border shadow-md">
+                  <Image src={media.images[0].url} alt={media.images[0].altText?.en || basicInfo.name.en} layout="fill" objectFit="contain" data-ai-hint="product main image" />
                 </div>
               ) : (
-                <div className="relative aspect-[4/3] rounded-lg overflow-hidden border bg-muted flex items-center justify-center" data-ai-hint="product placeholder">
+                <div className="relative aspect-square rounded-lg overflow-hidden border bg-muted flex items-center justify-center" data-ai-hint="product placeholder">
                   <ImageIcon className="h-24 w-24 text-muted-foreground" />
                 </div>
               )}
@@ -179,9 +179,9 @@ export default function ProductDetailsPage() {
         </CardContent>
       </Card>
       
-      {aiSummary && (aiSummary.en || aiSummary.no) && (
+      {product.aiSummary && (product.aiSummary.en || product.aiSummary.no) && (
         <DetailSection title="AI Summary" icon={Brain}>
-          <MultilingualTextDisplay label="Summary" data={aiSummary} />
+          <MultilingualTextDisplay label="Summary" data={product.aiSummary} />
         </DetailSection>
       )}
 
