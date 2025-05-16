@@ -46,9 +46,26 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 
 const requiredMultilingualStringSchema = z.object({
-  en: z.string().min(1, "English version is required"),
-  no: z.string().min(1, "Norwegian version is required"),
-}).catchall(z.string());
+  en: z.string(),
+  no: z.string(),
+}).catchall(z.string())
+.superRefine((data, ctx) => {
+  const enEmpty = !data.en || data.en.trim() === "";
+  const noEmpty = !data.no || data.no.trim() === "";
+  if (enEmpty && noEmpty) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "At least one language (English or Norwegian) is required.",
+      path: ['en'], // Attach error to 'en' field to ensure it's displayed
+    });
+     // Optionally, you could add the same issue to 'no' path as well
+     // ctx.addIssue({
+     //   code: z.ZodIssueCode.custom,
+     //   message: "At least one language (English or Norwegian) is required.",
+     //   path: ['no'],
+     // });
+  }
+});
 
 // Schema for multilingual strings where content can be empty (e.g., for AI summary before generation)
 const baseMultilingualStringSchema = z.object({
@@ -162,6 +179,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       descriptionLong: { ...defaultMultilingualString },
       brand: '',
       status: 'development',
+      countryOfOrigin: '', // Ensure initialization
     },
     attributesAndSpecs: {
       categories: [],
@@ -218,13 +236,14 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
             if (!img.url || img.url.trim() === '') return false;
             if (img.type === 'image') {
                 try {
-                    new URL(img.url);
+                    new URL(img.url); // This will throw if it's not a full URL
                     return true;
                 } catch (_) {
+                    // If new URL fails, check if it's a relative path
                     return img.url.startsWith('/');
                 }
             }
-            return true; 
+            return true; // For non-image types, assume valid if URL is present
           })
         },
         marketingSEO: data.marketingSEO,
@@ -233,10 +252,10 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
 
       if (existingProduct) {
         storeUpdateProduct(existingProduct.id, productPayload as Partial<Product>);
-        toast({ title: "Product Updated", description: `"${data.basicInfo.name.en}" has been successfully updated.` });
+        toast({ title: "Product Updated", description: `"${data.basicInfo.name.en || data.basicInfo.name.no}" has been successfully updated.` });
       } else {
         const newProd = addProduct(productPayload, data.aiSummary);
-        toast({ title: "Product Created", description: `"${newProd.basicInfo.name.en}" has been successfully created.` });
+        toast({ title: "Product Created", description: `"${newProd.basicInfo.name.en || newProd.basicInfo.name.no}" has been successfully created.` });
       }
       router.push("/products");
       router.refresh();
@@ -261,8 +280,11 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
   const handleGenerateSummary = async () => {
     setIsGeneratingSummary(true);
     const currentData = form.getValues();
-    if (!currentData.basicInfo.name.en || !currentData.basicInfo.descriptionLong.en) {
-      toast({ title: "Missing Information", description: "Please fill in English product name and long description to generate summary.", variant: "destructive" });
+    const primaryName = currentData.basicInfo.name.en || currentData.basicInfo.name.no;
+    const primaryDescription = currentData.basicInfo.descriptionLong.en || currentData.basicInfo.descriptionLong.no;
+
+    if (!primaryName || !primaryDescription) {
+      toast({ title: "Missing Information", description: "Please fill in product name and long description in at least one language to generate summary.", variant: "destructive" });
       setIsGeneratingSummary(false);
       return;
     }
@@ -274,15 +296,16 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         .map(prop => `${prop.key}: ${prop.value}`).join('\n');
 
       const result = await summarizeProductInformation({
-        productName: currentData.basicInfo.name.en,
-        productDescription: currentData.basicInfo.descriptionLong.en,
+        productName: primaryName,
+        productDescription: primaryDescription,
         productSpecifications: `Technical Specifications:\n${techSpecsString}\n\nProperties:\n${propertiesString}`,
       });
 
       if (result.summary) {
+        // For now, AI summary populates English, and a placeholder for Norwegian
         form.setValue("aiSummary.en", result.summary, { shouldValidate: true, shouldDirty: true });
-        form.setValue("aiSummary.no", result.summary + " (automatisk oppsummert)", { shouldValidate: true, shouldDirty: true });
-        toast({ title: "AI Summary Generated", description: "English summary has been populated." });
+        form.setValue("aiSummary.no", result.summary + " (automatisk oppsummert)", { shouldValidate: true, shouldDirty: true }); // Consider a more sophisticated translation or separate generation for NO
+        toast({ title: "AI Summary Generated", description: "Summary has been populated." });
       } else {
         toast({ title: "AI Summary Failed", description: "Could not generate summary.", variant: "destructive" });
       }
@@ -578,7 +601,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       control={form.control}
                       name="marketingSEO.seoTitle"
                       render={({ field }) => (
-                        <FormItem>
+                         <FormItem>
                           <FormControl>
                             <MultilingualInput id="seoTitle" label="SEO Title" required {...field} />
                           </FormControl>
@@ -621,7 +644,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                   <ProductFormSection title="AI Summary" value="ai-summary" icon={Brain} description="Generate or review AI-powered product summaries.">
                     <Button type="button" onClick={handleGenerateSummary} disabled={isGeneratingSummary || isSubmitting} className="mb-4">
                       <Sparkles className="mr-2 h-4 w-4" />
-                      {isGeneratingSummary ? "Generating..." : "Generate AI Summary (EN)"}
+                      {isGeneratingSummary ? "Generating..." : "Generate AI Summary"}
                     </Button>
                      <FormField
                       control={form.control}
@@ -633,9 +656,9 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                               id="aiSummary"
                               label="AI Generated Summary"
                               type="textarea"
-                              disabled={true}
+                              disabled={true} // Summary is not directly editable by user
                               value={field.value || defaultMultilingualString}
-                              onChange={field.onChange}
+                              onChange={field.onChange} // Keep onChange for react-hook-form
                             />
                           </FormControl>
                           <FormMessage />

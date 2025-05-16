@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { MultilingualString } from '@/types/product';
@@ -60,7 +61,8 @@ export function MultilingualInput({
               value={value[lang.code] || ''}
               onChange={(e) => handleInputChange(lang.code, e.target.value)}
               placeholder={placeholder ? placeholder[lang.code] : `Enter ${label.toLowerCase()} in ${lang.name.toLowerCase()}`}
-              required={required && lang.code === 'en'} // Example: make English required
+              // Removed: required={required && lang.code === 'en'} 
+              // Zod schema now handles the "at least one language" logic
               rows={type === 'textarea' ? 3 : undefined}
               disabled={disabled}
               className="mt-1"
@@ -71,3 +73,4 @@ export function MultilingualInput({
     </div>
   );
 }
+
