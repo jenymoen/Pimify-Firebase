@@ -19,7 +19,7 @@ export default function HomePage() {
           <span className="text-xl font-semibold text-primary">Pimify</span>
         </Link>
         <Link href="/products" passHref>
-          <Button size="md" variant="outline" className="text-primary border-primary hover:bg-primary/10">
+          <Button size="md"> {/* Changed variant and removed custom classes */}
             <LogIn className="mr-2 h-4 w-4" /> Login
           </Button>
         </Link>
@@ -49,3 +49,4 @@ export default function HomePage() {
     </div>
   );
 }
+
