@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { Product } from '@/types/product';
@@ -6,7 +7,7 @@ import Image from 'next/image';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowRight, Edit, Trash2 } from 'lucide-react';
+import { ArrowRight, Edit, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,12 +19,43 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useProductStore } from '@/lib/product-store';
 import { useToast } from "@/hooks/use-toast";
 
 interface ProductCardProps {
   product: Product;
 }
+
+const isProductComplete = (product: Product): boolean => {
+  const { basicInfo, media, marketingSEO, pricingAndStock } = product;
+
+  const isNameComplete = !!(basicInfo.name.en?.trim() || basicInfo.name.no?.trim());
+  const isSkuComplete = !!basicInfo.sku?.trim();
+  const isShortDescComplete = !!(basicInfo.descriptionShort.en?.trim() || basicInfo.descriptionShort.no?.trim());
+  const isLongDescComplete = !!(basicInfo.descriptionLong.en?.trim() || basicInfo.descriptionLong.no?.trim());
+  const isBrandComplete = !!basicInfo.brand?.trim();
+  const hasImage = media.images && media.images.length > 0 && !!media.images[0].url?.trim() && (media.images[0].url.startsWith('http') || media.images[0].url.startsWith('/'));
+  const isSeoTitleComplete = !!(marketingSEO.seoTitle.en?.trim() || marketingSEO.seoTitle.no?.trim());
+  const isSeoDescriptionComplete = !!(marketingSEO.seoDescription.en?.trim() || marketingSEO.seoDescription.no?.trim());
+  
+  const hasStandardPrice = pricingAndStock?.standardPrice && 
+                           pricingAndStock.standardPrice.length > 0 && 
+                           pricingAndStock.standardPrice[0].amount !== undefined && 
+                           pricingAndStock.standardPrice[0].amount >= 0;
+
+  return (
+    isNameComplete &&
+    isSkuComplete &&
+    isShortDescComplete &&
+    isLongDescComplete &&
+    isBrandComplete &&
+    hasImage &&
+    isSeoTitleComplete &&
+    isSeoDescriptionComplete &&
+    hasStandardPrice
+  );
+};
 
 export function ProductCard({ product }: ProductCardProps) {
   const { deleteProduct } = useProductStore();
@@ -38,8 +70,10 @@ export function ProductCard({ product }: ProductCardProps) {
     });
   };
   
-  const firstImage = product.media.images.length > 0 ? product.media.images[0].url : "https://placehold.co/300x300.png";
-  const imageAlt = product.media.images.length > 0 ? (product.media.images[0].altText?.en || product.basicInfo.name.en) : product.basicInfo.name.en;
+  const firstImage = product.media.images.length > 0 && product.media.images[0].url ? product.media.images[0].url : "https://placehold.co/300x300.png";
+  const imageAlt = product.media.images.length > 0 && product.media.images[0].altText?.en ? product.media.images[0].altText.en : (product.basicInfo.name.en || product.basicInfo.sku);
+
+  const complete = isProductComplete(product);
 
   return (
     <Card className="flex flex-col overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
@@ -50,7 +84,7 @@ export function ProductCard({ product }: ProductCardProps) {
             alt={imageAlt}
             layout="fill"
             objectFit="contain"
-            className="p-1" // Added some padding so image doesn't touch edges
+            className="p-1" 
             data-ai-hint="product item"
           />
         </div>
@@ -63,7 +97,7 @@ export function ProductCard({ product }: ProductCardProps) {
           </CardTitle>
           <CardDescription className="text-sm text-muted-foreground mb-1">SKU: {product.basicInfo.sku}</CardDescription>
           <p className="text-sm text-foreground/80 line-clamp-2 mb-2">
-            {product.basicInfo.descriptionShort.en || 'No short description available.'}
+            {product.basicInfo.descriptionShort.en || product.basicInfo.descriptionShort.no || 'No short description available.'}
           </p>
           {product.aiSummary?.en && (
              <p className="text-xs text-accent-foreground/70 bg-accent/20 p-2 rounded-md line-clamp-2 italic">
@@ -73,15 +107,30 @@ export function ProductCard({ product }: ProductCardProps) {
         </div>
       </CardHeader>
       <CardContent className="flex-grow p-6 pt-0">
-        {/* Can add more details here if needed, e.g. price, brand */}
         <p className="text-sm"><strong>Brand:</strong> {product.basicInfo.brand}</p>
       </CardContent>
       <CardFooter className="p-4 bg-muted/30 flex justify-between items-center">
-        <Link href={`/products/${product.id}`} passHref>
-          <Button variant="outline" size="sm">
-            View Details <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {complete ? (
+                  <CheckCircle2 className="h-5 w-5 text-green-600" />
+                ) : (
+                  <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                )}
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{complete ? 'Product Complete' : 'Product Incomplete'}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <Link href={`/products/${product.id}`} passHref>
+            <Button variant="outline" size="sm">
+              View Details <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </Link>
+        </div>
         <div className="flex gap-2">
           <Link href={`/products/${product.id}/edit`} passHref>
             <Button variant="ghost" size="icon" aria-label="Edit product">
@@ -115,3 +164,4 @@ export function ProductCard({ product }: ProductCardProps) {
     </Card>
   );
 }
+
