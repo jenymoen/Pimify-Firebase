@@ -98,7 +98,10 @@ const mediaEntrySchema = z.object({
 const productOptionSchema = z.object({
   id: z.string(),
   name: z.string().min(1, "Option name is required."),
-  values: z.string().min(1, "Option values are required (comma-separated).").transform(val => val.split(',').map(v => v.trim()).filter(v => v)),
+  values: z.string()
+    .min(1, "Option values are required (comma-separated).") // Ensures the input string isn't empty
+    .transform(val => val.split(',').map(v => v.trim()).filter(v => v)) // Transforms to string[]
+    .refine(arr => arr.length > 0, { message: "Please provide at least one valid, non-empty option value (e.g., 'Red' or 'Red,Blue'). Values like ' , ' are not valid." }) // Ensures the array isn't empty after transform
 });
 
 const productVariantSchema = z.object({
@@ -218,20 +221,20 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         costPriceAmount: existingProduct.pricingAndStock?.costPrice?.[0]?.amount,
         costPriceCurrency: existingProduct.pricingAndStock?.costPrice?.[0]?.currency || "NOK",
       },
-      options: (existingProduct.options || []).map(opt => ({
+      options: (existingProduct.options || []).map(opt => ({ // When loading an existing product
         id: opt.id,
         name: opt.name,
-        values: opt.values.join(','), // store has string[], form has string
+        values: opt.values.join(','), // store has string[], form expects string for this field
       })),
-      variants: (existingProduct.variants || []).map(v => {
+      variants: (existingProduct.variants || []).map(v => { // When loading an existing product
         return { 
             id: v.id,
             sku: v.sku,
             gtin: v.gtin || '',
             optionValues: v.optionValues,
-            standardPriceAmount: v.standardPrice?.[0]?.amount,
+            standardPriceAmount: v.standardPrice?.[0]?.amount, // Form expects flat amount
             standardPriceCurrency: v.standardPrice?.[0]?.currency || "NOK",
-            salePriceAmount: v.salePrice?.[0]?.amount,
+            salePriceAmount: v.salePrice?.[0]?.amount, // Form expects flat amount
             salePriceCurrency: v.salePrice?.[0]?.currency || "NOK",
         };
       }),
@@ -310,33 +313,33 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
           images: (data.media.images || []).filter(img => {
             if (!img.url || img.url.trim() === '') return false;
              try {
-                const url = new URL(img.url); // This will throw if img.url is not a valid absolute URL
+                const url = new URL(img.url); 
                 return url.protocol === "http:" || url.protocol === "https:";
               } catch (_) {
-                // If it's not an absolute URL, check if it's a valid relative path
                 return img.url.startsWith('/');
               }
           })
         },
         marketingSEO: data.marketingSEO,
         aiSummary: data.aiSummary,
-        pricingAndStock: { // Base pricing
+        pricingAndStock: { 
             standardPrice: [],
             salePrice: [],
             costPrice: [],
         },
-        options: (data.options || []).map(opt => ({ // Map form options back to store structure
+        options: (data.options || []).map(opt => ({ 
             id: opt.id,
             name: opt.name,
-            values: Array.isArray(opt.values) ? opt.values : (typeof opt.values === 'string' ? opt.values.split(',').map(v => v.trim()).filter(v => v) : []),
+            // data.options[x].values is already string[] here due to Zod transform
+            values: opt.values, 
         })),
         variants: (data.variants || []).map(vFormData => {
           const stdPriceEntries: PriceEntry[] = (vFormData.standardPriceAmount !== undefined && vFormData.standardPriceAmount !== null)
               ? [{ id: uuidv4(), amount: Number(vFormData.standardPriceAmount), currency: vFormData.standardPriceCurrency || "NOK" }]
-              : []; // Use empty array if no price
+              : [];
           const slPriceEntries: PriceEntry[] = (vFormData.salePriceAmount !== undefined && vFormData.salePriceAmount !== null)
               ? [{ id: uuidv4(), amount: Number(vFormData.salePriceAmount), currency: vFormData.salePriceCurrency || "NOK" }]
-              : []; // Use empty array if no price
+              : [];
 
           const variantForPayload: ProductVariant = {
             id: vFormData.id,
@@ -344,14 +347,12 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
             optionValues: vFormData.optionValues,
             standardPrice: stdPriceEntries,
             salePrice: slPriceEntries,
-            // costPrice is not in variant form schema currently
           };
           if (vFormData.gtin) variantForPayload.gtin = vFormData.gtin;
           return variantForPayload;
         }),
       };
 
-      // Populate base pricingAndStock from form
       if (data.pricingAndStock) {
         if (data.pricingAndStock.standardPriceAmount !== undefined && data.pricingAndStock.standardPriceAmount !== null) {
             productPayloadForSave.pricingAndStock!.standardPrice = [{
@@ -387,7 +388,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         toast({ title: "Product Created", description: `"${newProd.basicInfo.name.en || newProd.basicInfo.name.no || newProd.basicInfo.sku}" has been successfully created.` });
       }
       router.push("/products");
-      router.refresh(); // ensures data is re-fetched on the product list page if it uses server components
+      router.refresh(); 
     } catch (error) {
       console.error("Submission error:", error);
       toast({ title: "Error", description: "Failed to save product. Please try again.", variant: "destructive" });
@@ -432,7 +433,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
 
       if (result.summary) {
         form.setValue("aiSummary.en", result.summary, { shouldValidate: true, shouldDirty: true });
-        form.setValue("aiSummary.no", result.summary + " (automatisk oppsummert)", { shouldValidate: true, shouldDirty: true }); // Example for Norwegian
+        form.setValue("aiSummary.no", result.summary + " (automatisk oppsummert)", { shouldValidate: true, shouldDirty: true }); 
         toast({ title: "AI Summary Generated", description: "Summary has been populated." });
       } else {
         toast({ title: "AI Summary Failed", description: "Could not generate summary.", variant: "destructive" });
@@ -458,29 +459,30 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
   };
 
   const generateVariants = () => {
-    const options = form.getValues("options");
+    const options = form.getValues("options"); // This is an array of {id: string, name: string, values: string (comma-separated)}
     if (!options || options.length === 0) {
         toast({ title: "No Options Defined", description: "Please define at least one option to generate variants.", variant: "destructive" });
         replaceVariants([]);
         return;
     }
 
-    const validOptions = options.filter(opt => opt.name && opt.values && (Array.isArray(opt.values) ? opt.values.length > 0 : opt.values.trim() !== ''));
-    if (validOptions.length === 0) {
-        toast({ title: "Incomplete Options", description: "Ensure all defined options have a name and values.", variant: "destructive" });
-        replaceVariants([]);
+    const validOptions = options.filter(opt => opt.name && opt.name.trim() && opt.values && typeof opt.values === 'string' && opt.values.trim() !== '');
+    if (validOptions.length !== options.length || validOptions.length === 0) {
+        // This means some options were incomplete (missing name or values string)
+        toast({ title: "Incomplete Options", description: "Ensure all defined options have a name and a non-empty values string.", variant: "destructive" });
+        replaceVariants([]); // Clear variants if options are bad
         return;
     }
 
     const parsedOptions = validOptions.map(opt => ({
-        name: opt.name,
-        // opt.values is already string[] here due to Zod transform on productOptionSchema
-        values: Array.isArray(opt.values) ? opt.values : [], 
+        name: opt.name.trim(),
+        // opt.values is a string here; parse it.
+        values: opt.values.split(',').map(v => v.trim()).filter(v => v),
     }));
 
 
     if (parsedOptions.some(opt => opt.values.length === 0)) {
-        toast({ title: "Empty Option Values", description: "One or more options have no values defined after parsing.", variant: "destructive" });
+        toast({ title: "Invalid Option Values", description: "Some option values (e.g., ' , ' or ' ,,, ') are invalid because they don't produce any actual items after parsing. Please use comma-separated words like 'Red, Blue, Green'.", variant: "destructive" });
         replaceVariants([]);
         return;
     }
