@@ -186,8 +186,17 @@ export default function ProductDetailsPage() {
         </DetailSection>
       )}
 
+      <DetailSection title="Attributes &amp; Specifications" icon={Tag}>
+        {attributesAndSpecs.categories && attributesAndSpecs.categories.length > 0 && (
+          <p className="text-sm"><span className="font-medium text-foreground/90">Categories:</span> <span className="text-muted-foreground">{attributesAndSpecs.categories.join(', ')}</span></p>
+        )}
+        <KeyValueDisplay label="Properties" items={attributesAndSpecs.properties} />
+        <KeyValueDisplay label="Technical Specifications" items={attributesAndSpecs.technicalSpecs} />
+        {attributesAndSpecs.countryOfOrigin && <p className="text-sm"><span className="font-medium text-foreground/90">Country of Origin:</span> <span className="text-muted-foreground">{attributesAndSpecs.countryOfOrigin}</span></p>}
+      </DetailSection>
+
       {options && options.length > 0 && (
-        <DetailSection title="Product Options & Variants" icon={Cog}>
+        <DetailSection title="Product Options &amp; Variants" icon={Cog}>
           <div className="space-y-3 mb-4">
             {options.map(opt => (
               <div key={opt.id}>
@@ -228,34 +237,22 @@ export default function ProductDetailsPage() {
           )}
         </DetailSection>
       )}
-
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8">
-        <DetailSection title="Attributes & Specifications" icon={Tag}>
-          {attributesAndSpecs.categories && attributesAndSpecs.categories.length > 0 && (
-            <p className="text-sm"><span className="font-medium text-foreground/90">Categories:</span> <span className="text-muted-foreground">{attributesAndSpecs.categories.join(', ')}</span></p>
-          )}
-          <KeyValueDisplay label="Properties" items={attributesAndSpecs.properties} />
-          <KeyValueDisplay label="Technical Specifications" items={attributesAndSpecs.technicalSpecs} />
-          {attributesAndSpecs.countryOfOrigin && <p className="text-sm"><span className="font-medium text-foreground/90">Country of Origin:</span> <span className="text-muted-foreground">{attributesAndSpecs.countryOfOrigin}</span></p>}
-        </DetailSection>
-
-        <DetailSection title="Marketing & SEO" icon={BarChart3}>
-          <MultilingualTextDisplay label="SEO Title" data={marketingSEO.seoTitle} />
-          <MultilingualTextDisplay label="SEO Description" data={marketingSEO.seoDescription} />
-          {marketingSEO.keywords && marketingSEO.keywords.length > 0 && (
-             <p className="text-sm"><span className="font-medium text-foreground/90">Keywords:</span> <span className="text-muted-foreground">{marketingSEO.keywords.join(', ')}</span></p>
-          )}
-        </DetailSection>
-
-        {pricingAndStock && (!variants || variants.length === 0) && (pricingAndStock.standardPrice?.length > 0 || pricingAndStock.salePrice?.length > 0 || pricingAndStock.costPrice?.length > 0) && (
-          <DetailSection title="Base Pricing" icon={DollarSign}>
-            <PriceDisplay label="Original Price" priceEntries={pricingAndStock.standardPrice} />
-            <PriceDisplay label="Sales Price" priceEntries={pricingAndStock.salePrice} />
-            <PriceDisplay label="Cost Price" priceEntries={pricingAndStock.costPrice} />
-          </DetailSection>
+      
+      <DetailSection title="Marketing &amp; SEO" icon={BarChart3}>
+        <MultilingualTextDisplay label="SEO Title" data={marketingSEO.seoTitle} />
+        <MultilingualTextDisplay label="SEO Description" data={marketingSEO.seoDescription} />
+        {marketingSEO.keywords && marketingSEO.keywords.length > 0 && (
+            <p className="text-sm"><span className="font-medium text-foreground/90">Keywords:</span> <span className="text-muted-foreground">{marketingSEO.keywords.join(', ')}</span></p>
         )}
-      </div>
+      </DetailSection>
+
+      {pricingAndStock && (!variants || variants.length === 0) && (pricingAndStock.standardPrice?.length > 0 || pricingAndStock.salePrice?.length > 0 || pricingAndStock.costPrice?.length > 0) && (
+        <DetailSection title="Base Pricing" icon={DollarSign}>
+          <PriceDisplay label="Original Price" priceEntries={pricingAndStock.standardPrice} />
+          <PriceDisplay label="Sales Price" priceEntries={pricingAndStock.salePrice} />
+          <PriceDisplay label="Cost Price" priceEntries={pricingAndStock.costPrice} />
+        </DetailSection>
+      )}
 
       {media.images && media.images.length > 1 && (
         <DetailSection title="Additional Media" icon={ImageIcon}>
