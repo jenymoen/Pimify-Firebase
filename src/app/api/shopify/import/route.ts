@@ -1,6 +1,8 @@
 
+'use server';
+
 import { type NextRequest, NextResponse } from 'next/server';
-import type { Product, ProductStatus as PimStatus, MediaEntry, KeyValueEntry, PriceEntry } from '@/types/product';
+import type { Product, ProductStatus as PimStatus, MediaEntry, KeyValueEntry, PriceEntry, ProductOption as PimProductOption, ProductVariant as PimProductVariant } from '@/types/product';
 import { initialProductData, defaultMultilingualString } from '@/types/product';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -14,25 +16,25 @@ interface ShopifyImageShopify {
   height: number;
 }
 
-interface ShopifyPriceSet {
-    shop_money: { amount: string; currency_code: string; };
-    presentment_money: { amount: string; currency_code: string; };
+interface ShopifyOptionShopify {
+  id: number;
+  name: string;
+  position: number;
+  values: string[];
 }
 
 interface ShopifyVariantShopify {
   id: number;
   product_id: number;
-  title: string;
+  title: string; // e.g., "Red / S"
   price: string; 
   compare_at_price: string | null; 
   sku: string | null;
   barcode: string | null; // GTIN
   inventory_quantity: number;
-  // available_for_sale: boolean; 
-  // option1: string | null; 
-  // option2: string | null; 
-  // option3: string | null;
-  // presentment_prices: Array<{ price: { amount: string; currency_code: string }, compare_at_price: { amount: string; currency_code: string } | null }>;
+  option1: string | null;
+  option2: string | null;
+  option3: string | null;
 }
 
 interface ShopifyProductShopify {
@@ -46,6 +48,7 @@ interface ShopifyProductShopify {
   published_at: string | null; 
   status: 'active' | 'archived' | 'draft'; 
   tags: string; 
+  options: ShopifyOptionShopify[];
   variants: ShopifyVariantShopify[];
   images: ShopifyImageShopify[];
 }
@@ -76,34 +79,74 @@ function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify): Product 
   const longDescriptionEn = shopifyProduct.body_html || '';
   const shortDescriptionEn = stripHtml(longDescriptionEn).substring(0, 200) + (longDescriptionEn.length > 200 ? '...' : '');
 
-  const standardPrice: PriceEntry[] = [];
-  const salePrice: PriceEntry[] = [];
-  
-  // Default currency; ideally, extract from Shopify if consistently available per price
-  const shopifyCurrency = "USD"; // Placeholder: Shopify might return currency with prices. Adjust if needed.
+  // Base pricing from the first variant (used if no variants are mapped or as a fallback)
+  const baseStandardPrice: PriceEntry[] = [];
+  const baseSalePrice: PriceEntry[] = [];
+  const shopifyStoreCurrency = "NOK"; // Assuming NOK as default, ideally this would come from store settings or Shopify API
 
   if (firstVariant) {
     const currentPrice = parseFloat(firstVariant.price);
     const originalPrice = firstVariant.compare_at_price ? parseFloat(firstVariant.compare_at_price) : null;
 
     if (originalPrice && originalPrice > currentPrice) {
-      standardPrice.push({
+      baseStandardPrice.push({
         id: uuidv4(),
         amount: originalPrice,
-        currency: shopifyCurrency, 
+        currency: shopifyStoreCurrency, 
       });
-      salePrice.push({
+      baseSalePrice.push({
         id: uuidv4(),
         amount: currentPrice,
-        currency: shopifyCurrency,
+        currency: shopifyStoreCurrency,
       });
     } else {
-      standardPrice.push({
+      baseStandardPrice.push({
         id: uuidv4(),
         amount: currentPrice,
-        currency: shopifyCurrency,
+        currency: shopifyStoreCurrency,
       });
     }
+  }
+
+  // Map Shopify options to PIM options
+  const pimOptions: PimProductOption[] = shopifyProduct.options ? shopifyProduct.options.map(opt => ({
+    id: String(opt.id), // Using Shopify option ID
+    name: opt.name,
+    values: opt.values,
+  })) : [];
+
+  // Map Shopify variants to PIM variants
+  const pimVariants: PimProductVariant[] = [];
+  if (shopifyProduct.variants && shopifyProduct.options && shopifyProduct.options.length > 0) {
+    shopifyProduct.variants.forEach(sv => {
+      const optionValues: Record<string, string> = {};
+      if (shopifyProduct.options[0] && sv.option1) optionValues[shopifyProduct.options[0].name] = sv.option1;
+      if (shopifyProduct.options[1] && sv.option2) optionValues[shopifyProduct.options[1].name] = sv.option2;
+      if (shopifyProduct.options[2] && sv.option3) optionValues[shopifyProduct.options[2].name] = sv.option3;
+
+      const variantStandardPrice: PriceEntry[] = [];
+      const variantSalePrice: PriceEntry[] = [];
+      
+      const varCurrentPrice = parseFloat(sv.price);
+      const varOriginalPrice = sv.compare_at_price ? parseFloat(sv.compare_at_price) : null;
+
+      if (varOriginalPrice && varOriginalPrice > varCurrentPrice) {
+        variantStandardPrice.push({ id: uuidv4(), amount: varOriginalPrice, currency: shopifyStoreCurrency });
+        variantSalePrice.push({ id: uuidv4(), amount: varCurrentPrice, currency: shopifyStoreCurrency });
+      } else {
+        variantStandardPrice.push({ id: uuidv4(), amount: varCurrentPrice, currency: shopifyStoreCurrency });
+      }
+
+      pimVariants.push({
+        id: String(sv.id), // Using Shopify variant ID
+        sku: sv.sku || `SHOPIFY-VAR-${sv.id}`,
+        gtin: sv.barcode || undefined,
+        optionValues,
+        standardPrice: variantStandardPrice,
+        salePrice: variantSalePrice.length > 0 ? variantSalePrice : [], // store as empty array if no sale price
+        costPrice: [], // Shopify doesn't directly expose cost price here
+      });
+    });
   }
 
 
@@ -140,11 +183,13 @@ function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify): Product 
       seoDescription: { ...defaultMultilingualString, en: shortDescriptionEn }, 
       keywords: shopifyProduct.tags ? shopifyProduct.tags.split(',').map(tag => tag.trim()).filter(tag => tag) : [],
     },
-    pricingAndStock: {
-        standardPrice,
-        salePrice: salePrice.length > 0 ? salePrice : undefined,
-        costPrice: [], // Shopify doesn't expose cost price easily via basic product API
+    pricingAndStock: { // This is for the base product if no variants, or as a fallback
+        standardPrice: baseStandardPrice,
+        salePrice: baseSalePrice.length > 0 ? baseSalePrice : [],
+        costPrice: [], 
     },
+    options: pimOptions,
+    variants: pimVariants,
     aiSummary: { ...defaultMultilingualString }, 
     createdAt: shopifyProduct.created_at || new Date().toISOString(),
     updatedAt: shopifyProduct.updated_at || new Date().toISOString(),
