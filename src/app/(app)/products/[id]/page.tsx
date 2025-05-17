@@ -6,10 +6,10 @@ import { useParams, useRouter } from 'next/navigation';
 import type { Product, KeyValueEntry, MediaEntry, PriceEntry, ProductOption, ProductVariant } from '@/types/product';
 import { useProductStore } from '@/lib/product-store';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'; 
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
-import { ArrowLeft, Edit, Tag, Info, ImageIcon, BarChart3, Brain, Package, DollarSign, Cog } from 'lucide-react'; 
+import { ArrowLeft, Edit, Tag, Info, ImageIcon, BarChart3, Brain, Package, DollarSign, Cog } from 'lucide-react';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format, parseISO } from 'date-fns';
@@ -87,7 +87,7 @@ export default function ProductDetailsPage() {
   const router = useRouter();
   const params = useParams();
   const productId = params.id as string;
-  
+
   const { findProductById } = useProductStore();
   const [product, setProduct] = useState<Product | undefined | null>(undefined);
 
@@ -179,7 +179,7 @@ export default function ProductDetailsPage() {
           </div>
         </CardContent>
       </Card>
-      
+
       {product.aiSummary && (product.aiSummary.en || product.aiSummary.no) && (
         <DetailSection title="AI Summary" icon={Brain}>
           <MultilingualTextDisplay label="Summary" data={product.aiSummary} />
@@ -205,7 +205,7 @@ export default function ProductDetailsPage() {
               </div>
             ))}
           </div>
-          {variants && variants.length > 0 && (
+          {variants && variants.length > 0 ? (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -234,10 +234,12 @@ export default function ProductDetailsPage() {
                 </TableBody>
               </Table>
             </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No variants defined for these options. You can generate them in the product edit form.</p>
           )}
         </DetailSection>
       )}
-      
+
       <DetailSection title="Marketing &amp; SEO" icon={BarChart3}>
         <MultilingualTextDisplay label="SEO Title" data={marketingSEO.seoTitle} />
         <MultilingualTextDisplay label="SEO Description" data={marketingSEO.seoDescription} />
