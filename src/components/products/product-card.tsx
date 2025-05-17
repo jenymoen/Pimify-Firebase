@@ -7,7 +7,7 @@ import Image from 'next/image';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowRight, Edit, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { ArrowRight, Edit, Trash2, CheckCircle2, AlertTriangle, Cog } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,6 +45,7 @@ export function ProductCard({ product }: ProductCardProps) {
   const imageAlt = product.media.images.length > 0 && product.media.images[0].altText?.en ? product.media.images[0].altText.en : (product.basicInfo.name.en || product.basicInfo.sku);
 
   const complete = isProductComplete(product);
+  const hasVariants = product.variants && product.variants.length > 0;
 
   return (
     <Card className="flex flex-col overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
@@ -79,6 +80,12 @@ export function ProductCard({ product }: ProductCardProps) {
       </CardHeader>
       <CardContent className="flex-grow p-6 pt-0">
         <p className="text-sm"><strong>Brand:</strong> {product.basicInfo.brand}</p>
+        {hasVariants && (
+          <div className="mt-2 flex items-center text-xs text-muted-foreground">
+            <Cog className="mr-1 h-3 w-3" />
+            <span>{product.variants!.length} variant{product.variants!.length > 1 ? 's' : ''} available</span>
+          </div>
+        )}
       </CardContent>
       <CardFooter className="p-4 bg-muted/30 flex justify-between items-center">
         <div className="flex items-center gap-2">
@@ -135,3 +142,4 @@ export function ProductCard({ product }: ProductCardProps) {
     </Card>
   );
 }
+
