@@ -1,30 +1,43 @@
+
 // src/middleware.ts
 import { type NextRequest, NextResponse } from 'next/server';
 
 export function middleware(request: NextRequest) {
   const hostname = request.headers.get('host') || '';
-  const parts = hostname.split('.');
-  let tenantId = 'default_server'; // Default if no specific tenant identified
+  let tenantId = 'default_unknown'; // Default fallback
 
-  // Example: tenant.pimify.io (length 3)
-  // Example: localhost:3000 (length 1, after splitting by '.', then take first part by ':')
-  
-  if (hostname.includes('localhost')) {
+  // Remove port number for localhost checks
+  const hostnameNoPort = hostname.split(':')[0];
+
+  if (hostnameNoPort === 'localhost') {
     tenantId = 'localhost_dev';
-  } else if (parts.length > 2 && parts[0] !== 'www') {
-    // More robust check for your actual domain structure
-    if (parts[1] === 'pimify' && parts[2] === 'io') {
-       tenantId = parts[0];
+  } else if (hostname.endsWith('.pimify.io')) {
+    const parts = hostname.split('.');
+    // Expects tenant.pimify.io (3 parts) or www.pimify.io (3 parts, but www is not a tenant)
+    // or just pimify.io (2 parts)
+    if (parts.length === 3 && parts[0] !== 'www') {
+      tenantId = parts[0]; // e.g., "defendo" from "defendo.pimify.io"
+    } else if (parts.length === 2 && parts[0] === 'pimify') {
+      tenantId = 'default_host'; // Main domain pimify.io
+    } else if (parts.length === 3 && parts[0] === 'www' && parts[1] === 'pimify') {
+      tenantId = 'default_host'; // www.pimify.io
+    }
+  } else {
+    // Handle other domains or custom domains if necessary in the future
+    // For now, if it's not localhost or *.pimify.io, it's 'default_unknown'
+    // Or you could attempt to extract the first part as a tenant if your structure allows
+    const parts = hostname.split('.');
+    if (parts.length > 1) { // Avoid using TLD as tenantId
+        // This is a generic assumption, might need refinement for custom domains
+        // tenantId = parts[0]; 
     }
   }
-
-  // You can add the tenantId to request headers to be accessed by API routes or server components
+  
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-tenant-id', tenantId);
   
-  // console.log(`Middleware: Identified tenantId "${tenantId}" for host "${hostname}"`);
+  // console.log(`Middleware: Host "${hostname}", Tenant ID "${tenantId}"`);
 
-  // Continue with the request, adding the new header
   return NextResponse.next({
     request: {
       headers: requestHeaders,
@@ -37,11 +50,11 @@ export const config = {
   matcher: [
     /*
      * Match all request paths except for the ones starting with:
-     * - api (API routes)
+     * - api (API routes - they will still get the headers if called from a matched path)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      */
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+    '/((?!_next/static|_next/image|favicon.ico).*)', // Applied to API routes as well now
   ],
 };

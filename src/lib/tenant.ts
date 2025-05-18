@@ -1,37 +1,46 @@
+
 // src/lib/tenant.ts
 
 /**
- * Extracts a tenant ID from the current window.location.hostname.
- * Assumes subdomains like tenantid.domain.com.
- * Returns 'default' if no clear subdomain tenant is found.
+ * Extracts a tenant ID from the current window.location.hostname for client-side use.
+ * This is primarily for localStorage key generation.
+ * Server-side tenant identification should rely on middleware.
  */
 export function getCurrentTenantId(): string {
   if (typeof window === 'undefined') {
-    // Cannot determine tenant on the server without request context
-    // Middleware should handle server-side tenant identification
-    return 'default_server'; 
+    // This function is intended for client-side use.
+    // Server-side should use headers set by middleware.
+    // Returning a generic server ID if called on server, though this shouldn't happen for localStorage.
+    return 'server_context_tenant'; 
   }
 
   const hostname = window.location.hostname;
-  const parts = hostname.split('.');
+  // Remove port number for localhost checks, e.g. localhost:3000 -> localhost
+  const hostnameNoPort = hostname.split(':')[0];
 
-  // Example: tenant.pimify.io (length 3)
-  // Example: localhost (length 1)
-  // Example: pimify.io (length 2)
-  if (parts.length > 2 && parts[0] !== 'www' && parts[0] !== 'localhost') {
-    // Basic check: if it's not pimify.io itself and has a subdomain part
-    // This logic might need to be more robust depending on your domain structure
-    // e.g., ensuring it's not 'app.pimify.io' if 'app' is not a tenant.
-    if (parts[1] === 'pimify' && parts[2] === 'io') { // More specific to your pimify.io domain
-        return parts[0];
-    }
+
+  if (hostnameNoPort === 'localhost') {
+    return 'localhost_dev'; // Consistent ID for any localhost access
   }
   
-  // For localhost or main domain without a recognized tenant subdomain
-  if (hostname === 'localhost' || hostname === 'pimify.io' || hostname === 'www.pimify.io') {
-      return 'default_host';
+  // Handles your_tenant.pimify.io
+  if (hostname.endsWith('.pimify.io')) {
+    const parts = hostname.split('.');
+    if (parts.length === 3 && parts[0] !== 'www') {
+      return parts[0]; // e.g., "defendo" from "defendo.pimify.io"
+    }
+    // Handles pimify.io or www.pimify.io as the default host
+    if ((parts.length === 2 && parts[0] === 'pimify') || (parts.length === 3 && parts[0] === 'www' && parts[1] === 'pimify')) {
+        return 'default_host';
+    }
   }
 
-  // Fallback, could be an unrecognized subdomain or a different setup
-  return 'default_unknown';
+  // Fallback for other domains or if structure is unexpected
+  // You might want a more sophisticated way to handle custom domains in a real app
+  const parts = hostname.split('.');
+  if (parts.length > 1 && parts[0] !== 'www') {
+    return parts[0]; // Generic fallback: use the first part of the domain
+  }
+  
+  return 'default_unknown'; // Default fallback
 }

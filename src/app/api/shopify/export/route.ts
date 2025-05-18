@@ -59,9 +59,9 @@ function mapPimToShopifyProduct(product: Product): { product: ShopifyProductPayl
 
   if (product.media.images && product.media.images.length > 0) {
     shopifyPayload.images = product.media.images
-      .filter(img => img.type === 'image' && img.url && (img.url.startsWith('http') || img.url.startsWith('/'))) // Ensure valid URL
+      .filter(img => img.type === 'image' && img.url && (img.url.startsWith('http') || img.url.startsWith('/'))) 
       .map(img => ({
-        src: img.url!, // Assert non-null as it's filtered
+        src: img.url!, 
         alt: img.altText?.en || product.basicInfo.name.en || '',
       }));
   }
@@ -89,7 +89,7 @@ function mapPimToShopifyProduct(product: Product): { product: ShopifyProductPayl
       } else if (stdPriceEntry) {
         variantPayload.price = stdPriceEntry.amount.toString();
       } else {
-         // Fallback to main product pricing if variant price is missing - or set a default
+        // Fallback to main product pricing if variant price is missing
         const mainStdPrice = product.pricingAndStock?.standardPrice?.[0];
         const mainSalePrice = product.pricingAndStock?.salePrice?.[0];
         if (mainSalePrice && mainStdPrice && mainSalePrice.amount < mainStdPrice.amount) {
@@ -100,7 +100,7 @@ function mapPimToShopifyProduct(product: Product): { product: ShopifyProductPayl
         }
       }
       
-      // Map option values to option1, option2, option3
+      // Map PIM option values to Shopify's option1, option2, option3
       // This assumes product.options (PIM) order matches shopifyPayload.options order
       product.options?.forEach((opt, index) => {
         if (index < 3) { // Shopify supports up to 3 options
@@ -136,6 +136,9 @@ function mapPimToShopifyProduct(product: Product): { product: ShopifyProductPayl
 
 
 export async function POST(request: NextRequest) {
+  const tenantId = request.headers.get('x-tenant-id');
+  // console.log(`Shopify Export API: Tenant ID from header: ${tenantId}`);
+
   try {
     const { storeUrl, apiKey, productsToExport } = await request.json();
 
@@ -156,6 +159,8 @@ export async function POST(request: NextRequest) {
       const shopifyApiUrl = `https://${storeUrl.replace(/^https?:\/\//, '')}/admin/api/2024-04/products.json`;
       const shopifyPayload = mapPimToShopifyProduct(product);
       
+      // console.log(`Shopify Export API: Sending to ${shopifyApiUrl} for tenant ${tenantId}`, JSON.stringify(shopifyPayload, null, 2));
+
       const shopifyResponse = await fetch(shopifyApiUrl, {
         method: 'POST',
         headers: {
@@ -176,12 +181,13 @@ export async function POST(request: NextRequest) {
                 errorDetail = await shopifyResponse.text();
             }
         } catch (e) {
+            // If reading the error body fails, use the text from the response.
             errorDetail = await shopifyResponse.text().catch(() => `Failed to retrieve error details for product, status: ${shopifyResponse.status}`);
         }
         const errorMessage = `Failed to export product "${product.basicInfo.name.en || product.basicInfo.sku}": ${errorDetail}`;
-        console.error(errorMessage.substring(0,1000)); // Log a snippet
+        console.error(errorMessage.substring(0,1000)); 
         errors.push(errorMessage);
-        continue; // Continue with the next product
+        continue; 
       }
       
       exportedCount++;
@@ -189,11 +195,10 @@ export async function POST(request: NextRequest) {
 
     if (errors.length > 0) {
       const fullMessage = `${exportedCount} products exported. ${errors.length} products failed.`;
-      // If all failed, return 500, otherwise 207 (Multi-Status)
-      const status = errors.length === productsToExport.length ? 500 : 207; 
+      const status = exportedCount === 0 && errors.length === productsToExport.length ? 500 : 207; 
       return NextResponse.json({ 
         message: fullMessage,
-        errors, // Send back the detailed errors
+        errors, 
       }, { status }); 
     }
 
@@ -204,4 +209,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message || 'An internal server error occurred during Shopify export.' }, { status: 500 });
   }
 }
-

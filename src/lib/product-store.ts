@@ -17,7 +17,7 @@ interface ProductState {
 }
 
 const getProductStorageName = () => {
-  const tenantId = getCurrentTenantId();
+  const tenantId = getCurrentTenantId(); // For client-side localStorage key
   return `products-storage-${tenantId}`;
 }
 
@@ -27,13 +27,11 @@ export const useProductStore = create<ProductState>()(
       products: [],
       addProduct: (productDataWithoutMeta, aiSummaryArgument) => {
         const newProduct: Product = {
-          ...initialProductData, // Start with defaults
-          ...productDataWithoutMeta, // Spread the incoming data, this includes basicInfo, attributesAndSpecs etc.
-                                    // and should also include options and variants if provided in productDataWithoutMeta
-          id: productDataWithoutMeta.basicInfo.sku || uuidv4(), // Ensure ID is set
-          // Explicitly ensure options and variants from payload take precedence or default to empty arrays
-          options: productDataWithoutMeta.options ? [...productDataWithoutMeta.options] : [],
-          variants: productDataWithoutMeta.variants ? [...productDataWithoutMeta.variants] : [],
+          ...initialProductData,
+          ...productDataWithoutMeta,
+          id: productDataWithoutMeta.basicInfo.sku || uuidv4(),
+          options: productDataWithoutMeta.options || [], // Ensure options is an array
+          variants: productDataWithoutMeta.variants || [], // Ensure variants is an array
           aiSummary: aiSummaryArgument || { ...defaultMultilingualString },
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -48,8 +46,8 @@ export const useProductStore = create<ProductState>()(
           products: state.products.map(p => {
             if (p.id === productId) {
               const updatedProduct: Product = {
-                ...p, // existing product data
-                ...productUpdateData, // incoming updates for top-level fields
+                ...p, 
+                ...productUpdateData, 
                 basicInfo: { ...p.basicInfo, ...productUpdateData.basicInfo },
                 attributesAndSpecs: { ...p.attributesAndSpecs, ...productUpdateData.attributesAndSpecs },
                 media: productUpdateData.media ? { ...p.media, ...productUpdateData.media } : p.media,
@@ -61,7 +59,6 @@ export const useProductStore = create<ProductState>()(
                   salePrice: productUpdateData.pricingAndStock.salePrice !== undefined ? productUpdateData.pricingAndStock.salePrice : p.pricingAndStock?.salePrice || [],
                   costPrice: productUpdateData.pricingAndStock.costPrice !== undefined ? productUpdateData.pricingAndStock.costPrice : p.pricingAndStock?.costPrice || [],
                 } : p.pricingAndStock,
-                // Ensure options and variants are correctly updated or preserved
                 options: productUpdateData.options !== undefined ? [...productUpdateData.options] : p.options || [],
                 variants: productUpdateData.variants !== undefined ? [...productUpdateData.variants] : p.variants || [],
                 aiSummary: productUpdateData.aiSummary ? { ...p.aiSummary, ...productUpdateData.aiSummary } : p.aiSummary,
@@ -117,39 +114,26 @@ export const useProductStore = create<ProductState>()(
       }
     }),
     {
-      name: getProductStorageName(),
+      name: getProductStorageName(), // Dynamic name based on tenant
       storage: createJSONStorage(() => localStorage),
-      // onRehydrateStorage: (state) => {
-      //   console.log(`Product store for tenant "${getCurrentTenantId()}" rehydrated.`);
-      //   if (!state?.products?.length) { // Check if rehydrated state has products
-      //     const tenantId = getCurrentTenantId();
-      //     const productsInitializedKey = `products_initialized-${tenantId}`;
-      //     const isAlreadyInitialized = localStorage.getItem(productsInitializedKey);
-
-      //     if (!isAlreadyInitialized && (tenantId === 'default_host' || tenantId.startsWith('default_') || tenantId.startsWith('localhost'))) {
-      //       localStorage.setItem(productsInitializedKey, 'true');
-      //       // Seeding logic moved to setTimeout to ensure it runs after potential rehydration finishes
-      //     }
-      //   }
-      // }
     }
   )
 );
 
-// This effect runs once on client mount
+// This effect runs once on client mount to seed example data for default/localhost tenants
 if (typeof window !== 'undefined') {
   const tenantId = getCurrentTenantId();
   const productsInitializedKey = `products_initialized-${tenantId}`;
   
-  // Defer the check and potential seeding slightly
+  // Defer the check and potential seeding slightly to allow persist middleware to rehydrate
   setTimeout(() => {
     const isAlreadyInitialized = localStorage.getItem(productsInitializedKey);
-    const currentStoreState = useProductStore.getState();
 
-    if (!isAlreadyInitialized && (tenantId === 'default_host' || tenantId.startsWith('default_') || tenantId.startsWith('localhost'))) {
+    if (!isAlreadyInitialized && (tenantId === 'default_host' || tenantId === 'localhost_dev')) {
       localStorage.setItem(productsInitializedKey, 'true'); 
       
-      if (currentStoreState.products.length === 0) { // Only seed if store is still empty
+      const currentStoreState = useProductStore.getState();
+      if (currentStoreState.products.length === 0) { 
         const exampleProduct: Product = {
             id: 'EXAMPLE-SKU-001',
             basicInfo: {
@@ -207,5 +191,5 @@ if (typeof window !== 'undefined') {
         console.log(`Seeded example product for tenant: ${tenantId} because store was empty after initialization and init flag not set.`);
       }
     }
-  }, 100); // Small delay for rehydration check
+  }, 100); 
 }

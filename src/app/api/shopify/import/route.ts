@@ -2,7 +2,7 @@
 'use server';
 
 import { type NextRequest, NextResponse } from 'next/server';
-import type { Product, ProductStatus as PimStatus, MediaEntry, KeyValueEntry, PriceEntry, ProductOption as PimProductOption, ProductVariant as PimProductVariant } from '@/types/product';
+import type { Product, ProductStatus as PimStatus, MediaEntry, KeyValueEntry, PriceEntry, ProductOption as PimProductOption, ProductVariant as PimProductVariant, MultilingualString } from '@/types/product';
 import { initialProductData, defaultMultilingualString } from '@/types/product';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -18,6 +18,7 @@ interface ShopifyImageShopify {
 
 interface ShopifyOptionShopify {
   id: number;
+  product_id: number; // Added this, though often not directly used from this level
   name: string;
   position: number;
   values: string[];
@@ -35,6 +36,9 @@ interface ShopifyVariantShopify {
   option1: string | null;
   option2: string | null;
   option3: string | null;
+  // Shopify API might also include currency code with monetary values in some contexts,
+  // but for products.json, price is usually string in store's default currency.
+  // We will assume a default currency or derive it if possible.
 }
 
 interface ShopifyProductShopify {
@@ -72,38 +76,39 @@ function stripHtml(html: string | null): string {
 }
 
 
-function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify): Product {
+function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify, storeCurrency: string = "NOK"): Product {
   const pimId = shopifyProduct.variants?.[0]?.sku || `SHOPIFY-${shopifyProduct.id}` || uuidv4();
   const firstVariant = shopifyProduct.variants?.[0];
 
   const longDescriptionEn = shopifyProduct.body_html || '';
-  const shortDescriptionEn = stripHtml(longDescriptionEn).substring(0, 200) + (longDescriptionEn.length > 200 ? '...' : '');
+  // Basic short description: first 200 chars of stripped HTML, or less if it's shorter.
+  const shortDescriptionEn = stripHtml(longDescriptionEn).substring(0, 200) + (stripHtml(longDescriptionEn).length > 200 ? '...' : '');
+
 
   // Base pricing from the first variant (used if no variants are mapped or as a fallback)
   const baseStandardPrice: PriceEntry[] = [];
   const baseSalePrice: PriceEntry[] = [];
-  const shopifyStoreCurrency = "NOK"; // Assuming NOK as default, ideally this would come from store settings or Shopify API
-
+  
   if (firstVariant) {
     const currentPrice = parseFloat(firstVariant.price);
     const originalPrice = firstVariant.compare_at_price ? parseFloat(firstVariant.compare_at_price) : null;
 
-    if (originalPrice && originalPrice > currentPrice) {
+    if (originalPrice && originalPrice > currentPrice) { // It's a sale
       baseStandardPrice.push({
         id: uuidv4(),
         amount: originalPrice,
-        currency: shopifyStoreCurrency, 
+        currency: storeCurrency, 
       });
       baseSalePrice.push({
         id: uuidv4(),
         amount: currentPrice,
-        currency: shopifyStoreCurrency,
+        currency: storeCurrency,
       });
-    } else {
+    } else { // Not on sale, or compare_at_price is not higher
       baseStandardPrice.push({
         id: uuidv4(),
         amount: currentPrice,
-        currency: shopifyStoreCurrency,
+        currency: storeCurrency,
       });
     }
   }
@@ -112,7 +117,7 @@ function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify): Product 
   const pimOptions: PimProductOption[] = shopifyProduct.options ? shopifyProduct.options.map(opt => ({
     id: String(opt.id), // Using Shopify option ID
     name: opt.name,
-    values: opt.values,
+    values: opt.values, // Shopify provides values as an array of strings
   })) : [];
 
   // Map Shopify variants to PIM variants
@@ -120,6 +125,7 @@ function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify): Product 
   if (shopifyProduct.variants && shopifyProduct.options && shopifyProduct.options.length > 0) {
     shopifyProduct.variants.forEach(sv => {
       const optionValues: Record<string, string> = {};
+      // Shopify options array (shopifyProduct.options) defines the name for option1, option2, option3
       if (shopifyProduct.options[0] && sv.option1) optionValues[shopifyProduct.options[0].name] = sv.option1;
       if (shopifyProduct.options[1] && sv.option2) optionValues[shopifyProduct.options[1].name] = sv.option2;
       if (shopifyProduct.options[2] && sv.option3) optionValues[shopifyProduct.options[2].name] = sv.option3;
@@ -130,11 +136,11 @@ function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify): Product 
       const varCurrentPrice = parseFloat(sv.price);
       const varOriginalPrice = sv.compare_at_price ? parseFloat(sv.compare_at_price) : null;
 
-      if (varOriginalPrice && varOriginalPrice > varCurrentPrice) {
-        variantStandardPrice.push({ id: uuidv4(), amount: varOriginalPrice, currency: shopifyStoreCurrency });
-        variantSalePrice.push({ id: uuidv4(), amount: varCurrentPrice, currency: shopifyStoreCurrency });
-      } else {
-        variantStandardPrice.push({ id: uuidv4(), amount: varCurrentPrice, currency: shopifyStoreCurrency });
+      if (varOriginalPrice && varOriginalPrice > varCurrentPrice) { // On sale
+        variantStandardPrice.push({ id: uuidv4(), amount: varOriginalPrice, currency: storeCurrency });
+        variantSalePrice.push({ id: uuidv4(), amount: varCurrentPrice, currency: storeCurrency });
+      } else { // Not on sale
+        variantStandardPrice.push({ id: uuidv4(), amount: varCurrentPrice, currency: storeCurrency });
       }
 
       pimVariants.push({
@@ -143,8 +149,8 @@ function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify): Product 
         gtin: sv.barcode || undefined,
         optionValues,
         standardPrice: variantStandardPrice,
-        salePrice: variantSalePrice.length > 0 ? variantSalePrice : [], // store as empty array if no sale price
-        costPrice: [], // Shopify doesn't directly expose cost price here
+        salePrice: variantSalePrice.length > 0 ? variantSalePrice : [],
+        costPrice: [], // Shopify doesn't directly expose cost price per variant here
       });
     });
   }
@@ -183,7 +189,8 @@ function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify): Product 
       seoDescription: { ...defaultMultilingualString, en: shortDescriptionEn }, 
       keywords: shopifyProduct.tags ? shopifyProduct.tags.split(',').map(tag => tag.trim()).filter(tag => tag) : [],
     },
-    pricingAndStock: { // This is for the base product if no variants, or as a fallback
+    pricingAndStock: { // This is for the base product if no variants are defined, or as a fallback.
+                       // If variants are mapped, their pricing takes precedence.
         standardPrice: baseStandardPrice,
         salePrice: baseSalePrice.length > 0 ? baseSalePrice : [],
         costPrice: [], 
@@ -217,6 +224,9 @@ function parseLinkHeader(linkHeader: string | null): string | null {
 
 
 export async function POST(request: NextRequest) {
+  const tenantId = request.headers.get('x-tenant-id');
+  // console.log(`Shopify Import API: Tenant ID from header: ${tenantId}`);
+
   try {
     const { storeUrl, apiKey, pageInfo } = await request.json();
 
@@ -232,6 +242,7 @@ export async function POST(request: NextRequest) {
       shopifyApiUrl += `&page_info=${pageInfo}`;
     }
 
+    // console.log(`Shopify Import API: Fetching from ${shopifyApiUrl} for tenant ${tenantId}`);
 
     const shopifyResponse = await fetch(shopifyApiUrl, {
       method: 'GET',
@@ -271,7 +282,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Invalid product data received from Shopify.' }, { status: 500 });
     }
 
-    const productsToImport = shopifyData.products.map((product: ShopifyProductShopify) => mapShopifyToPimProduct(product));
+    // TODO: Fetch store's primary currency from Shopify API for more accurate price mapping
+    const storeCurrency = "NOK"; // Assuming NOK for now
+
+    const productsToImport = shopifyData.products.map((product: ShopifyProductShopify) => mapShopifyToPimProduct(product, storeCurrency));
     const nextPageCursor = parseLinkHeader(shopifyResponse.headers.get('Link'));
 
     return NextResponse.json({ 
@@ -285,4 +299,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message || 'An internal server error occurred during Shopify import.' }, { status: 500 });
   }
 }
-
