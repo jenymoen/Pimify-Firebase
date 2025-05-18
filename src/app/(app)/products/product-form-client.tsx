@@ -144,8 +144,8 @@ const productFormSchema = z.object({
     images: z.array(mediaEntrySchema).optional(),
   }),
   marketingSEO: z.object({
-    seoTitle: requiredMultilingualStringSchema,
-    seoDescription: requiredMultilingualStringSchema,
+    seoTitle: baseMultilingualStringSchema, // Changed to base (optional content)
+    seoDescription: baseMultilingualStringSchema, // Changed to base (optional content)
     keywords: z.array(z.string()).optional(),
   }),
   pricingAndStock: z.object({
@@ -221,20 +221,20 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         costPriceAmount: existingProduct.pricingAndStock?.costPrice?.[0]?.amount,
         costPriceCurrency: existingProduct.pricingAndStock?.costPrice?.[0]?.currency || "NOK",
       },
-      options: (existingProduct.options || []).map(opt => ({ // When loading an existing product
+      options: (existingProduct.options || []).map(opt => ({ 
         id: opt.id,
         name: opt.name,
-        values: opt.values.join(','), // store has string[], form expects string for this field
+        values: opt.values.join(','), 
       })),
-      variants: (existingProduct.variants || []).map(v => { // When loading an existing product
+      variants: (existingProduct.variants || []).map(v => { 
         return { 
             id: v.id,
             sku: v.sku,
             gtin: v.gtin || '',
             optionValues: v.optionValues,
-            standardPriceAmount: v.standardPrice?.[0]?.amount, // Form expects flat amount
+            standardPriceAmount: v.standardPrice?.[0]?.amount, 
             standardPriceCurrency: v.standardPrice?.[0]?.currency || "NOK",
-            salePriceAmount: v.salePrice?.[0]?.amount, // Form expects flat amount
+            salePriceAmount: v.salePrice?.[0]?.amount, 
             salePriceCurrency: v.salePrice?.[0]?.currency || "NOK",
         };
       }),
@@ -330,7 +330,6 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         options: (data.options || []).map(opt => ({ 
             id: opt.id,
             name: opt.name,
-            // data.options[x].values is already string[] here due to Zod transform
             values: opt.values, 
         })),
         variants: (data.variants || []).map(vFormData => {
@@ -459,7 +458,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
   };
 
   const generateVariants = () => {
-    const options = form.getValues("options"); // This is an array of {id: string, name: string, values: string (comma-separated)}
+    const options = form.getValues("options"); 
     if (!options || options.length === 0) {
         toast({ title: "No Options Defined", description: "Please define at least one option to generate variants.", variant: "destructive" });
         replaceVariants([]);
@@ -468,15 +467,13 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
 
     const validOptions = options.filter(opt => opt.name && opt.name.trim() && opt.values && typeof opt.values === 'string' && opt.values.trim() !== '');
     if (validOptions.length !== options.length || validOptions.length === 0) {
-        // This means some options were incomplete (missing name or values string)
         toast({ title: "Incomplete Options", description: "Ensure all defined options have a name and a non-empty values string.", variant: "destructive" });
-        replaceVariants([]); // Clear variants if options are bad
+        replaceVariants([]); 
         return;
     }
 
     const parsedOptions = validOptions.map(opt => ({
         name: opt.name.trim(),
-        // opt.values is a string here; parse it.
         values: opt.values.split(',').map(v => v.trim()).filter(v => v),
     }));
 
@@ -992,7 +989,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       name="marketingSEO.seoTitle"
                       render={({ field }) => (
                          <FormItem>
-                           <FormLabel>SEO Title <span className="text-destructive">*</span></FormLabel>
+                           <FormLabel>SEO Title</FormLabel>
                            <FormControl>
                             <MultilingualInput id="seoTitle" label="" {...field} value={field.value || defaultMultilingualString} />
                           </FormControl>
@@ -1005,7 +1002,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       name="marketingSEO.seoDescription"
                       render={({ field }) => (
                         <FormItem>
-                           <FormLabel>SEO Meta Description <span className="text-destructive">*</span></FormLabel>
+                           <FormLabel>SEO Meta Description</FormLabel>
                           <FormControl>
                             <MultilingualInput id="seoDescription" label="" type="textarea" {...field} value={field.value || defaultMultilingualString} />
                           </FormControl>
