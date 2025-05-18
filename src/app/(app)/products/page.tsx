@@ -10,13 +10,14 @@ import Link from 'next/link';
 import { PlusCircle, Search, Package } from 'lucide-react'; // Added Package
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton'; // Added Skeleton
+import { Card, CardHeader, CardContent, CardFooter } from '@/components/ui/card'; // Added Card imports
 
 export default function ProductsPage() {
-  const { 
-    products: allProducts, 
-    fetchProducts, 
-    isLoading, 
-    error 
+  const {
+    products: allProducts,
+    fetchProducts,
+    isLoading,
+    error
   } = useProductStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [mounted, setMounted] = useState(false);
@@ -35,7 +36,7 @@ export default function ProductsPage() {
     const brandMatch = product.basicInfo.brand?.toLowerCase().includes(searchTerm.toLowerCase());
     return nameMatch || skuMatch || brandMatch;
   });
-  
+
   if (!mounted || isLoading && allProducts.length === 0) { // Show skeletons if loading and no products yet
     return (
       <div className="container mx-auto py-8">
@@ -85,7 +86,7 @@ export default function ProductsPage() {
         <h1 className="text-3xl font-bold text-primary">Product Catalog</h1>
         <div className="flex gap-2 w-full sm:w-auto">
           <div className="relative flex-grow sm:flex-grow-0 sm:w-64">
-            <Input 
+            <Input
               type="search"
               placeholder="Search products..."
               className="pl-10"
@@ -107,7 +108,7 @@ export default function ProductsPage() {
           <Package className="mx-auto h-24 w-24 text-muted-foreground mb-4" />
           <h2 className="text-2xl font-semibold mb-2">No Products Found</h2>
           <p className="text-muted-foreground mb-6">
-            It looks like there are no products yet. 
+            It looks like there are no products yet.
             <Link href="/products/new" className="text-primary hover:underline">
               Add a new product
             </Link> to get started.
