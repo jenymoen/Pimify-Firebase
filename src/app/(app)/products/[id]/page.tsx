@@ -88,31 +88,49 @@ export default function ProductDetailsPage() {
   const params = useParams();
   const productId = params.id as string;
 
-  const { findProductById } = useProductStore();
+  const { findProductById, fetchProducts, products, isLoading, error } = useProductStore();
   const [product, setProduct] = useState<Product | undefined | null>(undefined);
 
   useEffect(() => {
-    if (productId) {
+    if (products.length === 0 && !isLoading) {
+      fetchProducts();
+    }
+  }, [products.length, isLoading, fetchProducts]);
+
+  useEffect(() => {
+    if (productId && products.length > 0) {
       const foundProduct = findProductById(productId);
       setProduct(foundProduct || null);
+    } else if (productId && isLoading) {
+       setProduct(undefined); // Still loading
+    } else if (productId && !isLoading && products.length === 0 && !error) {
+      setProduct(null); // Product not found after fetch
     }
-  }, [productId, findProductById]);
+  }, [productId, products, findProductById, isLoading, error]);
 
-  if (product === undefined) {
+  if (product === undefined || (isLoading && !product)) {
     return (
       <div className="container mx-auto py-8 px-4 md:px-6 lg:px-8">
-        <Skeleton className="h-12 w-1/4 mb-4" />
-        <Skeleton className="h-8 w-1/2 mb-8" />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="md:col-span-2 space-y-6">
-            <Skeleton className="h-64 w-full" />
-            <Skeleton className="h-48 w-full" />
-          </div>
-          <div className="space-y-6">
-            <Skeleton className="h-32 w-full" />
-            <Skeleton className="h-72 w-full" />
-          </div>
+        <Skeleton className="h-10 w-1/4 mb-6" /> {/* Back button skeleton */}
+        <Skeleton className="h-32 w-full mb-8" /> {/* Header card skeleton */}
+        <div className="space-y-6">
+          <Skeleton className="h-48 w-full" />
+          <Skeleton className="h-48 w-full" />
+          <Skeleton className="h-48 w-full" />
         </div>
+      </div>
+    );
+  }
+  
+  if (error && !product) { // Check if there was an error fetching products
+    return (
+      <div className="container mx-auto py-12 text-center">
+        <Package className="mx-auto h-24 w-24 text-destructive mb-4" />
+        <h1 className="text-3xl font-bold mb-4 text-destructive">Error Loading Product</h1>
+        <p className="text-muted-foreground mb-6">Could not load product data: {error}.</p>
+        <Button onClick={() => router.push('/products')}>
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Products
+        </Button>
       </div>
     );
   }
@@ -264,4 +282,3 @@ export default function ProductDetailsPage() {
     </div>
   );
 }
-

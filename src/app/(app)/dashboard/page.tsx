@@ -24,26 +24,17 @@ interface ProductCompletenessData {
 }
 
 export default function DashboardPage() {
-  const { products, setProducts } = useProductStore();
+  const { products, fetchProducts, isLoading, error } = useProductStore();
   const [mounted, setMounted] = useState(false);
   const [completenessData, setCompletenessData] = useState<ProductCompletenessData[]>([]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const storedProducts = localStorage.getItem('products');
-      if (storedProducts) {
-        try {
-          setProducts(JSON.parse(storedProducts));
-        } catch (e) {
-          console.error("Error parsing products from local storage for dashboard", e);
-        }
-      }
-    }
+    fetchProducts();
     setMounted(true);
-  }, [setProducts]);
+  }, [fetchProducts]);
 
   useEffect(() => {
-    if (mounted && products.length > 0) {
+    if (mounted && products.length > 0 && !isLoading) {
       let completeCount = 0;
       products.forEach(p => {
         if (isProductComplete(p)) {
@@ -53,17 +44,18 @@ export default function DashboardPage() {
       const incompleteCount = products.length - completeCount;
       
       setCompletenessData([
-        { name: 'Complete', value: completeCount, fill: 'hsl(var(--chart-2))' }, // Using chart-2 (greenish) for complete
-        { name: 'Incomplete', value: incompleteCount, fill: 'hsl(var(--chart-4))' }, // Using chart-4 (yellowish) for incomplete
+        { name: 'Complete', value: completeCount, fill: 'hsl(var(--chart-2))' },
+        { name: 'Incomplete', value: incompleteCount, fill: 'hsl(var(--chart-4))' },
       ]);
-    } else if (mounted && products.length === 0) {
+    } else if (mounted && products.length === 0 && !isLoading) {
       setCompletenessData([]);
     }
-  }, [products, mounted]);
+  }, [products, mounted, isLoading]);
 
   const productCount = products.length;
   const activeProducts = products.filter(p => p.basicInfo.status === 'active').length;
-  const averagePrice = mounted && productCount > 0 
+  
+  const averagePrice = mounted && !isLoading && productCount > 0 
     ? products.reduce((acc, p) => acc + (p.pricingAndStock?.standardPrice?.[0]?.amount || 0), 0) / productCount
     : 0;
 
@@ -78,22 +70,25 @@ export default function DashboardPage() {
     },
   } satisfies ChartConfig;
 
+  if (error) {
+    return <div className="text-center py-12 text-destructive">Error loading dashboard data: {error}</div>;
+  }
 
   return (
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-bold text-primary mb-8">Dashboard</h1>
       
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2"> {/* Adjusted lg:grid-cols for 2x2 layout potentially */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
         <Card className="shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Products</CardTitle>
             <Package className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {mounted ? (
-              <div className="text-2xl font-bold">{productCount}</div>
-            ) : (
+            {(!mounted || isLoading && productCount === 0) ? (
               <Skeleton className="h-8 w-16" />
+            ) : (
+              <div className="text-2xl font-bold">{productCount}</div>
             )}
             <p className="text-xs text-muted-foreground">
               Currently managed in the PIM
@@ -107,10 +102,10 @@ export default function DashboardPage() {
             <Users className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-             {mounted ? (
-              <div className="text-2xl font-bold">{activeProducts}</div>
-            ) : (
+             {(!mounted || isLoading && activeProducts === 0 && productCount === 0) ? (
               <Skeleton className="h-8 w-16" />
+            ) : (
+              <div className="text-2xl font-bold">{activeProducts}</div>
             )}
             <p className="text-xs text-muted-foreground">
               Products currently marked as active
@@ -124,14 +119,14 @@ export default function DashboardPage() {
             <DollarSign className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {mounted && productCount > 0 ? (
+            {(!mounted || isLoading && averagePrice === 0 && productCount === 0) ? (
+               <Skeleton className="h-8 w-24" />
+            ) : mounted && !isLoading && productCount > 0 ? (
                 <div className="text-2xl font-bold">
                     NOK {averagePrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
-            ) : mounted && productCount === 0 ? (
-                 <div className="text-2xl font-bold">N/A</div>
             ) : (
-              <Skeleton className="h-8 w-24" />
+                 <div className="text-2xl font-bold">N/A</div>
             )}
             <p className="text-xs text-muted-foreground">
               Based on standard prices of all products
@@ -144,12 +139,12 @@ export default function DashboardPage() {
             <CardTitle className="text-sm font-medium">Product Completeness</CardTitle>
             <CheckCircle className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
-          <CardContent className="h-[200px] aspect-square"> {/* Ensure CardContent can hold the chart */}
-            {!mounted ? (
+          <CardContent className="h-[200px] aspect-square">
+            {(!mounted || isLoading && products.length === 0) ? (
               <div className="flex items-center justify-center h-full">
                 <Skeleton className="h-32 w-32 rounded-full" />
               </div>
-            ) : products.length === 0 ? (
+            ) : products.length === 0 && !isLoading ? (
               <div className="flex items-center justify-center h-full">
                 <p className="text-sm text-muted-foreground">No product data to display.</p>
               </div>
@@ -169,17 +164,6 @@ export default function DashboardPage() {
                       cy="50%"
                       outerRadius={60}
                       labelLine={false}
-                      // label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, index }) => {
-                      //   const RADIAN = Math.PI / 180;
-                      //   const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-                      //   const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                      //   const y = cy + radius * Math.sin(-midAngle * RADIAN);
-                      //   return (
-                      //     <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central">
-                      //       {`${(percent * 100).toFixed(0)}%`}
-                      //     </text>
-                      //   );
-                      // }}
                     >
                       {completenessData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.fill} />
@@ -192,9 +176,7 @@ export default function DashboardPage() {
             )}
           </CardContent>
         </Card>
-
       </div>
     </div>
   );
 }
-

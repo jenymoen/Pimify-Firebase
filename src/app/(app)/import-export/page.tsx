@@ -12,9 +12,10 @@ import { useToast } from '@/hooks/use-toast';
 import { UploadCloud, DownloadCloud, FileJson, AlertTriangle, ShoppingCart, Save, Settings, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useShopifyConfigStore } from '@/lib/shopify-config-store';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function ImportExportPage() {
-  const { products, importProducts: storeImportProducts } = useProductStore();
+  const { products, importProducts: storeImportProducts, setProducts: storeSetProducts } = useProductStore();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImportingJson, setIsImportingJson] = useState(false);
@@ -24,13 +25,19 @@ export default function ImportExportPage() {
   const { 
     storeUrl, 
     apiKey,
-    setStoreUrl: setShopifyStoreUrl,
-    setApiKey: setShopifyApiKey,
-    isConfigured 
+    setStoreUrl: setLocalShopifyStoreUrl, // For local form state
+    setApiKey: setLocalShopifyApiKey,     // For local form state
+    isConfigured,
+    fetchShopifyConfig,
+    saveShopifyConfig,
+    isLoading: isShopifyConfigLoading,
+    isFetched: isShopifyConfigFetched,
+    error: shopifyConfigError
   } = useShopifyConfigStore();
 
-  const [localStoreUrl, setLocalStoreUrl] = useState('');
-  const [localApiKey, setLocalApiKey] = useState('');
+  // Local state for input fields to allow editing before saving
+  const [inputStoreUrl, setInputStoreUrl] = useState('');
+  const [inputApiKey, setInputApiKey] = useState('');
   const [clientShopifyReady, setClientShopifyReady] = useState(false); 
 
   const [isImportingFromShopify, setIsImportingFromShopify] = useState(false);
@@ -38,16 +45,28 @@ export default function ImportExportPage() {
   const [nextPageCursor, setNextPageCursor] = useState<string | null>(null);
 
   useEffect(() => {
-    setLocalStoreUrl(storeUrl);
-    setLocalApiKey(apiKey);
-  }, [storeUrl, apiKey]);
+    if (!isShopifyConfigFetched) {
+      fetchShopifyConfig();
+    }
+  }, [fetchShopifyConfig, isShopifyConfigFetched]);
 
   useEffect(() => {
+    // Update local form inputs when store data changes (e.g., after fetch)
+    setInputStoreUrl(storeUrl);
+    setInputApiKey(apiKey);
+  }, [storeUrl, apiKey]);
+  
+  useEffect(() => {
+    // Update clientShopifyReady based on the store's configured state
     setClientShopifyReady(isConfigured());
   }, [isConfigured, storeUrl, apiKey]);
 
 
   const handleExportJson = () => {
+    if (products.length === 0) {
+      toast({ title: 'No Products', description: 'There are no products to export.', variant: 'destructive' });
+      return;
+    }
     const jsonString = JSON.stringify(products, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -78,8 +97,8 @@ export default function ImportExportPage() {
         throw new Error("Invalid JSON format. Expected an array of products.");
       }
       
-      storeImportProducts(importedData as Product[]);
-      toast({ title: 'JSON Import Successful', description: `${importedData.length} products imported.` });
+      storeImportProducts(importedData as Product[]); // This method in store should merge/update
+      toast({ title: 'JSON Import Successful', description: `${importedData.length} products imported/updated.` });
 
     } catch (err: any) {
       console.error('JSON Import error:', err);
@@ -93,11 +112,18 @@ export default function ImportExportPage() {
     }
   };
 
-  const handleSaveShopifyConfig = () => {
-    setShopifyStoreUrl(localStoreUrl);
-    setShopifyApiKey(localApiKey);
-    setNextPageCursor(null); // Reset pagination on config change
-    toast({ title: 'Shopify Configuration Saved', description: 'Your Shopify Store URL and API Key have been saved locally.' });
+  const handleSaveShopifyConfig = async () => {
+    try {
+      await saveShopifyConfig({ storeUrl: inputStoreUrl, apiKey: inputApiKey });
+      // The store itself doesn't update local form state, so we sync it back
+      // Or rely on the useEffect that syncs storeUrl/apiKey to inputStoreUrl/inputApiKey
+      setLocalShopifyStoreUrl(inputStoreUrl); // This updates the store, which then via useEffect updates the input fields
+      setLocalShopifyApiKey(inputApiKey);     // Same here
+      setNextPageCursor(null); 
+      toast({ title: 'Shopify Configuration Saved', description: 'Your Shopify settings have been saved.' });
+    } catch (error) {
+      toast({ title: 'Save Failed', description: 'Could not save Shopify configuration.', variant: 'destructive' });
+    }
   };
 
 
@@ -111,7 +137,9 @@ export default function ImportExportPage() {
       const response = await fetch('/api/shopify/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storeUrl, apiKey, pageInfo: nextPageCursor }),
+        // API key and store URL are now read by the backend from its config (or env)
+        // The client only sends the pagination cursor
+        body: JSON.stringify({ pageInfo: nextPageCursor }), 
       });
 
       if (!response.ok) {
@@ -120,19 +148,24 @@ export default function ImportExportPage() {
           const errorData = await response.json();
           errorBody = errorData.error || JSON.stringify(errorData);
         } catch (e) {
-          errorBody = await response.text(); // Fallback to text if JSON parsing fails
+          errorBody = await response.text();
         }
         throw new Error(errorBody);
       }
       
-      const data = await response.json(); // Safe to parse as JSON if response.ok
+      const data = await response.json();
       
-      storeImportProducts(data.products as Product[]);
+      // The API now handles saving products to "DB" (simulated)
+      // So, we might want to re-fetch products in the product store, or the API returns the products
+      // For now, let's assume the import API updates the "DB" and we can reflect by setting products locally
+      // Or better, the API route could return the products it imported and we add them
+      storeSetProducts(data.products as Product[]); // Replace local product list with imported ones.
+                                                    // A more sophisticated approach might merge or re-fetch.
       setNextPageCursor(data.nextPageCursor || null);
       toast({ title: 'Shopify Import Successful', description: data.message });
     } catch (error: any) {
       console.error('Shopify Import Error:', error);
-      setNextPageCursor(null); // Reset cursor on error
+      setNextPageCursor(null);
       toast({ title: 'Shopify Import Failed', description: error.message || 'An error occurred.', variant: 'destructive' });
     } finally {
       setIsImportingFromShopify(false);
@@ -154,7 +187,9 @@ export default function ImportExportPage() {
       const response = await fetch('/api/shopify/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storeUrl, apiKey, productsToExport: products }),
+        // API key and store URL are now read by the backend.
+        // Client sends the products to be exported.
+        body: JSON.stringify({ productsToExport: products }),
       });
 
       if (!response.ok) {
@@ -163,13 +198,12 @@ export default function ImportExportPage() {
           const errorData = await response.json();
           errorBody = errorData.error || JSON.stringify(errorData);
         } catch (e) {
-           errorBody = await response.text(); // Fallback to text if JSON parsing fails
+           errorBody = await response.text();
         }
         throw new Error(errorBody);
       }
       
-      const data = await response.json(); // Safe to parse as JSON if response.ok
-      
+      const data = await response.json();
       toast({ title: 'Shopify Export Successful', description: data.message });
     } catch (error: any) {
       console.error('Shopify Export Error:', error);
@@ -250,18 +284,29 @@ export default function ImportExportPage() {
           </CardTitle>
           <CardDescription>
             Connect to your Shopify store to import or export products. Your Store URL and Admin API Access Token are required.
-            <br />
-            <span className="text-xs font-semibold text-destructive">
-              Security Note: Your API Access Token will be stored in your browser's local storage.
-              Ensure you are on a secure computer and network.
-            </span>
+            These settings are specific to your current tenant and are saved securely.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+           {isShopifyConfigLoading && !isShopifyConfigFetched ? (
+            <div className="space-y-4 p-4 border rounded-md bg-muted/20">
+              <Skeleton className="h-6 w-1/3 mb-2" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-1/4" />
+            </div>
+          ) : (
           <div className="space-y-4 p-4 border rounded-md bg-muted/20">
             <h3 className="font-medium text-foreground flex items-center gap-2">
               <Settings className="h-5 w-5" /> Store Configuration
             </h3>
+             {shopifyConfigError && (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Error Loading Config</AlertTitle>
+                  <AlertDescription>{shopifyConfigError}</AlertDescription>
+                </Alert>
+              )}
             <div className="space-y-3">
               <div>
                 <Label htmlFor="shopify-store-url" className="text-sm font-medium">Shopify Store URL</Label>
@@ -269,8 +314,8 @@ export default function ImportExportPage() {
                   id="shopify-store-url" 
                   type="text" 
                   placeholder="e.g., your-store-name.myshopify.com" 
-                  value={localStoreUrl}
-                  onChange={(e) => setLocalStoreUrl(e.target.value)}
+                  value={inputStoreUrl}
+                  onChange={(e) => setInputStoreUrl(e.target.value)}
                   className="mt-1"
                 />
                  <p className="text-xs text-muted-foreground mt-1">
@@ -283,25 +328,27 @@ export default function ImportExportPage() {
                   id="shopify-api-key" 
                   type="password" 
                   placeholder="Enter your Shopify Admin API Access Token (e.g., shpat_...)" 
-                  value={localApiKey}
-                  onChange={(e) => setLocalApiKey(e.target.value)}
+                  value={inputApiKey}
+                  onChange={(e) => setInputApiKey(e.target.value)}
                   className="mt-1"
                 />
                  <p className="text-xs text-muted-foreground mt-1">
                   Your Admin API Access Token is used to authenticate with Shopify.
                 </p>
               </div>
-              <Button onClick={handleSaveShopifyConfig}>
-                <Save className="mr-2 h-4 w-4" /> Save Configuration
+              <Button onClick={handleSaveShopifyConfig} disabled={isShopifyConfigLoading}>
+                {isShopifyConfigLoading ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />} 
+                Save Configuration
               </Button>
             </div>
           </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t mt-6">
             <Button 
               variant="outline" 
               onClick={handleImportFromShopify} 
-              disabled={!clientShopifyReady || isImportingFromShopify || isExportingToShopify}
+              disabled={!clientShopifyReady || isImportingFromShopify || isExportingToShopify || isShopifyConfigLoading}
             >
               {isImportingFromShopify ? <RefreshCw className="mr-2 h-5 w-5 animate-spin" /> : <DownloadCloud className="mr-2 h-5 w-5" />}
               {isImportingFromShopify 
@@ -311,13 +358,13 @@ export default function ImportExportPage() {
             <Button 
               variant="outline" 
               onClick={handleExportToShopify} 
-              disabled={!clientShopifyReady || isImportingFromShopify || isExportingToShopify || products.length === 0}
+              disabled={!clientShopifyReady || isImportingFromShopify || isExportingToShopify || products.length === 0 || isShopifyConfigLoading}
             >
               {isExportingToShopify ? <RefreshCw className="mr-2 h-5 w-5 animate-spin" /> : <UploadCloud className="mr-2 h-5 w-5" />}
               {isExportingToShopify ? 'Exporting...' : 'Export to Shopify'}
             </Button>
           </div>
-          {!clientShopifyReady && (
+          {!clientShopifyReady && isShopifyConfigFetched && (
              <Alert variant="default" className="bg-accent/10 border-accent/30 text-accent-foreground">
                 <Settings className="h-4 w-4 text-accent" />
                 <AlertTitle>Configuration Required</AlertTitle>
@@ -331,4 +378,3 @@ export default function ImportExportPage() {
     </div>
   );
 }
-

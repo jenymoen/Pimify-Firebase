@@ -104,8 +104,8 @@ export interface Product {
     costPrice?: PriceEntry[];
   };
 
-  options?: ProductOption[]; // Defines the types of options available (e.g., Color, Size)
-  variants?: ProductVariant[]; // Actual product variants based on options
+  options: ProductOption[]; // Defines the types of options available (e.g., Color, Size)
+  variants: ProductVariant[]; // Actual product variants based on options
 
   relations?: {
     relatedProducts?: string[];
@@ -158,4 +158,3 @@ export const initialProductData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>
   variants: [],
   aiSummary: { ...defaultMultilingualString },
 };
-

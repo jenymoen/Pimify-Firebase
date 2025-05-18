@@ -1,3 +1,4 @@
+
 // src/app/(app)/products/[id]/edit/page.tsx
 'use client';
 
@@ -6,25 +7,39 @@ import { useProductStore } from '@/lib/product-store';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type { Product } from '@/types/product';
-import { Skeleton } from '@/components/ui/skeleton'; // Assuming you have a Skeleton component
-import { Button } from '@/components/ui/button'; // Added import
+import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button'; 
 
 export default function EditProductPage() {
   const router = useRouter();
   const params = useParams();
   const productId = params.id as string;
   
-  const { findProductById } = useProductStore();
-  const [product, setProduct] = useState<Product | undefined | null>(undefined); // undefined: loading, null: not found
+  const { findProductById, fetchProducts, products, isLoading, error } = useProductStore();
+  // Local state for the product to edit, separate from the store's list until save
+  const [productToEdit, setProductToEdit] = useState<Product | undefined | null>(undefined); 
 
   useEffect(() => {
-    if (productId) {
-      const foundProduct = findProductById(productId);
-      setProduct(foundProduct || null); // if not found, set to null
+    // If products array is empty and not loading, fetch them
+    if (products.length === 0 && !isLoading) {
+      fetchProducts();
     }
-  }, [productId, findProductById]);
+  }, [products.length, isLoading, fetchProducts]);
 
-  if (product === undefined) {
+  useEffect(() => {
+    if (productId && products.length > 0) {
+      const foundProduct = findProductById(productId);
+      setProductToEdit(foundProduct || null); 
+    } else if (productId && isLoading) {
+      setProductToEdit(undefined); // Still loading
+    } else if (productId && !isLoading && products.length === 0 && !error) {
+      // Products fetched, but array is empty, implies product not found if not an error state
+      setProductToEdit(null);
+    }
+  }, [productId, products, findProductById, isLoading, error]);
+
+
+  if (productToEdit === undefined || (isLoading && !productToEdit)) {
     return (
       <div className="max-w-4xl mx-auto p-6 space-y-6">
         <Skeleton className="h-10 w-1/3" />
@@ -33,8 +48,18 @@ export default function EditProductPage() {
       </div>
     );
   }
+  
+  if (error && !productToEdit) { // Check if there was an error fetching products
+    return (
+      <div className="text-center py-12">
+        <h1 className="text-2xl font-semibold mb-4 text-destructive">Error Loading Product</h1>
+        <p className="text-muted-foreground">Could not load product data: {error}</p>
+        <Button onClick={() => router.push('/products')} className="mt-4">Go to Products</Button>
+      </div>
+    );
+  }
 
-  if (product === null) {
+  if (productToEdit === null) {
     return (
       <div className="text-center py-12">
         <h1 className="text-2xl font-semibold mb-4">Product Not Found</h1>
@@ -44,5 +69,5 @@ export default function EditProductPage() {
     );
   }
   
-  return <ProductFormClient product={product} />;
+  return <ProductFormClient product={productToEdit} />;
 }

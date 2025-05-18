@@ -2,6 +2,24 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import type { Product, ProductStatus as PimStatus, MediaEntry, PriceEntry, ProductOption as PimProductOption, ProductVariant as PimProductVariant } from '@/types/product';
 
+// Placeholder for Shopify Config API
+async function getShopifyConfigForTenant(tenantId: string): Promise<{ storeUrl: string; apiKey: string } | null> {
+  // SIMULATION: This should fetch from your tenant-specific Shopify config storage (e.g., Firestore)
+  // This is a HACK. In a real app, API routes should not call other API routes directly like this.
+  try {
+    const configResponse = await fetch(new URL('/api/shopify/config', process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'), {
+      method: 'GET',
+      headers: { 'x-tenant-id': tenantId },
+    });
+    if (configResponse.ok) {
+      return await configResponse.json();
+    }
+  } catch (e) {
+     console.error("Error fetching shopify config within export route:", e);
+  }
+  return null;
+}
+
 interface ShopifyOptionPayload {
   name: string;
   values: string[];
@@ -14,8 +32,8 @@ interface ShopifyProductVariantPayload {
   option1?: string | null;
   option2?: string | null;
   option3?: string | null;
-  // inventory_quantity?: number; // Requires inventory management setup
-  // image_id?: number; // For associating variant with a specific image (more complex to map by URL directly)
+  // inventory_quantity?: number; 
+  // image_id?: number; 
 }
 interface ShopifyProductPayload {
   title: string;
@@ -66,7 +84,6 @@ function mapPimToShopifyProduct(product: Product): { product: ShopifyProductPayl
       }));
   }
 
-  // Handle variants
   if (product.options && product.options.length > 0 && product.variants && product.variants.length > 0) {
     shopifyPayload.options = product.options.map(opt => ({
       name: opt.name,
@@ -77,7 +94,7 @@ function mapPimToShopifyProduct(product: Product): { product: ShopifyProductPayl
       const variantPayload: ShopifyProductVariantPayload = {
         sku: v.sku,
         barcode: v.gtin || undefined,
-        price: "0.00", // Default, will be overridden
+        price: "0.00", 
       };
 
       const stdPriceEntry = v.standardPrice?.[0];
@@ -89,7 +106,6 @@ function mapPimToShopifyProduct(product: Product): { product: ShopifyProductPayl
       } else if (stdPriceEntry) {
         variantPayload.price = stdPriceEntry.amount.toString();
       } else {
-        // Fallback to main product pricing if variant price is missing
         const mainStdPrice = product.pricingAndStock?.standardPrice?.[0];
         const mainSalePrice = product.pricingAndStock?.salePrice?.[0];
         if (mainSalePrice && mainStdPrice && mainSalePrice.amount < mainStdPrice.amount) {
@@ -100,17 +116,14 @@ function mapPimToShopifyProduct(product: Product): { product: ShopifyProductPayl
         }
       }
       
-      // Map PIM option values to Shopify's option1, option2, option3
-      // This assumes product.options (PIM) order matches shopifyPayload.options order
       product.options?.forEach((opt, index) => {
-        if (index < 3) { // Shopify supports up to 3 options
+        if (index < 3) { 
           (variantPayload as any)[`option${index + 1}`] = v.optionValues[opt.name] || null;
         }
       });
       return variantPayload;
     });
   } else {
-    // Single variant logic (fallback or product without options)
     const standardPriceEntry = product.pricingAndStock?.standardPrice?.[0];
     const salePriceEntry = product.pricingAndStock?.salePrice?.[0];
     let shopifyPrice: string = "0.00";
@@ -136,76 +149,73 @@ function mapPimToShopifyProduct(product: Product): { product: ShopifyProductPayl
 
 
 export async function POST(request: NextRequest) {
-  const tenantId = request.headers.get('x-tenant-id');
-  // console.log(`Shopify Export API: Tenant ID from header: ${tenantId}`);
+  const tenantId = request.headers.get('x-tenant-id') || 'default_tenant';
+  let productsToExport: Product[];
 
   try {
-    const { storeUrl, apiKey, productsToExport } = await request.json();
-
-    if (!storeUrl) {
-      return NextResponse.json({ error: 'Shopify store URL is required.' }, { status: 400 });
-    }
-    if (!apiKey) {
-      return NextResponse.json({ error: 'Shopify Admin API Access Token is required.' }, { status: 400 });
-    }
-    if (!productsToExport || !Array.isArray(productsToExport) || productsToExport.length === 0) {
-      return NextResponse.json({ error: 'No products provided for export.' }, { status: 400 });
-    }
-
-    let exportedCount = 0;
-    const errors: string[] = [];
-
-    for (const product of productsToExport as Product[]) {
-      const shopifyApiUrl = `https://${storeUrl.replace(/^https?:\/\//, '')}/admin/api/2024-04/products.json`;
-      const shopifyPayload = mapPimToShopifyProduct(product);
-      
-      // console.log(`Shopify Export API: Sending to ${shopifyApiUrl} for tenant ${tenantId}`, JSON.stringify(shopifyPayload, null, 2));
-
-      const shopifyResponse = await fetch(shopifyApiUrl, {
-        method: 'POST',
-        headers: {
-          'X-Shopify-Access-Token': apiKey,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(shopifyPayload),
-      });
-
-      if (!shopifyResponse.ok) {
-        let errorDetail = `Shopify API request failed (${shopifyResponse.status}): ${shopifyResponse.statusText}`;
-        try {
-            const contentType = shopifyResponse.headers.get("content-type");
-            if (contentType && contentType.includes("application/json")) {
-                const errorData = await shopifyResponse.json();
-                errorDetail = errorData.errors || errorData.error || JSON.stringify(errorData);
-            } else {
-                errorDetail = await shopifyResponse.text();
-            }
-        } catch (e) {
-            // If reading the error body fails, use the text from the response.
-            errorDetail = await shopifyResponse.text().catch(() => `Failed to retrieve error details for product, status: ${shopifyResponse.status}`);
-        }
-        const errorMessage = `Failed to export product "${product.basicInfo.name.en || product.basicInfo.sku}": ${errorDetail}`;
-        console.error(errorMessage.substring(0,1000)); 
-        errors.push(errorMessage);
-        continue; 
-      }
-      
-      exportedCount++;
-    }
-
-    if (errors.length > 0) {
-      const fullMessage = `${exportedCount} products exported. ${errors.length} products failed.`;
-      const status = exportedCount === 0 && errors.length === productsToExport.length ? 500 : 207; 
-      return NextResponse.json({ 
-        message: fullMessage,
-        errors, 
-      }, { status }); 
-    }
-
-    return NextResponse.json({ message: `${exportedCount} products exported successfully to Shopify.` });
-
-  } catch (error: any) {
-    console.error('Shopify Export API Error:', error);
-    return NextResponse.json({ error: error.message || 'An internal server error occurred during Shopify export.' }, { status: 500 });
+    const body = await request.json();
+    productsToExport = body.productsToExport;
+  } catch (error) {
+    return NextResponse.json({ error: 'Invalid JSON payload for export request' }, { status: 400 });
   }
+
+  if (!productsToExport || !Array.isArray(productsToExport) || productsToExport.length === 0) {
+    return NextResponse.json({ error: 'No products provided for export.' }, { status: 400 });
+  }
+
+  const shopifyConfig = await getShopifyConfigForTenant(tenantId);
+
+  if (!shopifyConfig || !shopifyConfig.storeUrl || !shopifyConfig.apiKey) {
+    return NextResponse.json({ error: 'Shopify configuration is missing or incomplete for this tenant.' }, { status: 400 });
+  }
+  const { storeUrl, apiKey } = shopifyConfig;
+
+  let exportedCount = 0;
+  const errors: string[] = [];
+
+  for (const product of productsToExport) {
+    const shopifyApiUrl = `https://${storeUrl.replace(/^https?:\/\//, '')}/admin/api/2024-04/products.json`;
+    const shopifyPayload = mapPimToShopifyProduct(product);
+    
+    const shopifyResponse = await fetch(shopifyApiUrl, {
+      method: 'POST',
+      headers: {
+        'X-Shopify-Access-Token': apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(shopifyPayload),
+    });
+
+    if (!shopifyResponse.ok) {
+      let errorDetail = `Shopify API request failed (${shopifyResponse.status}): ${shopifyResponse.statusText}`;
+      try {
+          const contentType = shopifyResponse.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+              const errorData = await shopifyResponse.json();
+              errorDetail = errorData.errors || errorData.error || JSON.stringify(errorData);
+          } else {
+              errorDetail = await shopifyResponse.text();
+          }
+      } catch (e) {
+          errorDetail = await shopifyResponse.text().catch(() => `Failed to retrieve error details, status: ${shopifyResponse.status}`);
+      }
+      const errorMessage = `Failed to export product "${product.basicInfo.name.en || product.basicInfo.sku}": ${errorDetail}`;
+      console.error(errorMessage.substring(0,1000)); 
+      errors.push(errorMessage);
+      continue; 
+    }
+    
+    exportedCount++;
+  }
+
+  if (errors.length > 0) {
+    const fullMessage = `${exportedCount} products exported. ${errors.length} products failed.`;
+    const status = exportedCount === 0 && errors.length === productsToExport.length ? 500 : 207; 
+    return NextResponse.json({ 
+      message: fullMessage,
+      errors, 
+    }, { status }); 
+  }
+
+  return NextResponse.json({ message: `${exportedCount} products exported successfully to Shopify.` });
 }

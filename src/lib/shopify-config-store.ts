@@ -2,46 +2,69 @@
 'use client';
 
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import { getCurrentTenantId } from './tenant';
 
-interface ShopifyConfigState {
+interface ShopifyConfig {
   storeUrl: string;
   apiKey: string;
-  setStoreUrl: (url: string) => void;
-  setApiKey: (key: string) => void;
+}
+
+interface ShopifyConfigState extends ShopifyConfig {
+  isFetched: boolean; // To know if config has been fetched initially
+  isLoading: boolean;
+  error: string | null;
+  setStoreUrl: (url: string) => void; // Still allow local update before save
+  setApiKey: (key: string) => void;   // Still allow local update before save
+  fetchShopifyConfig: () => Promise<void>;
+  saveShopifyConfig: (config: ShopifyConfig) => Promise<void>;
   isConfigured: () => boolean;
 }
 
-// Function to get the dynamic storage name
-const getShopifyConfigStorageName = () => {
-  const tenantId = getCurrentTenantId();
-  return `shopify-config-storage-${tenantId}`;
-}
-
-export const useShopifyConfigStore = create<ShopifyConfigState>()(
-  persist(
-    (set, get) => ({
-      storeUrl: '',
-      apiKey: '',
-      setStoreUrl: (url) => set({ storeUrl: url }),
-      setApiKey: (key) => set({ apiKey: key }),
-      isConfigured: () => {
-        const { storeUrl, apiKey } = get();
-        return !!storeUrl && !!apiKey;
+export const useShopifyConfigStore = create<ShopifyConfigState>((set, get) => ({
+  storeUrl: '',
+  apiKey: '',
+  isFetched: false,
+  isLoading: false,
+  error: null,
+  setStoreUrl: (url) => set({ storeUrl: url }),
+  setApiKey: (key) => set({ apiKey: key }),
+  fetchShopifyConfig: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await fetch('/api/shopify/config');
+      if (!response.ok) {
+        throw new Error('Failed to fetch Shopify config');
       }
-    }),
-    {
-      name: getShopifyConfigStorageName(), // Use dynamic name
-      storage: createJSONStorage(() => localStorage), 
-      // onRehydrateStorage: () => { // Optional: useful for debugging
-      //   console.log(`Shopify config store for tenant "${getCurrentTenantId()}" rehydrated.`);
-      //   return (state, error) => {
-      //     if (error) {
-      //       console.error(`An error occurred during Shopify config store rehydration for tenant "${getCurrentTenantId()}":`, error);
-      //     }
-      //   };
-      // }
+      const config: ShopifyConfig = await response.json();
+      set({ ...config, isFetched: true, isLoading: false });
+    } catch (err: any) {
+      console.error("Error fetching Shopify config:", err);
+      set({ error: err.message, isLoading: false, isFetched: true }); // isFetched true to prevent re-fetch loop
     }
-  )
-);
+  },
+  saveShopifyConfig: async (config) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await fetch('/api/shopify/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to save Shopify config');
+      }
+      // Assuming API returns a success message, we've already updated state optimistically via setStoreUrl/setApiKey
+      // Or, we could re-fetch if API returns the saved config:
+      // const savedConfig = await response.json();
+      // set({ ...savedConfig, isLoading: false });
+      set({ isLoading: false }); // Simple approach: just stop loading
+    } catch (err: any) {
+      console.error("Error saving Shopify config:", err);
+      set({ error: err.message, isLoading: false });
+      throw err; // Re-throw for the caller to handle
+    }
+  },
+  isConfigured: () => {
+    const { storeUrl, apiKey } = get();
+    return !!storeUrl && !!apiKey;
+  }
+}));
