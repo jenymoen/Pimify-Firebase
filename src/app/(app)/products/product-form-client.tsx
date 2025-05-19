@@ -303,8 +303,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         updatedAt: new Date().toISOString(),
         basicInfo: {
           ...data.basicInfo,
-          launchDate: data.basicInfo.launchDate ? data.basicInfo.launchDate.toISOString() : undefined,
-          endDate: data.basicInfo.endDate ? data.basicInfo.endDate.toISOString() : undefined,
+          launchDate: data.basicInfo.launchDate ? data.basicInfo.launchDate.toISOString() : null,
+          endDate: data.basicInfo.endDate ? data.basicInfo.endDate.toISOString() : null,
         },
         attributesAndSpecs: data.attributesAndSpecs,
         media: {
@@ -319,7 +319,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
           })
         },
         marketingSEO: data.marketingSEO,
-        aiSummary: data.aiSummary,
+        aiSummary: data.aiSummary || defaultMultilingualString,
         pricingAndStock: {
             standardPrice: [],
             salePrice: [],
@@ -332,10 +332,10 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         })),
         variants: (data.variants || []).map(vFormData => {
           const stdPriceEntries: PriceEntry[] = (vFormData.standardPriceAmount !== undefined && vFormData.standardPriceAmount !== null)
-              ? [{ id: uuidv4(), amount: Number(vFormData.standardPriceAmount), currency: vFormData.standardPriceCurrency || "NOK" }]
+              ? [{ id: uuidv4(), amount: Number(vFormData.standardPriceAmount), currency: vFormData.standardPriceCurrency || "NOK", validFrom: null, validTo: null }]
               : [];
           const slPriceEntries: PriceEntry[] = (vFormData.salePriceAmount !== undefined && vFormData.salePriceAmount !== null)
-              ? [{ id: uuidv4(), amount: Number(vFormData.salePriceAmount), currency: vFormData.salePriceCurrency || "NOK" }]
+              ? [{ id: uuidv4(), amount: Number(vFormData.salePriceAmount), currency: vFormData.salePriceCurrency || "NOK", validFrom: null, validTo: null }]
               : [];
 
           const variantForPayload: ProductVariant = {
@@ -344,6 +344,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
             optionValues: vFormData.optionValues,
             standardPrice: stdPriceEntries,
             salePrice: slPriceEntries,
+            costPrice: [], // Assuming no cost price at variant level in form for now
           };
           if (vFormData.gtin) variantForPayload.gtin = vFormData.gtin;
           return variantForPayload;
@@ -356,6 +357,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                 id: uuidv4(),
                 amount: Number(data.pricingAndStock.standardPriceAmount),
                 currency: data.pricingAndStock.standardPriceCurrency || "NOK",
+                validFrom: null, validTo: null
             }];
         }
         if (data.pricingAndStock.salePriceAmount !== undefined && data.pricingAndStock.salePriceAmount !== null) {
@@ -363,6 +365,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                 id: uuidv4(),
                 amount: Number(data.pricingAndStock.salePriceAmount),
                 currency: data.pricingAndStock.salePriceCurrency || "NOK",
+                validFrom: null, validTo: null
             }];
         }
         if (data.pricingAndStock.costPriceAmount !== undefined && data.pricingAndStock.costPriceAmount !== null) {
@@ -370,6 +373,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                 id: uuidv4(),
                 amount: Number(data.pricingAndStock.costPriceAmount),
                 currency: data.pricingAndStock.costPriceCurrency || "NOK",
+                validFrom: null, validTo: null
             }];
         }
       }
@@ -386,10 +390,10 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       } else {
         const { id, createdAt, updatedAt, aiSummary: _aiSummaryFromPayload, ...productDataForStore } = productPayloadForSave;
         const newProd = await addProduct(productDataForStore, productPayloadForSave.aiSummary);
-         if (newProd) {
-          toast({ title: "Product Created", description: `"${newProd.basicInfo.name.en || newProd.basicInfo.name.no || newProd.basicInfo.sku}" has been successfully created.` });
+        if (newProd) {
+           toast({ title: "Product Created", description: `"${newProd.basicInfo.name.en || newProd.basicInfo.name.no || newProd.basicInfo.sku}" has been successfully created.` });
         } else {
-          toast({ title: "Product Creation Failed", description: `Failed to create "${data.basicInfo.name.en || data.basicInfo.name.no || data.basicInfo.sku}".`, variant: "destructive" });
+           toast({ title: "Product Creation Failed", description: `Failed to create "${data.basicInfo.name.en || data.basicInfo.name.no || data.basicInfo.sku}".`, variant: "destructive" });
         }
       }
       router.push("/products");
@@ -414,7 +418,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     const actualErrors = form.formState.errors;
     if (Object.keys(actualErrors).length === 0) {
         console.error(
-          "Validation Failure - Source of Truth (`form.formState.errors`) is EMPTY when onError was called:",
+          "Validation Failure - Source of Truth (`form.formState.errors`) is EMPTY when onError was called (this indicates a Zod schema-level validation might not be mapping to a specific field, or a resolver issue):",
           actualErrors
         );
     } else {
@@ -575,7 +579,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       name="basicInfo.name"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Product Name <span className="text-destructive">*</span></FormLabel>
+                          <FormLabel>Product Name</FormLabel>
                            <FormControl>
                             <MultilingualInput id="name" label="" {...field} value={field.value || defaultMultilingualString} />
                           </FormControl>
@@ -640,7 +644,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       name="basicInfo.descriptionShort"
                       render={({ field }) => (
                          <FormItem>
-                          <FormLabel>Short Description <span className="text-destructive">*</span></FormLabel>
+                          <FormLabel>Short Description</FormLabel>
                            <FormControl>
                             <MultilingualInput id="descriptionShort" label="" type="textarea" {...field} value={field.value || defaultMultilingualString} />
                           </FormControl>
@@ -653,7 +657,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       name="basicInfo.descriptionLong"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Long Description <span className="text-destructive">*</span></FormLabel>
+                          <FormLabel>Long Description</FormLabel>
                            <FormControl>
                             <MultilingualInput id="descriptionLong" label="" type="textarea" {...field} value={field.value || defaultMultilingualString} />
                           </FormControl>
@@ -776,7 +780,11 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                 </div>
                             </Card>
                         ))}
-                         <FormMessage /> {/* For options array-level errors, e.g., max items */}
+                        <FormField
+                          control={form.control}
+                          name="options"
+                          render={() => <FormMessage />}
+                        />
                         <Button
                             type="button"
                             variant="outline"
@@ -791,7 +799,11 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                     <Button type="button" onClick={generateVariants} className="mt-4" disabled={optionsFields.length === 0}>
                         <Sparkles className="mr-2 h-4 w-4" /> Generate Variants
                     </Button>
-                     <FormMessage /> {/* For variants array-level errors */}
+                     <FormField
+                        control={form.control}
+                        name="variants"
+                        render={() => <FormMessage />}
+                      />
 
                     {variantsFields.length > 0 && (
                         <div className="mt-6 space-y-4">
@@ -827,7 +839,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                                 <FormField control={form.control} name={`variants.${index}.gtin`} render={({ field }) => ( <Input {...field} value={field.value || ''} placeholder="Variant GTIN" /> )} />
                                             </TableCell>
                                             <TableCell>
-                                                <FormField control={form.control} name={`variants.${index}.standardPriceAmount`} render={({ field }) => ( <Input type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' || e.target.value === null ? undefined : parseFloat(e.target.value))} placeholder="Amount"/> )} />
+                                                <FormField control={form.control} name={`variants.${index}.standardPriceAmount`} render={({ field }) => ( <Input type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(String(e.target.value).trim() === '' || e.target.value === null ? undefined : parseFloat(e.target.value))} placeholder="Amount"/> )} />
                                                  <FormMessage>{form.formState.errors.variants?.[index]?.standardPriceAmount?.message}</FormMessage>
                                             </TableCell>
                                             <TableCell>
@@ -835,7 +847,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                                  <FormMessage>{form.formState.errors.variants?.[index]?.standardPriceCurrency?.message}</FormMessage>
                                             </TableCell>
                                             <TableCell>
-                                                <FormField control={form.control} name={`variants.${index}.salePriceAmount`} render={({ field }) => ( <Input type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' || e.target.value === null ? undefined : parseFloat(e.target.value))} placeholder="Amount"/> )} />
+                                                <FormField control={form.control} name={`variants.${index}.salePriceAmount`} render={({ field }) => ( <Input type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(String(e.target.value).trim() === '' || e.target.value === null ? undefined : parseFloat(e.target.value))} placeholder="Amount"/> )} />
                                                  <FormMessage>{form.formState.errors.variants?.[index]?.salePriceAmount?.message}</FormMessage>
                                             </TableCell>
                                             <TableCell>
@@ -884,7 +896,11 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                         />
                       )}
                     />
-                     <FormMessage /> {/* For properties array-level errors */}
+                     <FormField
+                        control={form.control}
+                        name="attributesAndSpecs.properties"
+                        render={() => <FormMessage />}
+                      />
                     <Controller
                       control={form.control}
                       name="attributesAndSpecs.technicalSpecs"
@@ -898,7 +914,11 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                         />
                       )}
                     />
-                    <FormMessage /> {/* For technicalSpecs array-level errors */}
+                    <FormField
+                        control={form.control}
+                        name="attributesAndSpecs.technicalSpecs"
+                        render={() => <FormMessage />}
+                      />
                      <FormField
                       control={form.control}
                       name="attributesAndSpecs.countryOfOrigin"
@@ -1017,7 +1037,11 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                         />
                       )}
                     />
-                    <FormMessage /> {/* For media.images array-level errors */}
+                    <FormField
+                        control={form.control}
+                        name="media.images"
+                        render={() => <FormMessage />}
+                      />
                   </ProductFormSection>
 
                   <ProductFormSection title="Marketing & SEO" value="marketing-seo" icon={BarChart3} description="Optimize product visibility for search engines and marketing campaigns.">
