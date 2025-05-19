@@ -58,7 +58,7 @@ const requiredMultilingualStringSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "At least one language (English or Norwegian) is required.",
-      path: ['en'],
+      path: ['en'], // Or ['no'] or a general path like [] if you prefer
     });
   }
 });
@@ -78,11 +78,13 @@ const keyValueEntrySchema = z.object({
 const mediaEntrySchema = z.object({
   id: z.string(),
   url: z.string().refine(val => {
-    if (val === '' || val === undefined) return true;
+    if (val === '' || val === undefined) return true; // Allow empty string for removal
     try {
+      // Check if it's an absolute URL
       const url = new URL(val);
       return url.protocol === "http:" || url.protocol === "https:";
     } catch (_) {
+      // If not an absolute URL, check if it's a relative path starting with '/'
       return val.startsWith('/');
     }
   }, {
@@ -98,7 +100,6 @@ const productOptionSchema = z.object({
   id: z.string(),
   name: z.string().min(1, "Option name is required."),
   values: z.string()
-    .min(1, "Option values are required (comma-separated).")
     .transform(val => val.split(',').map(v => v.trim()).filter(v => v))
     .refine(arr => arr.length > 0, { message: "Please provide at least one valid, non-empty option value (e.g., 'Red' or 'Red,Blue'). Values like ' , ' are not valid." })
 });
@@ -166,7 +167,7 @@ const productFormSchema = z.object({
   }).optional(),
   options: z.array(productOptionSchema).max(3, "Maximum of 3 options allowed.").optional(),
   variants: z.array(productVariantSchema).optional(),
-  aiSummary: baseMultilingualStringSchema.optional(),
+  aiSummary: baseMultilingualStringSchema.optional(), // AI summary is optional
 });
 
 type ProductFormData = z.infer<typeof productFormSchema>;
@@ -312,9 +313,10 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
           images: (data.media.images || []).filter(img => {
             if (!img.url || img.url.trim() === '') return false;
              try {
-                const url = new URL(img.url);
+                const url = new URL(img.url); // This will throw if img.url is not a valid absolute URL
                 return url.protocol === "http:" || url.protocol === "https:";
               } catch (_) {
+                // If not absolute, check if it's a relative path starting with '/'
                 return img.url.startsWith('/');
               }
           })
@@ -345,6 +347,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
             optionValues: vFormData.optionValues,
             standardPrice: stdPriceEntries,
             salePrice: slPriceEntries,
+            // costPrice: [], // Variant-level cost price not implemented in form yet
           };
           if (vFormData.gtin) variantForPayload.gtin = vFormData.gtin;
           return variantForPayload;
@@ -388,7 +391,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         const { id, createdAt, updatedAt, aiSummary: _aiSummaryFromPayload, ...productDataForStore } = productPayloadForSave;
         const newProd = await addProduct(productDataForStore, productPayloadForSave.aiSummary);
         if (newProd) {
-            toast({ title: "Product Created", description: `"${newProd.basicInfo.name.en || newProd.basicInfo.name.no || newProd.basicInfo.sku}" has been successfully created.` });
+             toast({ title: "Product Created", description: `"${newProd.basicInfo.name.en || newProd.basicInfo.name.no || newProd.basicInfo.sku}" has been successfully created.` });
         } else {
              toast({ title: "Product Creation Failed", description: `Failed to create "${data.basicInfo.name.en || data.basicInfo.name.no || data.basicInfo.sku}".`, variant: "destructive" });
         }
@@ -404,13 +407,41 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
   }
 
   const onError = (errors: FieldErrors<ProductFormData>) => {
-    console.error("Form validation errors (raw object):", errors);
-    console.error("Form validation errors (JSON stringified):", JSON.stringify(errors, null, 2));
-    toast({
-      title: "Validation Error",
-      description: "Please check the form for errors. Some required fields might be missing or invalid.",
-      variant: "destructive",
-    });
+    console.error("onError callback 'errors' argument (raw):", errors);
+    console.error("onError callback 'errors' argument (JSON):", JSON.stringify(errors, null, 2));
+    
+    // Log form.formState.errors directly for comparison
+    console.error("form.formState.errors from within onError (raw):", form.formState.errors);
+    console.error("form.formState.errors from within onError (JSON):", JSON.stringify(form.formState.errors, null, 2));
+  
+    let hasActualErrors = false;
+    // Check if the errors argument from the callback has any keys
+    if (errors && Object.keys(errors).length > 0) {
+      hasActualErrors = true;
+    } 
+    // As a fallback or for more comprehensive checking, also check form.formState.errors
+    else if (form.formState.errors && Object.keys(form.formState.errors).length > 0) {
+      hasActualErrors = true;
+      if (Object.keys(errors).length === 0) {
+        console.warn("Warning: 'errors' argument to onError was empty, but form.formState.errors was not. Using form.formState.errors for toast.");
+      }
+    }
+  
+    if (hasActualErrors) {
+      toast({
+        title: "Validation Error",
+        description: "Please check the form for errors. Some required fields might be missing or invalid.",
+        variant: "destructive",
+      });
+    } else {
+      // This case suggests onError was called but no errors were found in either 'errors' or 'form.formState.errors'
+      toast({
+        title: "Submission Error",
+        description: "An unexpected issue occurred during form submission. Please review your entries or try again.",
+        variant: "destructive",
+      });
+      console.error("onError was called, but both the 'errors' argument and form.formState.errors appear to be empty. This is highly unexpected and suggests a potential issue with the form library or resolver setup if validation was intended to fail.");
+    }
   };
 
   const handleGenerateSummary = async () => {
@@ -849,7 +880,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       )}
                     />
                      {form.formState.errors.attributesAndSpecs?.properties && (
-                        <FormMessage>{typeof form.formState.errors.attributesAndSpecs.properties === 'string' ? form.formState.errors.attributesAndSpecs.properties : 'Error in properties (check fields).'}</FormMessage>
+                        <FormMessage>{typeof form.formState.errors.attributesAndSpecs.properties === 'string' ? String(form.formState.errors.attributesAndSpecs.properties) : 'Error in properties (check fields).'}</FormMessage>
                      )}
                     <Controller
                       control={form.control}
@@ -865,7 +896,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       )}
                     />
                     {form.formState.errors.attributesAndSpecs?.technicalSpecs && (
-                        <FormMessage>{typeof form.formState.errors.attributesAndSpecs.technicalSpecs === 'string' ? form.formState.errors.attributesAndSpecs.technicalSpecs : 'Error in technical specs (check fields).'}</FormMessage>
+                        <FormMessage>{typeof form.formState.errors.attributesAndSpecs.technicalSpecs === 'string' ? String(form.formState.errors.attributesAndSpecs.technicalSpecs) : 'Error in technical specs (check fields).'}</FormMessage>
                      )}
                      <FormField
                       control={form.control}
@@ -893,7 +924,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                     placeholder="e.g., 999.99"
                                     {...field}
                                     value={field.value ?? ''}
-                                    onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                                    onChange={e => field.onChange(e.target.value === '' || e.target.value === null ? undefined : parseFloat(e.target.value))}
                                 /></FormControl>
                                 <FormMessage />
                                 </FormItem>
@@ -921,7 +952,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                     placeholder="e.g., 799.99"
                                     {...field}
                                     value={field.value ?? ''}
-                                    onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                                    onChange={e => field.onChange(e.target.value === '' || e.target.value === null ? undefined : parseFloat(e.target.value))}
                                 /></FormControl>
                                 <FormDescription>Optional. If set, this is the active selling price.</FormDescription>
                                 <FormMessage />
@@ -950,7 +981,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                     placeholder="e.g., 499.99"
                                     {...field}
                                     value={field.value ?? ''}
-                                    onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                                    onChange={e => field.onChange(e.target.value === '' || e.target.value === null ? undefined : parseFloat(e.target.value))}
                                 /></FormControl>
                                 <FormDescription>Optional. Internal cost price.</FormDescription>
                                 <FormMessage />
@@ -986,7 +1017,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       )}
                     />
                     {form.formState.errors.media?.images && (
-                        <FormMessage>{typeof form.formState.errors.media.images === 'string' ? form.formState.errors.media.images : 'Error in media images (check URLs/alt text).'}</FormMessage>
+                        <FormMessage>{typeof form.formState.errors.media.images === 'string' ? String(form.formState.errors.media.images) : 'Error in media images (check URLs/alt text).'}</FormMessage>
                     )}
                   </ProductFormSection>
 
@@ -1124,3 +1155,5 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     </Card>
   );
 }
+
+    
