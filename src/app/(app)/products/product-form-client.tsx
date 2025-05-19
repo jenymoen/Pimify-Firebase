@@ -1,4 +1,3 @@
-
 // src/app/(app)/products/product-form-client.tsx
 "use client";
 
@@ -58,7 +57,7 @@ const requiredMultilingualStringSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "At least one language (English or Norwegian) is required.",
-      path: ['en'], // Or ['no'] or a general path like [] if you prefer
+      path: ['en'], 
     });
   }
 });
@@ -78,13 +77,11 @@ const keyValueEntrySchema = z.object({
 const mediaEntrySchema = z.object({
   id: z.string(),
   url: z.string().refine(val => {
-    if (val === '' || val === undefined) return true; // Allow empty string for removal
+    if (val === '' || val === undefined) return true; 
     try {
-      // Check if it's an absolute URL
       const url = new URL(val);
       return url.protocol === "http:" || url.protocol === "https:";
     } catch (_) {
-      // If not an absolute URL, check if it's a relative path starting with '/'
       return val.startsWith('/');
     }
   }, {
@@ -167,7 +164,7 @@ const productFormSchema = z.object({
   }).optional(),
   options: z.array(productOptionSchema).max(3, "Maximum of 3 options allowed.").optional(),
   variants: z.array(productVariantSchema).optional(),
-  aiSummary: baseMultilingualStringSchema.optional(), // AI summary is optional
+  aiSummary: baseMultilingualStringSchema.optional(),
 });
 
 type ProductFormData = z.infer<typeof productFormSchema>;
@@ -313,10 +310,9 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
           images: (data.media.images || []).filter(img => {
             if (!img.url || img.url.trim() === '') return false;
              try {
-                const url = new URL(img.url); // This will throw if img.url is not a valid absolute URL
+                const url = new URL(img.url); 
                 return url.protocol === "http:" || url.protocol === "https:";
               } catch (_) {
-                // If not absolute, check if it's a relative path starting with '/'
                 return img.url.startsWith('/');
               }
           })
@@ -331,7 +327,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         options: (data.options || []).map(opt => ({
             id: opt.id,
             name: opt.name,
-            values: opt.values, // Zod transform already converted string to string[]
+            values: opt.values, 
         })),
         variants: (data.variants || []).map(vFormData => {
           const stdPriceEntries: PriceEntry[] = (vFormData.standardPriceAmount !== undefined && vFormData.standardPriceAmount !== null)
@@ -347,7 +343,6 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
             optionValues: vFormData.optionValues,
             standardPrice: stdPriceEntries,
             salePrice: slPriceEntries,
-            // costPrice: [], // Variant-level cost price not implemented in form yet
           };
           if (vFormData.gtin) variantForPayload.gtin = vFormData.gtin;
           return variantForPayload;
@@ -390,10 +385,10 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       } else {
         const { id, createdAt, updatedAt, aiSummary: _aiSummaryFromPayload, ...productDataForStore } = productPayloadForSave;
         const newProd = await addProduct(productDataForStore, productPayloadForSave.aiSummary);
-        if (newProd) {
-             toast({ title: "Product Created", description: `"${newProd.basicInfo.name.en || newProd.basicInfo.name.no || newProd.basicInfo.sku}" has been successfully created.` });
+         if (newProd) {
+          toast({ title: "Product Created", description: `"${newProd.basicInfo.name.en || newProd.basicInfo.name.no || newProd.basicInfo.sku}" has been successfully created.` });
         } else {
-             toast({ title: "Product Creation Failed", description: `Failed to create "${data.basicInfo.name.en || data.basicInfo.name.no || data.basicInfo.sku}".`, variant: "destructive" });
+          toast({ title: "Product Creation Failed", description: `Failed to create "${data.basicInfo.name.en || data.basicInfo.name.no || data.basicInfo.sku}".`, variant: "destructive" });
         }
       }
       router.push("/products");
@@ -407,41 +402,30 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
   }
 
   const onError = (errors: FieldErrors<ProductFormData>) => {
-    console.error("onError callback 'errors' argument (raw):", errors);
-    console.error("onError callback 'errors' argument (JSON):", JSON.stringify(errors, null, 2));
+    console.group("Form Submission Error Details");
+    console.error("`errors` argument passed to onError callback (may be incomplete for complex validations):", errors);
+    console.error("`form.formState.errors` (source of truth for validation state):", form.formState.errors);
     
-    // Log form.formState.errors directly for comparison
-    console.error("form.formState.errors from within onError (raw):", form.formState.errors);
-    console.error("form.formState.errors from within onError (JSON):", JSON.stringify(form.formState.errors, null, 2));
-  
-    let hasActualErrors = false;
-    // Check if the errors argument from the callback has any keys
-    if (errors && Object.keys(errors).length > 0) {
-      hasActualErrors = true;
-    } 
-    // As a fallback or for more comprehensive checking, also check form.formState.errors
-    else if (form.formState.errors && Object.keys(form.formState.errors).length > 0) {
-      hasActualErrors = true;
-      if (Object.keys(errors).length === 0) {
-        console.warn("Warning: 'errors' argument to onError was empty, but form.formState.errors was not. Using form.formState.errors for toast.");
-      }
-    }
-  
-    if (hasActualErrors) {
-      toast({
-        title: "Validation Error",
-        description: "Please check the form for errors. Some required fields might be missing or invalid.",
-        variant: "destructive",
-      });
+    const actualErrors = form.formState.errors;
+    const hasActualValidationErrors = actualErrors && Object.keys(actualErrors).length > 0;
+
+    if (hasActualValidationErrors) {
+        console.warn("Validation errors found. Please check form fields. Details logged above.");
+        toast({
+            title: "Validation Error",
+            description: "Please check the form for errors. Some required fields might be missing or invalid. See browser console for details.",
+            variant: "destructive",
+        });
     } else {
-      // This case suggests onError was called but no errors were found in either 'errors' or 'form.formState.errors'
-      toast({
-        title: "Submission Error",
-        description: "An unexpected issue occurred during form submission. Please review your entries or try again.",
-        variant: "destructive",
-      });
-      console.error("onError was called, but both the 'errors' argument and form.formState.errors appear to be empty. This is highly unexpected and suggests a potential issue with the form library or resolver setup if validation was intended to fail.");
+        // This case is unusual: onError called, but form.formState.errors is empty.
+        console.error("`onError` was called, but `form.formState.errors` is empty. This might indicate an issue with the form resolver or an unexpected submission attempt.");
+        toast({
+            title: "Submission Error",
+            description: "An unexpected issue occurred. Please review your entries or try again. See browser console for details.",
+            variant: "destructive",
+        });
     }
+    console.groupEnd();
   };
 
   const handleGenerateSummary = async () => {
@@ -821,7 +805,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                                 <FormField control={form.control} name={`variants.${index}.gtin`} render={({ field }) => ( <Input {...field} value={field.value || ''} placeholder="Variant GTIN" /> )} />
                                             </TableCell>
                                             <TableCell>
-                                                <FormField control={form.control} name={`variants.${index}.standardPriceAmount`} render={({ field }) => ( <Input type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))} placeholder="Amount"/> )} />
+                                                <FormField control={form.control} name={`variants.${index}.standardPriceAmount`} render={({ field }) => ( <Input type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' || e.target.value === null ? undefined : parseFloat(e.target.value))} placeholder="Amount"/> )} />
                                                  <FormMessage>{form.formState.errors.variants?.[index]?.standardPriceAmount?.message}</FormMessage>
                                             </TableCell>
                                             <TableCell>
@@ -829,7 +813,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                                  <FormMessage>{form.formState.errors.variants?.[index]?.standardPriceCurrency?.message}</FormMessage>
                                             </TableCell>
                                             <TableCell>
-                                                <FormField control={form.control} name={`variants.${index}.salePriceAmount`} render={({ field }) => ( <Input type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))} placeholder="Amount"/> )} />
+                                                <FormField control={form.control} name={`variants.${index}.salePriceAmount`} render={({ field }) => ( <Input type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' || e.target.value === null ? undefined : parseFloat(e.target.value))} placeholder="Amount"/> )} />
                                                  <FormMessage>{form.formState.errors.variants?.[index]?.salePriceAmount?.message}</FormMessage>
                                             </TableCell>
                                             <TableCell>
@@ -1155,5 +1139,3 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     </Card>
   );
 }
-
-    
