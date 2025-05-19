@@ -5,9 +5,32 @@ import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import Link from 'next/link';
 import { LogIn } from 'lucide-react'; 
+import { useAuthStore } from '@/lib/auth-store';
 
 export default function HomePage() {
   const router = useRouter();
+  const { user, isInitialized, isLoading, initializeAuthListener } = useAuthStore();
+
+  // Initialize auth listener if not already done (e.g. if user lands here first)
+  useEffect(() => {
+    if (!isInitialized) {
+       const unsubscribe = initializeAuthListener();
+       return () => unsubscribe();
+    }
+  }, [isInitialized, initializeAuthListener]);
+
+  // Optional: Redirect to dashboard if already logged in
+  useEffect(() => {
+    if (isInitialized && user && !isLoading) {
+      router.push('/dashboard');
+    }
+  }, [user, isInitialized, isLoading, router]);
+
+  if (isLoading || !isInitialized) {
+     return <div className="flex min-h-screen items-center justify-center"><p>Loading...</p></div>;
+  }
+  // If user is already logged in (and not loading), they'll be redirected by the useEffect above.
+  // So, only render the landing page if they are not logged in or auth state is still loading.
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -18,7 +41,7 @@ export default function HomePage() {
           </svg>
           <span className="text-xl font-semibold text-primary">Pimify</span>
         </Link>
-        <Link href="/dashboard" passHref> {/* Changed from /products to /dashboard */}
+        <Link href="/auth/login" passHref>
           <Button size="md">
             <LogIn className="mr-2 h-4 w-4" /> Login
           </Button>
@@ -37,9 +60,9 @@ export default function HomePage() {
         <p className="text-xl text-foreground/80 mb-8 max-w-2xl">
           Your intuitive Product Information Management (PIM) system designed to streamline your product data and enhance your workflow.
         </p>
-        <Link href="/dashboard" passHref> {/* Changed from /products to /dashboard */}
+        <Link href="/auth/login" passHref> 
           <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground">
-            Go to Products
+            Go to Dashboard
           </Button>
         </Link>
         <p className="text-sm text-muted-foreground mt-12">

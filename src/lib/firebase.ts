@@ -1,7 +1,6 @@
 // src/lib/firebase.ts
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
-// import { getFirestore, type Firestore } from 'firebase/firestore'; // Uncomment when using Firestore client SDK
-// import { getAuth, type Auth } from 'firebase/auth'; // Uncomment when using Firebase Auth
+import { getAuth, type Auth } from 'firebase/auth'; // Import getAuth
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -13,8 +12,7 @@ const firebaseConfig = {
 };
 
 let app: FirebaseApp;
-// let db: Firestore; // Uncomment when using Firestore client SDK
-// let auth: Auth; // Uncomment when using Firebase Auth
+let auth: Auth;
 
 if (typeof window !== 'undefined') { // Ensure Firebase initializes only on the client
   if (getApps().length === 0) {
@@ -28,12 +26,11 @@ if (typeof window !== 'undefined') { // Ensure Firebase initializes only on the 
     app = getApp();
   }
 
-  // if (app!) { // Check if app was initialized
-  //   db = getFirestore(app);
-  //   auth = getAuth(app);
-  // }
+  if (app!) { // Check if app was initialized
+    auth = getAuth(app);
+  }
 }
 
-// Export app, db, auth if they are initialized.
+// Export app, auth if they are initialized.
 // Components using them should check for their existence.
-export { app /*, db, auth */ };
+export { app, auth };

@@ -3,8 +3,8 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation'; // Added useRouter
-import { LayoutDashboard, PackagePlus, Package, UploadCloud, Settings, Menu, LogOut } from 'lucide-react'; // Added LogOut
+import { usePathname, useRouter } from 'next/navigation';
+import { LayoutDashboard, PackagePlus, Package, UploadCloud, Settings, Menu, LogOut } from 'lucide-react';
 import {
   SidebarProvider,
   Sidebar,
@@ -14,18 +14,16 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarFooter,
-  SidebarTrigger,
-  SidebarInset,
-} from '@/components/ui/sidebar';
+} from '@/components/ui/sidebar'; // Removed SidebarTrigger, SidebarInset as they might not be needed for this auth setup directly
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useAuthStore } from '@/lib/auth-store'; // Import the auth store
 
 interface NavItem {
   href: string;
   label: string;
   icon: React.ElementType;
-  action?: () => void; // Optional action for items like logout
 }
 
 interface AppShellProps {
@@ -36,10 +34,11 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const isMobile = useIsMobile();
+  const { logout: authLogout, user } = useAuthStore(); // Get logout function and user from store
 
-  const handleLogout = () => {
-    // In a real app, you'd clear auth tokens, etc. here
-    router.push('/');
+  const handleLogout = async () => {
+    await authLogout();
+    router.push('/'); // Redirect to homepage after logout
   };
 
   const navItems: NavItem[] = [
@@ -96,7 +95,11 @@ export function AppShell({ children }: AppShellProps) {
   );
 
   if (isMobile === undefined) { 
-    return <div className="flex h-screen items-center justify-center"><p>Loading...</p></div>; 
+    return <div className="flex h-screen items-center justify-center"><p>Loading UI...</p></div>; 
+  }
+
+  if (!user) { // If user is somehow null here, it might mean auth state is still resolving or lost
+      return <div className="flex h-screen items-center justify-center"><p>Authenticating...</p></div>;
   }
 
   return (
@@ -116,7 +119,7 @@ export function AppShell({ children }: AppShellProps) {
                   <Menu className="h-6 w-6" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-[280px] p-0 flex flex-col"> {/* Added flex flex-col */}
+              <SheetContent side="left" className="w-[280px] p-0 flex flex-col">
                 {sidebarContent}
               </SheetContent>
             </Sheet>
@@ -125,12 +128,13 @@ export function AppShell({ children }: AppShellProps) {
         </div>
       ) : (
         <div className="flex min-h-screen">
-          <Sidebar collapsible="icon" variant="sidebar" side="left" className="flex flex-col"> {/* Added flex flex-col */}
+          <Sidebar collapsible="icon" variant="sidebar" side="left" className="flex flex-col">
             {sidebarContent}
           </Sidebar>
-          <SidebarInset className="flex-1"> 
+          {/* Use a simple div wrapper instead of SidebarInset if SidebarInset is causing issues or not needed */}
+          <div className="flex-1 bg-background"> 
             <div className="p-6">{children}</div>
-          </SidebarInset>
+          </div>
         </div>
       )}
     </SidebarProvider>
