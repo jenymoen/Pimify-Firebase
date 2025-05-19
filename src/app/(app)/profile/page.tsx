@@ -12,8 +12,9 @@ import { Label } from '@/components/ui/label';
 import { UserCircle, Mail, Shield, Edit3, Save, XCircle, RefreshCw, Camera } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { auth } from '@/lib/firebase'; // Import Firebase auth instance
+import { auth, storage } from '@/lib/firebase'; // Import Firebase auth and storage instance
 import { updateProfile, updateEmail } from 'firebase/auth';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertTriangle } from 'lucide-react';
 
@@ -28,25 +29,40 @@ export default function ProfilePage() {
   const [pageLoading, setPageLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Placeholder for image preview if we were handling local file selection
-  // const [imagePreview, setImagePreview] = useState<string | null>(null);
-  // const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (user) {
       setEditableDisplayName(user.displayName || '');
       setEditableEmail(user.email || '');
-      // setImagePreview(user.photoURL); // Set initial preview if photoURL exists
+      setImagePreview(user.photoURL); 
     }
   }, [user]);
 
+  useEffect(() => {
+    // Clean up object URL when component unmounts or imagePreview changes
+    let objectUrl: string | null = null;
+    if (imagePreview && imagePreview.startsWith('blob:')) {
+      objectUrl = imagePreview;
+    }
+    return () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [imagePreview]);
+
+
   const getInitials = (email: string | null | undefined, displayName: string | null | undefined) => {
     if (displayName) {
-      const names = displayName.split(' ');
-      if (names.length > 1) {
+      const names = displayName.trim().split(' ');
+      if (names.length > 1 && names[0] && names[names.length - 1]) {
         return (names[0][0] + names[names.length - 1][0]).toUpperCase();
       }
-      return displayName.substring(0, 2).toUpperCase();
+      if (names[0] && names[0].length >=2) return names[0].substring(0, 2).toUpperCase();
+      if (names[0] && names[0].length === 1) return names[0].toUpperCase();
     }
     if (email) return email.substring(0, 2).toUpperCase();
     return 'U';
@@ -57,24 +73,27 @@ export default function ProfilePage() {
       // Reset fields to current user state if canceling
       setEditableDisplayName(user.displayName || '');
       setEditableEmail(user.email || '');
-      // setImagePreview(user.photoURL);
+      setImagePreview(user.photoURL);
+      setSelectedFile(null); // Clear selected file on cancel
       setError(null);
     }
     setIsEditing(!isEditing);
   };
 
-  // Placeholder for file change handler - full implementation needs Firebase Storage
-  // const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-  //   const file = event.target.files?.[0];
-  //   if (file) {
-  //     const reader = new FileReader();
-  //     reader.onloadend = () => {
-  //       setImagePreview(reader.result as string);
-  //     };
-  //     reader.readAsDataURL(file);
-  //     // Here you would typically also prepare to upload the file
-  //   }
-  // };
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (imagePreview && imagePreview.startsWith('blob:')) {
+        URL.revokeObjectURL(imagePreview); // Revoke old blob URL
+      }
+      setSelectedFile(file);
+      setImagePreview(URL.createObjectURL(file));
+    }
+     // Reset file input to allow selecting the same file again if needed
+    if (event.target) {
+      event.target.value = '';
+    }
+  };
 
   const handleSaveChanges = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -90,13 +109,27 @@ export default function ProfilePage() {
     const currentUser = auth.currentUser;
     let profileUpdated = false;
     let emailUpdated = false;
-    // let photoUpdated = false; // For future photoURL update
+    let photoUpdated = false;
+    let newPhotoURL = currentUser.photoURL;
+
 
     try {
-      // Update Display Name
-      if (editableDisplayName !== (currentUser.displayName || '')) {
-        await updateProfile(currentUser, { displayName: editableDisplayName });
-        profileUpdated = true;
+      // Upload new profile picture if selected
+      if (selectedFile) {
+        const filePath = `profilePictures/${currentUser.uid}/${selectedFile.name}`;
+        const fileStorageRef = storageRef(storage, filePath);
+        await uploadBytes(fileStorageRef, selectedFile);
+        newPhotoURL = await getDownloadURL(fileStorageRef);
+        photoUpdated = true;
+      }
+
+      // Update Display Name or Photo URL (if changed)
+      if (editableDisplayName !== (currentUser.displayName || '') || (photoUpdated && newPhotoURL !== currentUser.photoURL) ) {
+        await updateProfile(currentUser, { 
+          displayName: editableDisplayName,
+          photoURL: newPhotoURL // This will be the new URL if photo was updated, otherwise existing
+        });
+        profileUpdated = true; // Covers both name and photo change
       }
 
       // Update Email
@@ -105,29 +138,22 @@ export default function ProfilePage() {
         emailUpdated = true;
       }
       
-      // Placeholder: Actual photo upload and photoURL update would happen here
-      // This would involve:
-      // 1. Uploading the file from fileInputRef.current?.files?.[0] to Firebase Storage
-      // 2. Getting the download URL of the uploaded image
-      // 3. Calling await updateProfile(currentUser, { photoURL: downloadURL });
-      // For now, we'll just simulate a photo update if the preview changed (which it won't yet)
-      // if (imagePreview && imagePreview !== currentUser.photoURL) {
-      //   console.log("Simulating photoURL update. Actual implementation needed.");
-      //   // await updateProfile(currentUser, { photoURL: imagePreview }); // Example
-      //   photoUpdated = true;
-      // }
 
-      if (profileUpdated || emailUpdated) { // || photoUpdated
+      if (profileUpdated || emailUpdated || photoUpdated) {
         // Manually update the user object in the store after all successful updates
-        // Firebase onAuthStateChanged might take time or not pick up all profile changes immediately
-        const updatedUser = { ...auth.currentUser } as any; // Cast to any to allow dynamic assignment
-        if (profileUpdated) updatedUser.displayName = editableDisplayName;
-        if (emailUpdated) updatedUser.email = editableEmail;
-        // if (photoUpdated && imagePreview) updatedUser.photoURL = imagePreview; // Example
+        const updatedUserSnapshot = { ...auth.currentUser } as any; 
         
-        setAuthStoreUser(updatedUser);
+        // It's better to fetch the fresh user object, but for optimistic update:
+        if (profileUpdated) updatedUserSnapshot.displayName = editableDisplayName;
+        if (emailUpdated) updatedUserSnapshot.email = editableEmail;
+        if (photoUpdated && newPhotoURL) updatedUserSnapshot.photoURL = newPhotoURL;
+        
+        setAuthStoreUser(updatedUserSnapshot);
+
         toast({ title: 'Profile Updated', description: 'Your profile details have been updated.' });
         setIsEditing(false);
+        setSelectedFile(null); 
+        // Image preview will be user.photoURL from store after update
       } else {
         toast({ title: 'No Changes', description: 'No changes were made to your profile.' });
         setIsEditing(false);
@@ -180,7 +206,7 @@ export default function ProfilePage() {
         <CardHeader className="text-center relative">
           <div className="relative mx-auto mb-4">
             <Avatar className="h-24 w-24 text-3xl">
-              <AvatarImage src={user.photoURL || undefined} alt={user.displayName || user.email || 'User Avatar'} />
+              <AvatarImage src={isEditing && imagePreview ? imagePreview : user.photoURL || undefined} alt={user.displayName || user.email || 'User Avatar'} />
               <AvatarFallback className="bg-primary text-primary-foreground">
                 {getInitials(user.email, user.displayName)}
               </AvatarFallback>
@@ -189,17 +215,16 @@ export default function ProfilePage() {
               <Button 
                 variant="outline" 
                 size="icon" 
+                type="button" // Important for forms
                 className="absolute bottom-0 right-[calc(50%-3rem)] transform translate-x-1/2 p-1 rounded-full bg-background border-2 border-primary hover:bg-primary/10"
-                onClick={() => toast({ title: "Feature Coming Soon", description: "Profile picture upload will be implemented here."})}
-                // onClick={() => fileInputRef.current?.click()} // For actual file input trigger
-                title="Change Profile Picture (Coming Soon)"
+                onClick={() => fileInputRef.current?.click()}
+                title="Change Profile Picture"
               >
                 <Camera className="h-4 w-4 text-primary" />
                 <span className="sr-only">Change Profile Picture</span>
               </Button>
             )}
           </div>
-          {/* Hidden file input for future use
           <Input 
             type="file" 
             ref={fileInputRef} 
@@ -207,7 +232,6 @@ export default function ProfilePage() {
             accept="image/png, image/jpeg, image/gif" 
             onChange={handleFileChange} 
           />
-          */}
           <CardTitle className="text-2xl">{user.displayName || user.email?.split('@')[0] || 'User'}</CardTitle>
           <CardDescription>Manage your profile information.</CardDescription>
           {!isEditing && (

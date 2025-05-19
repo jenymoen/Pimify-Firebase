@@ -1,6 +1,7 @@
 // src/lib/firebase.ts
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
+import { getStorage, type FirebaseStorage } from 'firebase/storage'; // Added import
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -13,6 +14,7 @@ const firebaseConfig = {
 
 let app: FirebaseApp | undefined = undefined;
 let auth: Auth | undefined = undefined;
+let storage: FirebaseStorage | undefined = undefined; // Added storage variable
 
 if (typeof window !== 'undefined') { // Ensure Firebase initializes only on the client
   if (getApps().length === 0) {
@@ -36,17 +38,18 @@ if (typeof window !== 'undefined') { // Ensure Firebase initializes only on the 
     app = getApp(); // Use the existing app if already initialized
   }
 
-  if (app) { // Only try to getAuth if the app was successfully initialized or retrieved
+  if (app) { // Only try to getAuth/getStorage if the app was successfully initialized or retrieved
     try {
       auth = getAuth(app);
+      storage = getStorage(app); // Initialize storage
     } catch (e: any) {
-      console.error("Firebase getAuth() error:", e.message, e.stack);
-      // auth remains undefined
+      console.error("Firebase getAuth() or getStorage() error:", e.message, e.stack);
+      // auth/storage might remain undefined
     }
   } else if (getApps().length > 0) {
     // This case should ideally not be hit if logic is correct, but as a fallback.
-    console.warn("Firebase app was not successfully initialized or retrieved, though getApps() is not empty. Auth will not be available.");
+    console.warn("Firebase app was not successfully initialized or retrieved, though getApps() is not empty. Auth and Storage will not be available.");
   }
 }
 
-export { app, auth };
+export { app, auth, storage }; // Added storage to exports
