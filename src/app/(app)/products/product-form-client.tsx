@@ -376,7 +376,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
 
 
       if (existingProduct) {
-        const {id, createdAt, updatedAt, ...updatePayload} = productPayloadForSave;
+        const {id, createdAt, ...updatePayload} = productPayloadForSave;
         const updatedProd = await storeUpdateProduct(existingProduct.id, updatePayload);
         if (updatedProd) {
             toast({ title: "Product Updated", description: `"${updatedProd.basicInfo.name.en || updatedProd.basicInfo.name.no || updatedProd.basicInfo.sku}" has been successfully updated.` });
@@ -406,9 +406,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     console.group("Form Submission Error Details");
     // Log the errors object passed to the callback - this one can sometimes be incomplete.
     console.warn(
-      "Diagnostics: `errors` argument passed to onError callback was:",
-      errors,
-      "Note: This object might be incomplete for complex validations. See `form.formState.errors` logged below for the comprehensive list of validation issues."
+      "`errors` argument passed to onError callback (may be incomplete for complex validations):",
+      errors
     );
 
     // Log form.formState.errors directly for comparison - THIS IS THE SOURCE OF TRUTH.
@@ -421,8 +420,6 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     const hasActualValidationErrors = actualErrors && Object.keys(actualErrors).length > 0;
 
     if (hasActualValidationErrors) {
-        // This console message is now less critical as the one above is more direct
-        // console.warn("Validation errors found. Please check form fields. Details logged above.");
         toast({
             title: "Validation Error",
             description: "Please check the form for errors. Specific messages should be visible next to invalid fields. For a full summary, see the 'Validation Failure - Source of Truth' log in your browser console.",
@@ -771,12 +768,16 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                 </div>
                             </Card>
                         ))}
-                        {optionsFields.length < 3 && (
-                            <Button type="button" variant="outline" onClick={() => appendOption({ id: uuidv4(), name: '', values: '' })}>
-                                <ListPlus className="mr-2 h-4 w-4" /> Add Option
-                            </Button>
-                        )}
-                        {form.formState.errors.options && <FormMessage>{typeof form.formState.errors.options === 'string' ? form.formState.errors.options : form.formState.errors.options.message}</FormMessage>}
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => appendOption({ id: uuidv4(), name: '', values: '' })}
+                            disabled={optionsFields.length >= 3}
+                        >
+                            <ListPlus className="mr-2 h-4 w-4" /> Add Option
+                        </Button>
+                        {optionsFields.length >= 3 && <FormDescription>Maximum of 3 options reached.</FormDescription>}
+                        {form.formState.errors.options && typeof form.formState.errors.options.message === 'string' && <FormMessage>{form.formState.errors.options.message}</FormMessage>}
                     </div>
 
                     <Button type="button" onClick={generateVariants} className="mt-4" disabled={optionsFields.length === 0}>
