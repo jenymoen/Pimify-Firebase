@@ -2,14 +2,14 @@
 // src/app/(app)/profile/page.tsx
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, useRef, ChangeEvent } from 'react';
 import { useAuthStore } from '@/lib/auth-store';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { UserCircle, Mail, Shield, Edit3, Save, XCircle, RefreshCw } from 'lucide-react';
+import { UserCircle, Mail, Shield, Edit3, Save, XCircle, RefreshCw, Camera } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { auth } from '@/lib/firebase'; // Import Firebase auth instance
@@ -27,16 +27,27 @@ export default function ProfilePage() {
   const [editableEmail, setEditableEmail] = useState('');
   const [pageLoading, setPageLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Placeholder for image preview if we were handling local file selection
+  // const [imagePreview, setImagePreview] = useState<string | null>(null);
+  // const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (user) {
       setEditableDisplayName(user.displayName || '');
       setEditableEmail(user.email || '');
+      // setImagePreview(user.photoURL); // Set initial preview if photoURL exists
     }
   }, [user]);
 
   const getInitials = (email: string | null | undefined, displayName: string | null | undefined) => {
-    if (displayName) return displayName.substring(0, 2).toUpperCase();
+    if (displayName) {
+      const names = displayName.split(' ');
+      if (names.length > 1) {
+        return (names[0][0] + names[names.length - 1][0]).toUpperCase();
+      }
+      return displayName.substring(0, 2).toUpperCase();
+    }
     if (email) return email.substring(0, 2).toUpperCase();
     return 'U';
   };
@@ -46,10 +57,24 @@ export default function ProfilePage() {
       // Reset fields to current user state if canceling
       setEditableDisplayName(user.displayName || '');
       setEditableEmail(user.email || '');
+      // setImagePreview(user.photoURL);
       setError(null);
     }
     setIsEditing(!isEditing);
   };
+
+  // Placeholder for file change handler - full implementation needs Firebase Storage
+  // const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+  //   const file = event.target.files?.[0];
+  //   if (file) {
+  //     const reader = new FileReader();
+  //     reader.onloadend = () => {
+  //       setImagePreview(reader.result as string);
+  //     };
+  //     reader.readAsDataURL(file);
+  //     // Here you would typically also prepare to upload the file
+  //   }
+  // };
 
   const handleSaveChanges = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -65,33 +90,43 @@ export default function ProfilePage() {
     const currentUser = auth.currentUser;
     let profileUpdated = false;
     let emailUpdated = false;
+    // let photoUpdated = false; // For future photoURL update
 
     try {
       // Update Display Name
-      if (editableDisplayName !== currentUser.displayName) {
+      if (editableDisplayName !== (currentUser.displayName || '')) {
         await updateProfile(currentUser, { displayName: editableDisplayName });
-        // Manually update the user object in the store as onAuthStateChanged might not be immediate for displayName
-        if (auth.currentUser) { // Check again as updateProfile might have changed it
-             setAuthStoreUser({...auth.currentUser, displayName: editableDisplayName });
-        }
-        toast({ title: 'Profile Updated', description: 'Display name has been updated.' });
         profileUpdated = true;
       }
 
       // Update Email
-      // IMPORTANT: Updating email is a sensitive operation and may require re-authentication.
-      // Firebase will throw an error if the user hasn't signed in recently.
-      // A full solution would involve catching this error and prompting for re-authentication.
       if (editableEmail !== currentUser.email) {
         await updateEmail(currentUser, editableEmail);
-         if (auth.currentUser) { // Check again as updateEmail might have changed it
-             setAuthStoreUser({...auth.currentUser, email: editableEmail });
-        }
-        toast({ title: 'Email Update Initiated', description: 'Email update process started. You might need to verify your new email address.' });
         emailUpdated = true;
       }
       
-      if (profileUpdated || emailUpdated) {
+      // Placeholder: Actual photo upload and photoURL update would happen here
+      // This would involve:
+      // 1. Uploading the file from fileInputRef.current?.files?.[0] to Firebase Storage
+      // 2. Getting the download URL of the uploaded image
+      // 3. Calling await updateProfile(currentUser, { photoURL: downloadURL });
+      // For now, we'll just simulate a photo update if the preview changed (which it won't yet)
+      // if (imagePreview && imagePreview !== currentUser.photoURL) {
+      //   console.log("Simulating photoURL update. Actual implementation needed.");
+      //   // await updateProfile(currentUser, { photoURL: imagePreview }); // Example
+      //   photoUpdated = true;
+      // }
+
+      if (profileUpdated || emailUpdated) { // || photoUpdated
+        // Manually update the user object in the store after all successful updates
+        // Firebase onAuthStateChanged might take time or not pick up all profile changes immediately
+        const updatedUser = { ...auth.currentUser } as any; // Cast to any to allow dynamic assignment
+        if (profileUpdated) updatedUser.displayName = editableDisplayName;
+        if (emailUpdated) updatedUser.email = editableEmail;
+        // if (photoUpdated && imagePreview) updatedUser.photoURL = imagePreview; // Example
+        
+        setAuthStoreUser(updatedUser);
+        toast({ title: 'Profile Updated', description: 'Your profile details have been updated.' });
         setIsEditing(false);
       } else {
         toast({ title: 'No Changes', description: 'No changes were made to your profile.' });
@@ -133,7 +168,7 @@ export default function ProfilePage() {
     );
   }
   
-  if (!user) { // Should be caught by layout, but as a fallback
+  if (!user) { 
       return <div className="container mx-auto py-8 text-center"><p>User not found. Please log in.</p></div>
   }
 
@@ -143,12 +178,36 @@ export default function ProfilePage() {
       <h1 className="text-3xl font-bold text-primary mb-8">User Profile</h1>
       <Card className="max-w-2xl mx-auto shadow-lg">
         <CardHeader className="text-center relative">
-          <Avatar className="h-24 w-24 mx-auto mb-4 text-3xl">
-            <AvatarImage src={user.photoURL || undefined} alt={user.displayName || user.email || 'User Avatar'} />
-            <AvatarFallback className="bg-primary text-primary-foreground">
-              {getInitials(user.email, user.displayName)}
-            </AvatarFallback>
-          </Avatar>
+          <div className="relative mx-auto mb-4">
+            <Avatar className="h-24 w-24 text-3xl">
+              <AvatarImage src={user.photoURL || undefined} alt={user.displayName || user.email || 'User Avatar'} />
+              <AvatarFallback className="bg-primary text-primary-foreground">
+                {getInitials(user.email, user.displayName)}
+              </AvatarFallback>
+            </Avatar>
+            {isEditing && (
+              <Button 
+                variant="outline" 
+                size="icon" 
+                className="absolute bottom-0 right-[calc(50%-3rem)] transform translate-x-1/2 p-1 rounded-full bg-background border-2 border-primary hover:bg-primary/10"
+                onClick={() => toast({ title: "Feature Coming Soon", description: "Profile picture upload will be implemented here."})}
+                // onClick={() => fileInputRef.current?.click()} // For actual file input trigger
+                title="Change Profile Picture (Coming Soon)"
+              >
+                <Camera className="h-4 w-4 text-primary" />
+                <span className="sr-only">Change Profile Picture</span>
+              </Button>
+            )}
+          </div>
+          {/* Hidden file input for future use
+          <Input 
+            type="file" 
+            ref={fileInputRef} 
+            className="hidden" 
+            accept="image/png, image/jpeg, image/gif" 
+            onChange={handleFileChange} 
+          />
+          */}
           <CardTitle className="text-2xl">{user.displayName || user.email?.split('@')[0] || 'User'}</CardTitle>
           <CardDescription>Manage your profile information.</CardDescription>
           {!isEditing && (
@@ -256,3 +315,4 @@ export default function ProfilePage() {
     </div>
   );
 }
+
