@@ -411,12 +411,20 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     );
 
     // Log form.formState.errors directly for comparison - THIS IS THE SOURCE OF TRUTH.
-    console.error(
-      "Validation Failure - Source of Truth (`form.formState.errors`):",
-      form.formState.errors
-    );
-
     const actualErrors = form.formState.errors;
+    if (Object.keys(actualErrors).length === 0) {
+        console.error(
+          "Validation Failure - Source of Truth (`form.formState.errors`) is EMPTY when onError was called:",
+          actualErrors
+        );
+    } else {
+        console.error(
+          "Validation Failure - Source of Truth (`form.formState.errors`):",
+          actualErrors
+        );
+    }
+    
+
     const hasActualValidationErrors = actualErrors && Object.keys(actualErrors).length > 0;
 
     if (hasActualValidationErrors) {
@@ -768,7 +776,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                 </div>
                             </Card>
                         ))}
-                         {form.formState.errors.options && typeof form.formState.errors.options.message === 'string' && <FormMessage>{form.formState.errors.options.message}</FormMessage>}
+                         <FormMessage /> {/* For options array-level errors, e.g., max items */}
                         <Button
                             type="button"
                             variant="outline"
@@ -783,7 +791,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                     <Button type="button" onClick={generateVariants} className="mt-4" disabled={optionsFields.length === 0}>
                         <Sparkles className="mr-2 h-4 w-4" /> Generate Variants
                     </Button>
-                     {form.formState.errors.variants && typeof form.formState.errors.variants.message === 'string' && <FormMessage>{form.formState.errors.variants.message}</FormMessage>}
+                     <FormMessage /> {/* For variants array-level errors */}
 
                     {variantsFields.length > 0 && (
                         <div className="mt-6 space-y-4">
@@ -876,9 +884,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                         />
                       )}
                     />
-                     {form.formState.errors.attributesAndSpecs?.properties && (
-                        <FormMessage>{typeof form.formState.errors.attributesAndSpecs.properties === 'string' ? String(form.formState.errors.attributesAndSpecs.properties) : 'Error in properties (check fields).'}</FormMessage>
-                     )}
+                     <FormMessage /> {/* For properties array-level errors */}
                     <Controller
                       control={form.control}
                       name="attributesAndSpecs.technicalSpecs"
@@ -892,9 +898,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                         />
                       )}
                     />
-                    {form.formState.errors.attributesAndSpecs?.technicalSpecs && (
-                        <FormMessage>{typeof form.formState.errors.attributesAndSpecs.technicalSpecs === 'string' ? String(form.formState.errors.attributesAndSpecs.technicalSpecs) : 'Error in technical specs (check fields).'}</FormMessage>
-                     )}
+                    <FormMessage /> {/* For technicalSpecs array-level errors */}
                      <FormField
                       control={form.control}
                       name="attributesAndSpecs.countryOfOrigin"
@@ -1013,9 +1017,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                         />
                       )}
                     />
-                    {form.formState.errors.media?.images && (
-                        <FormMessage>{typeof form.formState.errors.media.images === 'string' ? String(form.formState.errors.media.images) : 'Error in media images (check URLs/alt text).'}</FormMessage>
-                    )}
+                    <FormMessage /> {/* For media.images array-level errors */}
                   </ProductFormSection>
 
                   <ProductFormSection title="Marketing & SEO" value="marketing-seo" icon={BarChart3} description="Optimize product visibility for search engines and marketing campaigns.">
@@ -1083,7 +1085,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                               type="textarea"
                               disabled={true}
                               value={field.value || defaultMultilingualString}
-                              onChange={field.onChange}
+                              onChange={field.onChange} // Though disabled, onChange is needed for Controller
                             />
                           </FormControl>
                            <FormMessage />
