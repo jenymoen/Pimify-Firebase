@@ -1,11 +1,10 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 import type { Product, ProductStatus as PimStatus, MediaEntry, PriceEntry, ProductOption as PimProductOption, ProductVariant as PimProductVariant } from '@/types/product';
-import { dbAdmin } from '@/lib/firebase-admin'; // Import dbAdmin
+import { dbAdmin } from '@/lib/firebase-admin'; // Corrected import path
 
 const SHOPIFY_CONFIG_DOC_ID = 'configuration'; // Consistent with config route
 
-// Updated function to fetch Shopify config directly from Firestore
 async function getShopifyConfigForTenant(tenantId: string): Promise<{ storeUrl: string; apiKey: string } | null> {
   if (!tenantId) {
     console.error('getShopifyConfigForTenant called without tenantId in export route');
@@ -99,7 +98,7 @@ function mapPimToShopifyProduct(product: Product): { product: ShopifyProductPayl
   if (product.options && product.options.length > 0 && product.variants && product.variants.length > 0) {
     shopifyPayload.options = product.options.map(opt => ({
       name: opt.name,
-      values: opt.values, // Assuming opt.values is already string[]
+      values: opt.values,
     }));
 
     shopifyPayload.variants = product.variants.map(v => {
@@ -232,7 +231,7 @@ export async function POST(request: NextRequest) {
     const fullMessage = `${exportedCount} products exported. ${errors.length} products failed.`;
     // Use 207 Multi-Status if some succeeded and some failed
     // Use 500 if all failed due to backend/Shopify issues
-    const status = exportedCount === 0 && errors.length === productsToExport.length ? 500 : 207; 
+    const status = exportedCount === 0 && errors.length === productsToExport.length ? 500 : 207;
     return NextResponse.json({
       message: fullMessage,
       errors, // Send back the list of errors
@@ -241,4 +240,4 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ message: `${exportedCount} products exported successfully to Shopify.` });
 }
-
+    

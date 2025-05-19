@@ -5,11 +5,10 @@ import { type NextRequest, NextResponse } from 'next/server';
 import type { Product, ProductStatus as PimStatus, MediaEntry, KeyValueEntry, PriceEntry, ProductOption as PimProductOption, ProductVariant as PimProductVariant, MultilingualString } from '@/types/product';
 import { initialProductData, defaultMultilingualString } from '@/types/product';
 import { v4 as uuidv4 } from 'uuid';
-import { dbAdmin } from '@/lib/firebase-admin'; // Import dbAdmin
+import { dbAdmin } from '@/lib/firebase-admin'; // Corrected import path
 
 const SHOPIFY_CONFIG_DOC_ID = 'configuration'; // Consistent with config route
 
-// Updated function to fetch Shopify config directly from Firestore
 async function getShopifyConfigForTenant(tenantId: string): Promise<{ storeUrl: string; apiKey: string } | null> {
   if (!tenantId) {
     console.error('getShopifyConfigForTenant called without tenantId in import route');
@@ -34,28 +33,6 @@ async function getShopifyConfigForTenant(tenantId: string): Promise<{ storeUrl: 
     return null;
   }
 }
-
-// Placeholder for Product Create API - In real app, save to DB via tenantId
-async function saveProductForTenant(tenantId: string, product: Product): Promise<Product | null> {
-    if (!tenantId) {
-        console.error("saveProductForTenant called without tenantId in import route");
-        return null;
-    }
-    try {
-        // Use SKU or a generated ID if SKU is not reliable/unique enough for Firestore doc IDs
-        const docId = product.basicInfo.sku || product.id || uuidv4();
-        const productToSave = { ...product, id: docId }; // Ensure product has the ID we're using for the doc
-
-        const productRef = dbAdmin.collection('tenants').doc(tenantId).collection('products').doc(docId);
-        await productRef.set(productToSave, { merge: true }); // Use merge:true to create or update
-        console.log(`Product ${docId} saved/updated for tenant ${tenantId}`);
-        return productToSave;
-    } catch (e) {
-        console.error(`Error saving product ${product.id} to Firestore for tenant ${tenantId} in import route:`, e);
-        return null; // Indicate failure
-    }
-}
-
 
 // Shopify API types (simplified)
 interface ShopifyImageShopify {
@@ -126,10 +103,7 @@ function stripHtml(html: string | null): string {
 
 
 function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify, storeCurrency: string = "NOK"): Product {
-  // Prioritize Shopify variant SKU, then main SKU from Shopify ID, then a new UUID if all else fails.
-  // For PIM ID, it's usually best to use the Shopify Product ID itself to ensure uniqueness and easy mapping.
-  const pimId = String(shopifyProduct.id); // Using Shopify's Product ID as the PIM's main ID for this product.
-  
+  const pimId = String(shopifyProduct.id);
   const firstVariant = shopifyProduct.variants?.[0];
 
   const longDescriptionEn = shopifyProduct.body_html || '';
@@ -138,18 +112,17 @@ function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify, storeCurr
   const baseStandardPrice: PriceEntry[] = [];
   const baseSalePrice: PriceEntry[] = [];
 
-  // Base pricing is taken from the first variant for products *without* explicit options/variants in Shopify
-  // or as a general fallback if variant mapping is complex.
-  // If Shopify product has options, variant-specific pricing should be preferred.
-  if (firstVariant && shopifyProduct.options.length === 0) { // Only use first variant for base pricing if NO options
+  // This pricing logic is for products WITHOUT Shopify options.
+  // If a product has options, variant pricing should be used.
+  if (firstVariant && (!shopifyProduct.options || shopifyProduct.options.length === 0)) {
     const currentPrice = parseFloat(firstVariant.price);
     const originalPrice = firstVariant.compare_at_price ? parseFloat(firstVariant.compare_at_price) : null;
 
-    if (originalPrice && originalPrice > currentPrice) { // It's a sale
+    if (originalPrice && originalPrice > currentPrice) {
       baseStandardPrice.push({
         id: uuidv4(),
         amount: originalPrice,
-        currency: storeCurrency,
+        currency: storeCurrency, // Assuming Shopify variant price is in store's default currency
       });
       baseSalePrice.push({
         id: uuidv4(),
@@ -176,7 +149,7 @@ function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify, storeCurr
   if (shopifyProduct.variants && shopifyProduct.options && shopifyProduct.options.length > 0) {
     shopifyProduct.variants.forEach(sv => {
       const optionValues: Record<string, string> = {};
-      // Map option values based on position (option1, option2, option3)
+      // Map Shopify's option1, option2, option3 to PIM's optionValues using names from shopifyProduct.options
       if (shopifyProduct.options[0] && sv.option1) optionValues[shopifyProduct.options[0].name] = sv.option1;
       if (shopifyProduct.options[1] && sv.option2) optionValues[shopifyProduct.options[1].name] = sv.option2;
       if (shopifyProduct.options[2] && sv.option3) optionValues[shopifyProduct.options[2].name] = sv.option3;
@@ -201,34 +174,33 @@ function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify, storeCurr
         optionValues,
         standardPrice: variantStandardPrice,
         salePrice: variantSalePrice.length > 0 ? variantSalePrice : [],
-        costPrice: [], // Cost price not typically available directly from Shopify product/variant API
-                       // Would usually come from other sources or Shopify's cost_per_item on inventory items.
+        costPrice: [], // Cost price not typically available directly on Shopify variant, needs other source
       });
     });
   }
 
 
   return {
-    ...initialProductData, // Start with defaults
-    id: pimId,             // PIM ID is Shopify Product ID
+    ...initialProductData, // Start with defaults to ensure all fields are present
+    id: pimId,              // Use Shopify ID as PIM ID for easier matching
     basicInfo: {
       name: { ...defaultMultilingualString, en: shopifyProduct.title },
-      sku: firstVariant?.sku || `SKU-SHOPIFY-${shopifyProduct.id}`, // Base SKU from first variant or derived
-      gtin: firstVariant?.barcode || undefined, // Base GTIN from first variant
+      sku: firstVariant?.sku || `SKU-SHOPIFY-${shopifyProduct.id}`, // Fallback SKU
+      gtin: firstVariant?.barcode || undefined, // GTIN from first variant
       descriptionShort: { ...defaultMultilingualString, en: shortDescriptionEn },
       descriptionLong: { ...defaultMultilingualString, en: longDescriptionEn },
       brand: shopifyProduct.vendor || 'Unknown Brand',
       status: mapShopifyStatusToPim(shopifyProduct.status),
       launchDate: shopifyProduct.published_at || shopifyProduct.created_at || undefined,
-      endDate: undefined, 
-      internalId: String(shopifyProduct.id), // Store Shopify's original ID
+      endDate: undefined, // Shopify doesn't have a direct 'end date'
+      internalId: String(shopifyProduct.id), // Store original Shopify ID
     },
     attributesAndSpecs: {
       ...initialProductData.attributesAndSpecs,
       categories: shopifyProduct.product_type ? [shopifyProduct.product_type] : [],
     },
     media: {
-      ...initialProductData.media, // ensure all media arrays are initialized
+      ...initialProductData.media, // Ensure all media arrays are initialized
       images: shopifyProduct.images.map((img): MediaEntry => ({
         id: String(img.id) || uuidv4(), // Use Shopify image ID or generate one
         url: img.src,
@@ -243,17 +215,16 @@ function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify, storeCurr
       seoDescription: { ...defaultMultilingualString, en: shortDescriptionEn },
       keywords: shopifyProduct.tags ? shopifyProduct.tags.split(',').map(tag => tag.trim()).filter(tag => tag) : [],
     },
-    // Base pricing is only set if there are NO variants, otherwise variant pricing takes precedence.
-    pricingAndStock: (pimVariants.length > 0) ? 
-      initialProductData.pricingAndStock : // Use default empty pricing if variants exist
-      { 
+    pricingAndStock: (pimVariants.length > 0) ? // If variants exist, base pricing might be less relevant or empty
+      initialProductData.pricingAndStock : // Or specifically derive from first variant if appropriate
+      { // For products without variants from Shopify options
         standardPrice: baseStandardPrice,
         salePrice: baseSalePrice.length > 0 ? baseSalePrice : [],
-        costPrice: [], // Not typically mapped from basic Shopify product endpoint
+        costPrice: [], // Cost price needs other source
       },
     options: pimOptions,
     variants: pimVariants,
-    aiSummary: { ...defaultMultilingualString }, // Default empty AI summary
+    aiSummary: { ...defaultMultilingualString }, // AI summary to be generated later
     createdAt: shopifyProduct.created_at || new Date().toISOString(),
     updatedAt: shopifyProduct.updated_at || new Date().toISOString(),
   };
@@ -365,11 +336,54 @@ export async function POST(request: NextRequest) {
     const importedPimProducts: Product[] = [];
     for (const shopifyProd of shopifyData.products as ShopifyProductShopify[]) {
         const pimProduct = mapShopifyToPimProduct(shopifyProd, storeCurrency);
-        const savedProduct = await saveProductForTenant(tenantId, pimProduct);
-        if (savedProduct) {
-            importedPimProducts.push(savedProduct);
-        } else {
-            console.warn(`Failed to save imported product ${pimProduct.id} for tenant ${tenantId}`);
+        try {
+          const docId = pimProduct.basicInfo.sku || pimProduct.id; // Using SKU as primary ID, fallback to Shopify ID
+          const productToSave: Product = {
+            ...initialProductData, // Ensure all fields exist
+            ...pimProduct,         // Spread imported data
+            id: docId,              // Override ID
+            options: pimProduct.options || [], // Ensure arrays exist
+            variants: pimProduct.variants || [],
+            aiSummary: pimProduct.aiSummary || { ...defaultMultilingualString },
+            // Ensure basicInfo and its nested multilingual strings are fully formed
+            basicInfo: {
+                ...initialProductData.basicInfo,
+                ...pimProduct.basicInfo,
+                name: { ...defaultMultilingualString, ...pimProduct.basicInfo.name },
+                descriptionShort: { ...defaultMultilingualString, ...pimProduct.basicInfo.descriptionShort },
+                descriptionLong: { ...defaultMultilingualString, ...pimProduct.basicInfo.descriptionLong },
+            },
+            marketingSEO: {
+                ...initialProductData.marketingSEO,
+                ...pimProduct.marketingSEO,
+                seoTitle: { ...defaultMultilingualString, ...pimProduct.marketingSEO.seoTitle },
+                seoDescription: { ...defaultMultilingualString, ...pimProduct.marketingSEO.seoDescription },
+            },
+            media: {
+                ...initialProductData.media,
+                ...pimProduct.media,
+                images: (pimProduct.media.images || []).map(img => ({
+                    ...img,
+                    altText: { ...defaultMultilingualString, ...(img.altText || {}) }
+                })),
+            },
+            // Ensure pricingAndStock and its nested price arrays are handled
+            pricingAndStock: {
+                standardPrice: pimProduct.pricingAndStock?.standardPrice || [],
+                salePrice: pimProduct.pricingAndStock?.salePrice || [],
+                costPrice: pimProduct.pricingAndStock?.costPrice || [],
+            },
+            createdAt: pimProduct.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString(), // Always set updatedAt on import/update
+          };
+
+          const productRef = dbAdmin.collection('tenants').doc(tenantId).collection('products').doc(docId);
+          await productRef.set(productToSave, { merge: true }); // Use merge:true to update if exists, create if not
+          console.log(`Product ${docId} saved/updated via Shopify import for tenant ${tenantId}`);
+          importedPimProducts.push(productToSave);
+        } catch (dbError: any) {
+          console.error(`Error saving imported product ${pimProduct.id} to Firestore for tenant ${tenantId}:`, dbError.message, dbError.stack);
+          // Optionally skip this product or collect errors
         }
     }
 
@@ -387,3 +401,4 @@ export async function POST(request: NextRequest) {
   }
 }
 
+    
