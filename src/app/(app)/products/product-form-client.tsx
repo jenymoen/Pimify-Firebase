@@ -1,3 +1,4 @@
+
 // src/app/(app)/products/product-form-client.tsx
 "use client";
 
@@ -35,7 +36,7 @@ import { useProductStore } from "@/lib/product-store";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { summarizeProductInformation } from "@/ai/flows/summarize-product-information";
-import { Info, Package, Tag, Image as ImageIconLucide, BarChart3, Brain, CalendarDays, CheckCircle, Save, Trash2, Sparkles, Languages, Edit, DollarSign, ListPlus, Cog } from "lucide-react";
+import { Info, Package, Tag, Image as ImageIconLucide, BarChart3, Brain, CalendarDays, CheckCircle, Save, Trash2, Sparkles, Languages, Edit as EditIcon, DollarSign, ListPlus, Cog } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Label } from "@/components/ui/label";
@@ -403,25 +404,36 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
 
   const onError = (errors: FieldErrors<ProductFormData>) => {
     console.group("Form Submission Error Details");
-    console.error("`errors` argument passed to onError callback (may be incomplete for complex validations):", errors);
-    console.error("`form.formState.errors` (source of truth for validation state):", form.formState.errors);
-    
+    // Log the errors object passed to the callback - this one can sometimes be incomplete.
+    console.warn(
+      "Diagnostics: `errors` argument passed to onError callback was:",
+      errors,
+      "Note: This object might be incomplete for complex validations. See `form.formState.errors` logged below for the comprehensive list of validation issues."
+    );
+
+    // Log form.formState.errors directly for comparison - THIS IS THE SOURCE OF TRUTH.
+    console.error(
+      "Validation Failure - Source of Truth (`form.formState.errors`):",
+      form.formState.errors
+    );
+
     const actualErrors = form.formState.errors;
     const hasActualValidationErrors = actualErrors && Object.keys(actualErrors).length > 0;
 
     if (hasActualValidationErrors) {
-        console.warn("Validation errors found. Please check form fields. Details logged above.");
+        // This console message is now less critical as the one above is more direct
+        // console.warn("Validation errors found. Please check form fields. Details logged above.");
         toast({
             title: "Validation Error",
-            description: "Please check the form for errors. Some required fields might be missing or invalid. See browser console for details.",
+            description: "Please check the form for errors. Specific messages should be visible next to invalid fields. For a full summary, see the 'Validation Failure - Source of Truth' log in your browser console.",
             variant: "destructive",
         });
     } else {
-        // This case is unusual: onError called, but form.formState.errors is empty.
-        console.error("`onError` was called, but `form.formState.errors` is empty. This might indicate an issue with the form resolver or an unexpected submission attempt.");
+        // This case is unusual: onError called, but form.formState.errors is also empty.
+        console.error("`onError` was called, but `form.formState.errors` (the source of truth) is also empty. This might indicate an issue with the form resolver or an unexpected submission attempt. Please double-check form setup and Zod schema.");
         toast({
-            title: "Submission Error",
-            description: "An unexpected issue occurred. Please review your entries or try again. See browser console for details.",
+            title: "Submission Issue",
+            description: "The form could not be submitted due to an unexpected issue. Please review your entries or try again. See browser console for details.",
             variant: "destructive",
         });
     }
@@ -541,7 +553,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     <Card className="mx-auto">
       <CardHeader>
         <CardTitle className="text-2xl font-bold text-primary flex items-center gap-2">
-          {existingProduct ? <Edit className="h-7 w-7"/> : <Package className="h-7 w-7"/>}
+          {existingProduct ? <EditIcon className="h-7 w-7"/> : <Package className="h-7 w-7"/>}
           {existingProduct ? "Edit Product" : "Create New Product"}
         </CardTitle>
       </CardHeader>
@@ -908,7 +920,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                     placeholder="e.g., 999.99"
                                     {...field}
                                     value={field.value ?? ''}
-                                    onChange={e => field.onChange(e.target.value === '' || e.target.value === null ? undefined : parseFloat(e.target.value))}
+                                    onChange={e => field.onChange(String(e.target.value).trim() === '' || e.target.value === null ? undefined : parseFloat(e.target.value))}
                                 /></FormControl>
                                 <FormMessage />
                                 </FormItem>
@@ -936,7 +948,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                     placeholder="e.g., 799.99"
                                     {...field}
                                     value={field.value ?? ''}
-                                    onChange={e => field.onChange(e.target.value === '' || e.target.value === null ? undefined : parseFloat(e.target.value))}
+                                    onChange={e => field.onChange(String(e.target.value).trim() === '' || e.target.value === null ? undefined : parseFloat(e.target.value))}
                                 /></FormControl>
                                 <FormDescription>Optional. If set, this is the active selling price.</FormDescription>
                                 <FormMessage />
@@ -965,7 +977,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                     placeholder="e.g., 499.99"
                                     {...field}
                                     value={field.value ?? ''}
-                                    onChange={e => field.onChange(e.target.value === '' || e.target.value === null ? undefined : parseFloat(e.target.value))}
+                                    onChange={e => field.onChange(String(e.target.value).trim() === '' || e.target.value === null ? undefined : parseFloat(e.target.value))}
                                 /></FormControl>
                                 <FormDescription>Optional. Internal cost price.</FormDescription>
                                 <FormMessage />
@@ -1139,3 +1151,4 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     </Card>
   );
 }
+
