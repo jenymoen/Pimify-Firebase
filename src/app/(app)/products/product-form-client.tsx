@@ -58,7 +58,7 @@ const requiredMultilingualStringSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "At least one language (English or Norwegian) is required.",
-      path: ['en'], // Or ['no'], or a more general path if preferred
+      path: ['en'], 
     });
   }
 });
@@ -78,12 +78,11 @@ const keyValueEntrySchema = z.object({
 const mediaEntrySchema = z.object({
   id: z.string(),
   url: z.string().refine(val => {
-    if (val === '' || val === undefined) return true; // Allow empty string for removal/optional
+    if (val === '' || val === undefined) return true; 
     try {
       const url = new URL(val);
       return url.protocol === "http:" || url.protocol === "https:";
     } catch (_) {
-      // Allow relative paths starting with '/' for local assets, or handle placeholder logic
       return val.startsWith('/') || val.startsWith('https://placehold.co');
     }
   }, {
@@ -306,7 +305,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
           ...data.basicInfo,
           launchDate: data.basicInfo.launchDate ? data.basicInfo.launchDate.toISOString() : null,
           endDate: data.basicInfo.endDate ? data.basicInfo.endDate.toISOString() : null,
-          internalId: existingProduct?.basicInfo.internalId || null, // Preserve existing internalId
+          internalId: existingProduct?.basicInfo.internalId || null, 
         },
         attributesAndSpecs: {
           ...data.attributesAndSpecs,
@@ -342,7 +341,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         options: (data.options || []).map(opt => ({
             id: opt.id,
             name: opt.name,
-            values: opt.values, // Already an array from Zod transform
+            values: opt.values, 
         })),
         variants: (data.variants || []).map(vFormData => {
           const stdPriceEntries: PriceEntry[] = (vFormData.standardPriceAmount !== undefined && vFormData.standardPriceAmount !== null)
@@ -359,7 +358,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
             standardPrice: stdPriceEntries,
             salePrice: slPriceEntries,
             costPrice: [],
-            imageIds: [], // Default to empty, can be enhanced later
+            imageIds: [], 
           };
           if (vFormData.gtin) variantForPayload.gtin = vFormData.gtin;
           return variantForPayload;
@@ -397,18 +396,20 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
 
 
       if (existingProduct) {
-        const updatedProd = await storeUpdateProduct(existingProduct.id, productPayloadForSave);
+        const { id, createdAt, updatedAt, aiSummary: _aiSummary, ...updatePayload } = productPayloadForSave;
+        const updatedProd = await storeUpdateProduct(existingProduct.id, updatePayload);
         if (updatedProd) {
             toast({ title: "Product Updated", description: `"${updatedProd.basicInfo.name.en || updatedProd.basicInfo.name.no || updatedProd.basicInfo.sku}" has been successfully updated.` });
         } else {
             toast({ title: "Product Update Failed", description: `Failed to update "${data.basicInfo.name.en || data.basicInfo.name.no || data.basicInfo.sku}".`, variant: "destructive" });
         }
       } else {
-        const newProd = await addProduct(productPayloadForSave);
+        const { id, createdAt, updatedAt, aiSummary: _aiSummaryFromPayload, ...productDataForStore } = productPayloadForSave;
+        const newProd = await addProduct(productDataForStore, productPayloadForSave.aiSummary);
         if (newProd) {
-           toast({ title: "Product Created", description: `"${newProd.basicInfo.name.en || newProd.basicInfo.name.no || newProd.basicInfo.sku}" has been successfully created.` });
+            toast({ title: "Product Created", description: `"${newProd.basicInfo.name.en || newProd.basicInfo.name.no || newProd.basicInfo.sku}" has been successfully created.` });
         } else {
-           toast({ title: "Product Creation Failed", description: `Failed to create "${data.basicInfo.name.en || data.basicInfo.name.no || data.basicInfo.sku}".`, variant: "destructive" });
+            toast({ title: "Product Creation Failed", description: `Failed to create "${data.basicInfo.name.en || data.basicInfo.name.no || data.basicInfo.sku}".`, variant: "destructive" });
         }
       }
       router.push("/products");
@@ -427,16 +428,17 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       "`errors` argument passed to onError callback (may be incomplete for complex validations):",
       errors
     );
-    // Log form.formState.errors directly for comparison - THIS IS THE SOURCE OF TRUTH.
+    
     const actualErrors = form.formState.errors;
+    const numActualErrorKeys = Object.keys(actualErrors).length;
+    console.log("Number of keys in `form.formState.errors`:", numActualErrorKeys);
 
-    if (Object.keys(actualErrors).length === 0) {
-        // This case is unusual: onError called, but form.formState.errors is also empty.
-        console.warn(
-          "Diagnostic: `form.formState.errors` (Source of Truth) is EMPTY when onError was called. " +
+    if (numActualErrorKeys === 0) {
+        console.warn( 
+          "Diagnostic: `form.formState.errors` (Source of Truth) is EMPTY when `onError` was called. " +
           "This indicates a Zod schema-level validation (e.g., array.max()) that isn't mapping to a specific field, " +
-          "or a resolver issue. Review schema for potential unmapped errors.",
-          actualErrors // Will log {}
+          "or a resolver issue. Review Zod schema for potential unmapped errors.",
+          actualErrors 
         );
         toast({
             title: "Submission Issue",
@@ -444,18 +446,19 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
             variant: "destructive",
         });
     } else {
-        // actualErrors is NOT empty.
+        // actualErrors is NOT empty according to Object.keys().length.
+        console.log("`form.formState.errors` (Source of Truth) has keys, indicating errors exist.");
         console.error(
-          "Validation Failure - Source of Truth (`form.formState.errors`) - Raw Object:",
+          "Validation Failure - Source of Truth (`form.formState.errors`) - Raw Object (If this appears as '{}' in console, check the JSON stringified version below for reliable details):",
           actualErrors
         );
         console.error(
-          "Validation Failure - Source of Truth (`form.formState.errors`) - JSON Stringified:",
+          "Validation Failure - Source of Truth (`form.formState.errors`) - JSON Stringified (MOST RELIABLE VIEW):",
           JSON.stringify(actualErrors, null, 2)
         );
         toast({
             title: "Validation Error",
-            description: "Please check the form for errors. Specific messages should be visible next to invalid fields. For a full summary, see the 'Validation Failure - Source of Truth' log in your browser console.",
+            description: "Please check the form for errors. Specific messages should be visible next to invalid fields. For a full summary, see the 'Validation Failure - Source of Truth (JSON Stringified)' log in your browser console.",
             variant: "destructive",
         });
     }
@@ -528,9 +531,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         replaceVariants([]);
         return;
     }
-
-    // The Zod schema already transforms opt.values into an array of strings.
-    // So, parsedOptions will use opt.values directly if the transform is correct.
+    
     const parsedOptions = validOptions.map(opt => ({
         name: opt.name.trim(),
         values: Array.isArray(opt.values) ? opt.values : opt.values.split(',').map(v => v.trim()).filter(v => v),
@@ -1125,7 +1126,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                               type="textarea"
                               disabled={true}
                               value={field.value || defaultMultilingualString}
-                              onChange={field.onChange} // Though disabled, onChange is needed for Controller
+                              onChange={field.onChange} 
                             />
                           </FormControl>
                            <FormMessage />
