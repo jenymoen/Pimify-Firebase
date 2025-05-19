@@ -58,7 +58,7 @@ export function AppShell({ children }: AppShellProps) {
           <h1 className="text-2xl font-semibold text-foreground">Pimify</h1>
         </Link>
       </SidebarHeader>
-      <SidebarContent className="flex-grow">
+      <SidebarContent className="flex-grow p-4"> {/* Increased padding */}
         <SidebarMenu>
           {navItems.map((item) => (
             <SidebarMenuItem key={item.label}>
@@ -76,7 +76,7 @@ export function AppShell({ children }: AppShellProps) {
           ))}
         </SidebarMenu>
       </SidebarContent>
-      <SidebarFooter className="p-2 border-t border-sidebar-border mt-auto">
+      <SidebarFooter className="p-4 border-t border-sidebar-border mt-auto"> {/* Adjusted padding to match content/header */}
         <SidebarMenu>
           <SidebarMenuItem>
              <Link href="/profile" passHref legacyBehavior>
