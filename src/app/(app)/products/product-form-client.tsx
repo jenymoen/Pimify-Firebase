@@ -1,3 +1,4 @@
+
 // src/app/(app)/products/product-form-client.tsx
 "use client";
 
@@ -89,8 +90,8 @@ const mediaEntrySchema = z.object({
   }).optional(),
   altText: baseMultilingualStringSchema.optional(),
   type: z.enum(['image', 'video', '3d_model', 'manual', 'certificate']),
-  language: z.string().optional(),
-  title: z.string().optional(),
+  language: z.preprocess((val) => val === null ? undefined : val, z.string().optional()),
+  title: z.preprocess((val) => val === null ? undefined : val, z.string().optional()),
 });
 
 const productOptionSchema = z.object({
@@ -201,7 +202,9 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         images: (existingProduct.media.images || []).map(img => ({
           ...img,
           url: img.url || '',
-          altText: img.altText || {...defaultMultilingualString}
+          altText: img.altText || {...defaultMultilingualString},
+          language: img.language || null, // Ensure null for consistency
+          title: img.title || null, // Ensure null for consistency
         })),
       },
       marketingSEO: {
@@ -318,7 +321,11 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
               } catch (_) {
                 return img.url.startsWith('/') || img.url.startsWith('https://placehold.co');
               }
-          }),
+          }).map(img => ({
+            ...img,
+            language: img.language === undefined ? null : img.language, // Ensure null if undefined
+            title: img.title === undefined ? null : img.title, // Ensure null if undefined
+          })),
           videos: existingProduct?.media.videos || [],
           models3d: existingProduct?.media.models3d || [],
           manuals: existingProduct?.media.manuals || [],
@@ -434,8 +441,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         console.warn(
           "Diagnostic: `onError` was called, but `form.formState.errors` (the source of truth) is also empty. " +
           "This might indicate a Zod schema-level validation (e.g., array.max()) that isn't mapping to a specific field, " +
-          "or a resolver issue. Review Zod schema for potential unmapped errors.",
-          actualErrors // Log the empty object for completeness
+          "or a resolver issue. Review Zod schema for potential unmapped errors. `actualErrors` object:",
+          actualErrors 
         );
         toast({
             title: "Submission Issue",
@@ -795,11 +802,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                 </div>
                             </Card>
                         ))}
-                        <FormField
-                          control={form.control}
-                          name="options"
-                          render={() => <FormMessage />}
-                        />
+                         <FormMessage>{form.formState.errors.options?.message}</FormMessage>
                         <Button
                             type="button"
                             variant="outline"
@@ -814,11 +817,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                     <Button type="button" onClick={generateVariants} className="mt-4" disabled={optionsFields.length === 0}>
                         <Sparkles className="mr-2 h-4 w-4" /> Generate Variants
                     </Button>
-                     <FormField
-                        control={form.control}
-                        name="variants"
-                        render={() => <FormMessage />}
-                      />
+                     <FormMessage>{form.formState.errors.variants?.message}</FormMessage>
+                      
 
                     {variantsFields.length > 0 && (
                         <div className="mt-6 space-y-4">
@@ -854,7 +854,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                                 <FormField control={form.control} name={`variants.${index}.gtin`} render={({ field }) => ( <Input {...field} value={field.value || ''} placeholder="Variant GTIN" /> )} />
                                             </TableCell>
                                             <TableCell>
-                                                <FormField control={form.control} name={`variants.${index}.standardPriceAmount`} render={({ field }) => ( <Input type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(String(e.target.value).trim() === '' || e.target.value === null ? undefined : parseFloat(e.target.value))} placeholder="Amount"/> )} />
+                                                <FormField control={form.control} name={`variants.${index}.standardPriceAmount`} render={({ field }) => ( <Input type="text" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value)} placeholder="Amount"/> )} />
                                                  <FormMessage>{form.formState.errors.variants?.[index]?.standardPriceAmount?.message}</FormMessage>
                                             </TableCell>
                                             <TableCell>
@@ -862,7 +862,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                                  <FormMessage>{form.formState.errors.variants?.[index]?.standardPriceCurrency?.message}</FormMessage>
                                             </TableCell>
                                             <TableCell>
-                                                <FormField control={form.control} name={`variants.${index}.salePriceAmount`} render={({ field }) => ( <Input type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(String(e.target.value).trim() === '' || e.target.value === null ? undefined : parseFloat(e.target.value))} placeholder="Amount"/> )} />
+                                                <FormField control={form.control} name={`variants.${index}.salePriceAmount`} render={({ field }) => ( <Input type="text" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value)} placeholder="Amount"/> )} />
                                                  <FormMessage>{form.formState.errors.variants?.[index]?.salePriceAmount?.message}</FormMessage>
                                             </TableCell>
                                             <TableCell>
@@ -911,11 +911,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                         />
                       )}
                     />
-                     <FormField
-                        control={form.control}
-                        name="attributesAndSpecs.properties"
-                        render={() => <FormMessage />}
-                      />
+                     <FormMessage>{form.formState.errors.attributesAndSpecs?.properties?.message}</FormMessage>
                     <Controller
                       control={form.control}
                       name="attributesAndSpecs.technicalSpecs"
@@ -929,11 +925,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                         />
                       )}
                     />
-                    <FormField
-                        control={form.control}
-                        name="attributesAndSpecs.technicalSpecs"
-                        render={() => <FormMessage />}
-                      />
+                    <FormMessage>{form.formState.errors.attributesAndSpecs?.technicalSpecs?.message}</FormMessage>
                      <FormField
                       control={form.control}
                       name="attributesAndSpecs.countryOfOrigin"
@@ -956,11 +948,11 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                 <FormItem>
                                 <FormLabel>Original Price Amount <span className="text-destructive">*</span></FormLabel>
                                 <FormControl><Input
-                                    type="number"
+                                    type="text"
                                     placeholder="e.g., 999.99"
                                     {...field}
                                     value={field.value ?? ''}
-                                    onChange={e => field.onChange(String(e.target.value).trim() === '' || e.target.value === null || isNaN(parseFloat(e.target.value)) ? undefined : parseFloat(e.target.value))}
+                                    onChange={e => field.onChange(e.target.value)}
                                 /></FormControl>
                                 <FormMessage />
                                 </FormItem>
@@ -984,11 +976,11 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                 <FormItem>
                                 <FormLabel>Sales Price Amount</FormLabel>
                                 <FormControl><Input
-                                    type="number"
+                                    type="text"
                                     placeholder="e.g., 799.99"
                                     {...field}
                                     value={field.value ?? ''}
-                                    onChange={e => field.onChange(String(e.target.value).trim() === '' || e.target.value === null || isNaN(parseFloat(e.target.value)) ? undefined : parseFloat(e.target.value))}
+                                    onChange={e => field.onChange(e.target.value)}
                                 /></FormControl>
                                 <FormDescription>Optional. If set, this is the active selling price.</FormDescription>
                                 <FormMessage />
@@ -1013,11 +1005,11 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                 <FormItem>
                                 <FormLabel>Cost Price Amount</FormLabel>
                                 <FormControl><Input
-                                    type="number"
+                                    type="text"
                                     placeholder="e.g., 499.99"
                                     {...field}
                                     value={field.value ?? ''}
-                                    onChange={e => field.onChange(String(e.target.value).trim() === '' || e.target.value === null || isNaN(parseFloat(e.target.value)) ? undefined : parseFloat(e.target.value))}
+                                    onChange={e => field.onChange(e.target.value)}
                                 /></FormControl>
                                 <FormDescription>Optional. Internal cost price.</FormDescription>
                                 <FormMessage />
@@ -1052,11 +1044,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                         />
                       )}
                     />
-                    <FormField
-                        control={form.control}
-                        name="media.images"
-                        render={() => <FormMessage />}
-                      />
+                     <FormMessage>{form.formState.errors.media?.images?.message}</FormMessage>
                   </ProductFormSection>
 
                   <ProductFormSection title="Marketing & SEO" value="marketing-seo" icon={BarChart3} description="Optimize product visibility for search engines and marketing campaigns.">
@@ -1151,8 +1139,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                           <Image
                             src={image.url!}
                             alt={image.altText?.en || `Product image ${index + 1}`}
-                            layout="fill"
-                            objectFit="contain"
+                            fill
+                            className="object-contain"
                             data-ai-hint="product form image"
                             onError={(e) => {
                               const target = e.target as HTMLImageElement;

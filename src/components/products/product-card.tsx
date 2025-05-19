@@ -38,7 +38,7 @@ export function ProductCard({ product }: ProductCardProps) {
       toast({
         title: "Product Deleted",
         description: `Product "${product.basicInfo.name.en || product.basicInfo.sku}" has been successfully deleted.`,
-        variant: "default", // Changed from destructive for success
+        variant: "default",
       });
     } catch (error: any) {
       toast({
@@ -62,9 +62,8 @@ export function ProductCard({ product }: ProductCardProps) {
           <Image
             src={firstImage}
             alt={imageAlt}
-            layout="fill"
-            objectFit="contain"
-            className="p-1" 
+            fill
+            className="object-contain p-1"
             data-ai-hint="product item"
           />
         </div>
@@ -150,4 +149,3 @@ export function ProductCard({ product }: ProductCardProps) {
     </Card>
   );
 }
-

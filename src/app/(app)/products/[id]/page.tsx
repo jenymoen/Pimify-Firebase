@@ -28,7 +28,7 @@ const DetailSection: React.FC<{ title: string; icon: React.ElementType; children
   </div>
 );
 
-const MultilingualTextDisplay: React.FC<{ label: string; data?: Product['basicInfo']['name'] }> = ({ label, data }) => {
+const MultilingualTextDisplay: React.FC<{ label: string; data?: Product['basicInfo']['name'] | null }> = ({ label, data }) => {
   if (!data || (!data.en && !data.no)) return null;
   return (
     <div>
@@ -39,7 +39,7 @@ const MultilingualTextDisplay: React.FC<{ label: string; data?: Product['basicIn
   );
 };
 
-const KeyValueDisplay: React.FC<{ label: string; items?: KeyValueEntry[] }> = ({ label, items }) => {
+const KeyValueDisplay: React.FC<{ label: string; items?: KeyValueEntry[] | null }> = ({ label, items }) => {
   if (!items || items.length === 0) return <p className="text-sm text-muted-foreground">{label}: Not specified</p>;
   return (
     <div>
@@ -51,7 +51,7 @@ const KeyValueDisplay: React.FC<{ label: string; items?: KeyValueEntry[] }> = ({
   );
 };
 
-const MediaDisplay: React.FC<{ label: string; items?: MediaEntry[] }> = ({ label, items }) => {
+const MediaDisplay: React.FC<{ label: string; items?: MediaEntry[] | null }> = ({ label, items }) => {
   if (!items || items.length === 0) return <p className="text-sm text-muted-foreground">{label}: No media available</p>;
   return (
     <div>
@@ -60,7 +60,7 @@ const MediaDisplay: React.FC<{ label: string; items?: MediaEntry[] }> = ({ label
         {items.map(item => (
           item.type === 'image' && item.url && (
             <div key={item.id} className="relative aspect-square rounded-md overflow-hidden border">
-              <Image src={item.url} alt={item.altText?.en || 'Product Media'} layout="fill" objectFit="cover" data-ai-hint="product image detail" />
+              <Image src={item.url} alt={item.altText?.en || 'Product Media'} fill className="object-cover" data-ai-hint="product image detail" />
             </div>
           )
         ))}
@@ -69,7 +69,7 @@ const MediaDisplay: React.FC<{ label: string; items?: MediaEntry[] }> = ({ label
   );
 };
 
-const PriceDisplay: React.FC<{ label: string; priceEntries?: PriceEntry[] }> = ({ label, priceEntries }) => {
+const PriceDisplay: React.FC<{ label: string; priceEntries?: PriceEntry[] | null }> = ({ label, priceEntries }) => {
   if (!priceEntries || priceEntries.length === 0 || priceEntries[0].amount === undefined) {
     return <p className="text-sm"><span className="font-medium text-foreground/90">{label}:</span> <span className="text-muted-foreground">Not specified</span></p>;
   }
@@ -179,7 +179,7 @@ export default function ProductDetailsPage() {
             <div className="md:col-span-1">
               {media.images && media.images.length > 0 && media.images[0].url ? (
                 <div className="relative aspect-square rounded-lg overflow-hidden border shadow-md">
-                  <Image src={media.images[0].url} alt={media.images[0].altText?.en || basicInfo.name.en || ''} layout="fill" objectFit="contain" data-ai-hint="product main image" />
+                  <Image src={media.images[0].url} alt={media.images[0].altText?.en || basicInfo.name.en || ''} fill className="object-contain" data-ai-hint="product main image" />
                 </div>
               ) : (
                 <div className="relative aspect-square rounded-lg overflow-hidden border bg-muted flex items-center justify-center" data-ai-hint="product placeholder">
