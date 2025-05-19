@@ -58,7 +58,7 @@ const requiredMultilingualStringSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "At least one language (English or Norwegian) is required.",
-      path: ['en'], 
+      path: ['en'],
     });
   }
 });
@@ -78,13 +78,12 @@ const keyValueEntrySchema = z.object({
 const mediaEntrySchema = z.object({
   id: z.string(),
   url: z.string().refine(val => {
-    if (val === '' || val === undefined) return true; // Allow empty URL for removal
+    if (val === '' || val === undefined) return true;
     try {
       const url = new URL(val);
       return url.protocol === "http:" || url.protocol === "https:";
     } catch (_) {
-      // Allow relative paths starting with '/'
-      return val.startsWith('/'); 
+      return val.startsWith('/');
     }
   }, {
     message: "Must be a valid HTTP/HTTPS URL or a relative path starting with '/'. Leave empty to remove image.",
@@ -99,16 +98,16 @@ const productOptionSchema = z.object({
   id: z.string(),
   name: z.string().min(1, "Option name is required."),
   values: z.string()
-    .min(1, "Option values are required (comma-separated).") // Ensures the input string isn't empty
-    .transform(val => val.split(',').map(v => v.trim()).filter(v => v)) // Transforms to string[]
-    .refine(arr => arr.length > 0, { message: "Please provide at least one valid, non-empty option value (e.g., 'Red' or 'Red,Blue'). Values like ' , ' are not valid." }) // Ensures the array isn't empty after transform
+    .min(1, "Option values are required (comma-separated).")
+    .transform(val => val.split(',').map(v => v.trim()).filter(v => v))
+    .refine(arr => arr.length > 0, { message: "Please provide at least one valid, non-empty option value (e.g., 'Red' or 'Red,Blue'). Values like ' , ' are not valid." })
 });
 
 const productVariantSchema = z.object({
     id: z.string(),
     sku: z.string().min(1, "Variant SKU is required."),
     gtin: z.string().optional(),
-    optionValues: z.record(z.string()), 
+    optionValues: z.record(z.string()),
     standardPriceAmount: z.preprocess(
         (val) => (String(val).trim() === "" || val === null || val === undefined ? undefined : val),
         z.coerce.number({invalid_type_error: "Price must be a number"}).min(0, "Price cannot be negative").optional().nullable()
@@ -144,8 +143,8 @@ const productFormSchema = z.object({
     images: z.array(mediaEntrySchema).optional(),
   }),
   marketingSEO: z.object({
-    seoTitle: baseMultilingualStringSchema, // Changed to base (optional content)
-    seoDescription: baseMultilingualStringSchema, // Changed to base (optional content)
+    seoTitle: baseMultilingualStringSchema,
+    seoDescription: baseMultilingualStringSchema,
     keywords: z.array(z.string()).optional(),
   }),
   pricingAndStock: z.object({
@@ -221,20 +220,20 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         costPriceAmount: existingProduct.pricingAndStock?.costPrice?.[0]?.amount,
         costPriceCurrency: existingProduct.pricingAndStock?.costPrice?.[0]?.currency || "NOK",
       },
-      options: (existingProduct.options || []).map(opt => ({ 
+      options: (existingProduct.options || []).map(opt => ({
         id: opt.id,
         name: opt.name,
-        values: opt.values.join(','), 
+        values: opt.values.join(','),
       })),
-      variants: (existingProduct.variants || []).map(v => { 
-        return { 
+      variants: (existingProduct.variants || []).map(v => {
+        return {
             id: v.id,
             sku: v.sku,
             gtin: v.gtin || '',
             optionValues: v.optionValues,
-            standardPriceAmount: v.standardPrice?.[0]?.amount, 
+            standardPriceAmount: v.standardPrice?.[0]?.amount,
             standardPriceCurrency: v.standardPrice?.[0]?.currency || "NOK",
-            salePriceAmount: v.salePrice?.[0]?.amount, 
+            salePriceAmount: v.salePrice?.[0]?.amount,
             salePriceCurrency: v.salePrice?.[0]?.currency || "NOK",
         };
       }),
@@ -313,7 +312,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
           images: (data.media.images || []).filter(img => {
             if (!img.url || img.url.trim() === '') return false;
              try {
-                const url = new URL(img.url); 
+                const url = new URL(img.url);
                 return url.protocol === "http:" || url.protocol === "https:";
               } catch (_) {
                 return img.url.startsWith('/');
@@ -322,15 +321,15 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         },
         marketingSEO: data.marketingSEO,
         aiSummary: data.aiSummary,
-        pricingAndStock: { 
+        pricingAndStock: {
             standardPrice: [],
             salePrice: [],
             costPrice: [],
         },
-        options: (data.options || []).map(opt => ({ 
+        options: (data.options || []).map(opt => ({
             id: opt.id,
             name: opt.name,
-            values: opt.values, 
+            values: opt.values, // Zod transform already converted string to string[]
         })),
         variants: (data.variants || []).map(vFormData => {
           const stdPriceEntries: PriceEntry[] = (vFormData.standardPriceAmount !== undefined && vFormData.standardPriceAmount !== null)
@@ -379,15 +378,23 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
 
       if (existingProduct) {
         const {id, createdAt, updatedAt, ...updatePayload} = productPayloadForSave;
-        storeUpdateProduct(existingProduct.id, updatePayload);
-        toast({ title: "Product Updated", description: `"${data.basicInfo.name.en || data.basicInfo.name.no || data.basicInfo.sku}" has been successfully updated.` });
+        const updatedProd = await storeUpdateProduct(existingProduct.id, updatePayload);
+        if (updatedProd) {
+            toast({ title: "Product Updated", description: `"${updatedProd.basicInfo.name.en || updatedProd.basicInfo.name.no || updatedProd.basicInfo.sku}" has been successfully updated.` });
+        } else {
+            toast({ title: "Product Update Failed", description: `Failed to update "${data.basicInfo.name.en || data.basicInfo.name.no || data.basicInfo.sku}".`, variant: "destructive" });
+        }
       } else {
         const { id, createdAt, updatedAt, aiSummary: _aiSummaryFromPayload, ...productDataForStore } = productPayloadForSave;
-        const newProd = addProduct(productDataForStore, productPayloadForSave.aiSummary);
-        toast({ title: "Product Created", description: `"${newProd.basicInfo.name.en || newProd.basicInfo.name.no || newProd.basicInfo.sku}" has been successfully created.` });
+        const newProd = await addProduct(productDataForStore, productPayloadForSave.aiSummary);
+        if (newProd) {
+            toast({ title: "Product Created", description: `"${newProd.basicInfo.name.en || newProd.basicInfo.name.no || newProd.basicInfo.sku}" has been successfully created.` });
+        } else {
+             toast({ title: "Product Creation Failed", description: `Failed to create "${data.basicInfo.name.en || data.basicInfo.name.no || data.basicInfo.sku}".`, variant: "destructive" });
+        }
       }
       router.push("/products");
-      router.refresh(); 
+      router.refresh();
     } catch (error) {
       console.error("Submission error:", error);
       toast({ title: "Error", description: "Failed to save product. Please try again.", variant: "destructive" });
@@ -432,7 +439,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
 
       if (result.summary) {
         form.setValue("aiSummary.en", result.summary, { shouldValidate: true, shouldDirty: true });
-        form.setValue("aiSummary.no", result.summary + " (automatisk oppsummert)", { shouldValidate: true, shouldDirty: true }); 
+        form.setValue("aiSummary.no", result.summary + " (automatisk oppsummert)", { shouldValidate: true, shouldDirty: true });
         toast({ title: "AI Summary Generated", description: "Summary has been populated." });
       } else {
         toast({ title: "AI Summary Failed", description: "Could not generate summary.", variant: "destructive" });
@@ -458,7 +465,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
   };
 
   const generateVariants = () => {
-    const options = form.getValues("options"); 
+    const options = form.getValues("options");
     if (!options || options.length === 0) {
         toast({ title: "No Options Defined", description: "Please define at least one option to generate variants.", variant: "destructive" });
         replaceVariants([]);
@@ -468,7 +475,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     const validOptions = options.filter(opt => opt.name && opt.name.trim() && opt.values && typeof opt.values === 'string' && opt.values.trim() !== '');
     if (validOptions.length !== options.length || validOptions.length === 0) {
         toast({ title: "Incomplete Options", description: "Ensure all defined options have a name and a non-empty values string.", variant: "destructive" });
-        replaceVariants([]); 
+        replaceVariants([]);
         return;
     }
 
@@ -1117,4 +1124,3 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     </Card>
   );
 }
-
