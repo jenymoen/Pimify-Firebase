@@ -32,17 +32,25 @@ export function ProductCard({ product }: ProductCardProps) {
   const { deleteProduct } = useProductStore();
   const { toast } = useToast();
 
-  const handleDelete = () => {
-    deleteProduct(product.id);
-    toast({
-      title: "Product Deleted",
-      description: `Product "${product.basicInfo.name.en || product.basicInfo.sku}" has been deleted.`,
-      variant: "destructive",
-    });
+  const handleDelete = async () => {
+    try {
+      await deleteProduct(product.id);
+      toast({
+        title: "Product Deleted",
+        description: `Product "${product.basicInfo.name.en || product.basicInfo.sku}" has been successfully deleted.`,
+        variant: "default", // Changed from destructive for success
+      });
+    } catch (error: any) {
+      toast({
+        title: "Delete Failed",
+        description: error.message || "Could not delete product.",
+        variant: "destructive",
+      });
+    }
   };
   
-  const firstImage = product.media.images.length > 0 && product.media.images[0].url ? product.media.images[0].url : "https://placehold.co/300x300.png";
-  const imageAlt = product.media.images.length > 0 && product.media.images[0].altText?.en ? product.media.images[0].altText.en : (product.basicInfo.name.en || product.basicInfo.sku);
+  const firstImage = product.media.images && product.media.images.length > 0 && product.media.images[0].url ? product.media.images[0].url : "https://placehold.co/300x300.png";
+  const imageAlt = product.media.images && product.media.images.length > 0 && product.media.images[0].altText?.en ? product.media.images[0].altText.en : (product.basicInfo.name.en || product.basicInfo.sku);
 
   const complete = isProductComplete(product);
   const hasVariants = product.variants && product.variants.length > 0;
