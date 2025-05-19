@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, PackagePlus, Package, UploadCloud, Settings, Menu, LogOut } from 'lucide-react';
+import { LayoutDashboard, PackagePlus, Package, UploadCloud, Settings, Menu, LogOut, UserCircle } from 'lucide-react';
 import {
   SidebarProvider,
   Sidebar,
@@ -14,11 +14,11 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarFooter,
-} from '@/components/ui/sidebar'; // Removed SidebarTrigger, SidebarInset as they might not be needed for this auth setup directly
+} from '@/components/ui/sidebar'; 
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { useAuthStore } from '@/lib/auth-store'; // Import the auth store
+import { useAuthStore } from '@/lib/auth-store'; 
 
 interface NavItem {
   href: string;
@@ -34,11 +34,11 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const isMobile = useIsMobile();
-  const { logout: authLogout, user } = useAuthStore(); // Get logout function and user from store
+  const { logout: authLogout, user } = useAuthStore(); 
 
   const handleLogout = async () => {
     await authLogout();
-    router.push('/'); // Redirect to homepage after logout
+    router.push('/'); 
   };
 
   const navItems: NavItem[] = [
@@ -64,7 +64,7 @@ export function AppShell({ children }: AppShellProps) {
             <SidebarMenuItem key={item.label}>
               <Link href={item.href} passHref legacyBehavior>
                 <SidebarMenuButton
-                  isActive={pathname === item.href || (item.href !== '/products' && item.href !== '/dashboard' && pathname.startsWith(item.href)) || (item.href === '/dashboard' && pathname === '/dashboard') }
+                  isActive={pathname === item.href || (item.href !== '/products' && item.href !== '/dashboard' && pathname.startsWith(item.href)) || (item.href === '/dashboard' && pathname === '/dashboard') || (item.href === '/profile' && pathname === '/profile') }
                   asChild={false} 
                   tooltip={item.label}
                 >
@@ -78,6 +78,19 @@ export function AppShell({ children }: AppShellProps) {
       </SidebarContent>
       <SidebarFooter className="p-2 border-t border-sidebar-border mt-auto">
         <SidebarMenu>
+          <SidebarMenuItem>
+             <Link href="/profile" passHref legacyBehavior>
+                <SidebarMenuButton
+                  isActive={pathname === '/profile'}
+                  asChild={false}
+                  tooltip="User Profile"
+                  className="w-full"
+                >
+                  <UserCircle />
+                  <span>User Profile</span>
+                </SidebarMenuButton>
+              </Link>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton
               onClick={handleLogout}
@@ -98,7 +111,7 @@ export function AppShell({ children }: AppShellProps) {
     return <div className="flex h-screen items-center justify-center"><p>Loading UI...</p></div>; 
   }
 
-  if (!user) { // If user is somehow null here, it might mean auth state is still resolving or lost
+  if (!user) { 
       return <div className="flex h-screen items-center justify-center"><p>Authenticating...</p></div>;
   }
 
@@ -131,7 +144,6 @@ export function AppShell({ children }: AppShellProps) {
           <Sidebar collapsible="icon" variant="sidebar" side="left" className="flex flex-col">
             {sidebarContent}
           </Sidebar>
-          {/* Use a simple div wrapper instead of SidebarInset if SidebarInset is causing issues or not needed */}
           <div className="flex-1 bg-background"> 
             <div className="p-6">{children}</div>
           </div>
