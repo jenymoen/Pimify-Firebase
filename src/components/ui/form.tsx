@@ -125,6 +125,7 @@ const FormControl = React.forwardRef<
           : `${formDescriptionId} ${formMessageId}`
       }
       aria-invalid={!!error}
+      suppressHydrationWarning={true} // Added this line
       {...props}
     />
   )
