@@ -58,7 +58,7 @@ const requiredMultilingualStringSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "At least one language (English or Norwegian) is required.",
-      path: ['en'], 
+      path: ['en'],
     });
   }
 });
@@ -78,7 +78,7 @@ const keyValueEntrySchema = z.object({
 const mediaEntrySchema = z.object({
   id: z.string(),
   url: z.string().refine(val => {
-    if (val === '' || val === undefined) return true; 
+    if (val === '' || val === undefined) return true;
     try {
       const url = new URL(val);
       return url.protocol === "http:" || url.protocol === "https:";
@@ -311,7 +311,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
           images: (data.media.images || []).filter(img => {
             if (!img.url || img.url.trim() === '') return false;
              try {
-                const url = new URL(img.url); 
+                const url = new URL(img.url);
                 return url.protocol === "http:" || url.protocol === "https:";
               } catch (_) {
                 return img.url.startsWith('/');
@@ -328,7 +328,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         options: (data.options || []).map(opt => ({
             id: opt.id,
             name: opt.name,
-            values: opt.values, 
+            values: opt.values,
         })),
         variants: (data.variants || []).map(vFormData => {
           const stdPriceEntries: PriceEntry[] = (vFormData.standardPriceAmount !== undefined && vFormData.standardPriceAmount !== null)
@@ -406,9 +406,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     }
   }
 
- const onError = (errors: FieldErrors<ProductFormData>) => {
+  const onError = (errors: FieldErrors<ProductFormData>) => {
     console.group("Form Submission Error Details");
-    // Log the errors object passed to the callback - this one can sometimes be incomplete.
     console.warn(
       "`errors` argument passed to onError callback (may be incomplete for complex validations):",
       errors
@@ -417,8 +416,10 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     // Log form.formState.errors directly for comparison - THIS IS THE SOURCE OF TRUTH.
     const actualErrors = form.formState.errors;
     if (Object.keys(actualErrors).length === 0) {
-        console.error(
-          "Validation Failure - Source of Truth (`form.formState.errors`) is EMPTY when onError was called (this indicates a Zod schema-level validation might not be mapping to a specific field, or a resolver issue):",
+        console.warn( // Changed to console.warn
+          "Diagnostic: `onError` was called, but `form.formState.errors` (the source of truth) is also empty. " +
+          "This often indicates a Zod schema-level validation (e.g., array.max()) that isn't mapping to a specific field error, " +
+          "or a resolver issue. Review schema for potential unmapped errors.",
           actualErrors
         );
     } else {
@@ -427,7 +428,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
           actualErrors
         );
     }
-    
+
 
     const hasActualValidationErrors = actualErrors && Object.keys(actualErrors).length > 0;
 
@@ -438,16 +439,16 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
             variant: "destructive",
         });
     } else {
-        // This case is unusual: onError called, but form.formState.errors is also empty.
-        console.error("`onError` was called, but `form.formState.errors` (the source of truth) is also empty. This might indicate an issue with the form resolver or an unexpected submission attempt. Please double-check form setup and Zod schema.");
+        // This case is for when actualErrors is empty (after the above console.warn)
         toast({
             title: "Submission Issue",
-            description: "The form could not be submitted due to an unexpected issue. Please review your entries or try again. See browser console for details.",
+            description: "The form could not be submitted due to an unexpected issue. Please review your entries or try again. See browser console for diagnostic details.",
             variant: "destructive",
         });
     }
     console.groupEnd();
   };
+
 
   const handleGenerateSummary = async () => {
     setIsGeneratingSummary(true);
