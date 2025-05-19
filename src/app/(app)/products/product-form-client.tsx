@@ -125,8 +125,8 @@ const productFormSchema = z.object({
     name: requiredMultilingualStringSchema,
     sku: z.string().min(1, "SKU is required"),
     gtin: z.string().optional(),
-    descriptionShort: requiredMultilingualStringSchema,
-    descriptionLong: requiredMultilingualStringSchema,
+    descriptionShort: baseMultilingualStringSchema, // Changed to base
+    descriptionLong: baseMultilingualStringSchema,  // Changed to base
     brand: z.string().min(1, "Brand is required"),
     status: z.enum(['active', 'inactive', 'development', 'discontinued']),
     launchDate: z.date().optional(),
@@ -203,8 +203,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
           ...img,
           url: img.url || '',
           altText: img.altText || {...defaultMultilingualString},
-          language: img.language || null, // Ensure null for consistency
-          title: img.title || null, // Ensure null for consistency
+          language: img.language || null, 
+          title: img.title || null, 
         })),
       },
       marketingSEO: {
@@ -323,8 +323,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
               }
           }).map(img => ({
             ...img,
-            language: img.language === undefined ? null : img.language, // Ensure null if undefined
-            title: img.title === undefined ? null : img.title, // Ensure null if undefined
+            language: img.language === undefined ? null : img.language, 
+            title: img.title === undefined ? null : img.title, 
           })),
           videos: existingProduct?.media.videos || [],
           models3d: existingProduct?.media.models3d || [],
@@ -437,7 +437,6 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     console.log("Number of keys in `form.formState.errors` (Source of Truth):", Object.keys(actualErrors).length);
 
     if (Object.keys(actualErrors).length === 0) {
-        // This case is unusual: onError called, but form.formState.errors is also empty.
         console.warn(
           "Diagnostic: `onError` was called, but `form.formState.errors` (the source of truth) is also empty. " +
           "This might indicate a Zod schema-level validation (e.g., array.max()) that isn't mapping to a specific field, " +
@@ -451,10 +450,9 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
             variant: "destructive",
         });
     } else {
-        // actualErrors is NOT empty according to Object.keys().length.
         console.log("`form.formState.errors` (Source of Truth) has keys, indicating errors exist.");
         console.error(
-          "Validation Failure - Source of Truth (`form.formState.errors`) - Raw Object. IMPORTANT: If this appears as '{}' in console, it might be a console preview limitation. ALWAYS check the JSON stringified version logged immediately below for the full error details.",
+          "Validation Failure - Source of Truth (`form.formState.errors`) - Raw Object (If this appears as '{}' in console, check the JSON stringified version logged immediately below for the full error details):",
           actualErrors
         );
         console.error(
@@ -601,7 +599,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       name="basicInfo.name"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Product Name</FormLabel>
+                          <FormLabel>Product Name <span className="text-destructive">*</span></FormLabel>
                            <FormControl>
                             <MultilingualInput id="name" label="" {...field} value={field.value || defaultMultilingualString} />
                           </FormControl>
@@ -802,7 +800,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                 </div>
                             </Card>
                         ))}
-                         <FormMessage>{form.formState.errors.options?.message}</FormMessage>
+                         <FormMessage>{form.formState.errors.options?.root?.message || form.formState.errors.options?.message}</FormMessage>
                         <Button
                             type="button"
                             variant="outline"
@@ -817,7 +815,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                     <Button type="button" onClick={generateVariants} className="mt-4" disabled={optionsFields.length === 0}>
                         <Sparkles className="mr-2 h-4 w-4" /> Generate Variants
                     </Button>
-                     <FormMessage>{form.formState.errors.variants?.message}</FormMessage>
+                     <FormMessage>{form.formState.errors.variants?.root?.message || form.formState.errors.variants?.message}</FormMessage>
                       
 
                     {variantsFields.length > 0 && (
@@ -911,7 +909,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                         />
                       )}
                     />
-                     <FormMessage>{form.formState.errors.attributesAndSpecs?.properties?.message}</FormMessage>
+                     <FormMessage>{form.formState.errors.attributesAndSpecs?.properties?.root?.message || form.formState.errors.attributesAndSpecs?.properties?.message}</FormMessage>
                     <Controller
                       control={form.control}
                       name="attributesAndSpecs.technicalSpecs"
@@ -925,7 +923,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                         />
                       )}
                     />
-                    <FormMessage>{form.formState.errors.attributesAndSpecs?.technicalSpecs?.message}</FormMessage>
+                    <FormMessage>{form.formState.errors.attributesAndSpecs?.technicalSpecs?.root?.message || form.formState.errors.attributesAndSpecs?.technicalSpecs?.message}</FormMessage>
                      <FormField
                       control={form.control}
                       name="attributesAndSpecs.countryOfOrigin"
@@ -1044,7 +1042,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                         />
                       )}
                     />
-                     <FormMessage>{form.formState.errors.media?.images?.message}</FormMessage>
+                     <FormMessage>{form.formState.errors.media?.images?.root?.message || form.formState.errors.media?.images?.message}</FormMessage>
                   </ProductFormSection>
 
                   <ProductFormSection title="Marketing & SEO" value="marketing-seo" icon={BarChart3} description="Optimize product visibility for search engines and marketing campaigns.">
@@ -1181,3 +1179,5 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     </Card>
   );
 }
+
+    
