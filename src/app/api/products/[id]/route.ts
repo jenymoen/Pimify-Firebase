@@ -1,12 +1,7 @@
 // src/app/api/products/[id]/route.ts
 import { type NextRequest, NextResponse } from 'next/server';
 import type { Product } from '@/types/product';
-
-// VERY SIMPLIFIED IN-MEMORY DB FOR DEMO - REPLACE WITH FIRESTORE
-// This should be the same instance as in /api/products/route.ts if running in a single process environment.
-// For serverless, each function invocation is separate, so this in-memory store won't persist across different API calls reliably.
-// This is a major reason to move to a proper database like Firestore.
-const tenantDatabases: Record<string, Record<string, Product>> = {}; // Needs to be populated by product creation
+import { dbAdmin } from '@/lib/firebase-admin'; // Import initialized Firebase Admin SDK
 
 interface ProductParams {
   params: {
@@ -16,20 +11,43 @@ interface ProductParams {
 
 // GET /api/products/[id] - Get a single product by ID
 export async function GET(request: NextRequest, { params }: ProductParams) {
-  const tenantId = request.headers.get('x-tenant-id') || 'default_tenant';
+  const tenantId = request.headers.get('x-tenant-id');
   const { id } = params;
 
-  if (!tenantDatabases[tenantId] || !tenantDatabases[tenantId][id]) {
-    return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Tenant ID is missing' }, { status: 400 });
   }
-  return NextResponse.json(tenantDatabases[tenantId][id]);
+  if (!id) {
+    return NextResponse.json({ error: 'Product ID is missing' }, { status: 400 });
+  }
+
+  try {
+    const productRef = dbAdmin.collection('tenants').doc(tenantId).collection('products').doc(id);
+    const doc = await productRef.get();
+
+    if (!doc.exists) {
+      return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+    }
+    return NextResponse.json(doc.data() as Product);
+  } catch (error: any) {
+    console.error(`Error fetching product ${id} for tenant ${tenantId}:`, error);
+    return NextResponse.json({ error: 'Failed to fetch product', details: error.message }, { status: 500 });
+  }
 }
 
 // PUT /api/products/[id] - Update a product by ID
 export async function PUT(request: NextRequest, { params }: ProductParams) {
-  const tenantId = request.headers.get('x-tenant-id') || 'default_tenant';
+  const tenantId = request.headers.get('x-tenant-id');
   const { id } = params;
-  let productUpdateData: Partial<Omit<Product, 'id' | 'createdAt' | 'updatedAt'>>;
+
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Tenant ID is missing' }, { status: 400 });
+  }
+  if (!id) {
+    return NextResponse.json({ error: 'Product ID is missing' }, { status: 400 });
+  }
+
+  let productUpdateData: Partial<Omit<Product, 'id' | 'createdAt'>>; // Allow updatedAt to be part of payload
 
   try {
     productUpdateData = await request.json();
@@ -37,41 +55,60 @@ export async function PUT(request: NextRequest, { params }: ProductParams) {
     return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
   }
 
-  if (!tenantDatabases[tenantId] || !tenantDatabases[tenantId][id]) {
-    return NextResponse.json({ error: 'Product not found for update' }, { status: 404 });
+  try {
+    const productRef = dbAdmin.collection('tenants').doc(tenantId).collection('products').doc(id);
+    const doc = await productRef.get();
+
+    if (!doc.exists) {
+      return NextResponse.json({ error: 'Product not found for update' }, { status: 404 });
+    }
+
+    const updatePayload = {
+      ...productUpdateData,
+      updatedAt: new Date().toISOString(), // Always set/update the updatedAt timestamp
+    };
+
+    await productRef.update(updatePayload);
+    
+    // Fetch the updated document to return it
+    const updatedDoc = await productRef.get();
+    const updatedProduct = updatedDoc.data() as Product;
+
+    return NextResponse.json(updatedProduct);
+  } catch (error: any) {
+    console.error(`Error updating product ${id} for tenant ${tenantId}:`, error);
+    return NextResponse.json({ error: 'Failed to update product', details: error.message }, { status: 500 });
   }
-
-  const existingProduct = tenantDatabases[tenantId][id];
-  const updatedProduct: Product = {
-    ...existingProduct,
-    ...productUpdateData,
-    basicInfo: { ...existingProduct.basicInfo, ...productUpdateData.basicInfo },
-    attributesAndSpecs: { ...existingProduct.attributesAndSpecs, ...productUpdateData.attributesAndSpecs },
-    media: productUpdateData.media ? { ...existingProduct.media, ...productUpdateData.media } : existingProduct.media,
-    marketingSEO: { ...existingProduct.marketingSEO, ...productUpdateData.marketingSEO },
-    pricingAndStock: productUpdateData.pricingAndStock ? {
-      ...existingProduct.pricingAndStock,
-      ...productUpdateData.pricingAndStock,
-    } : existingProduct.pricingAndStock,
-    options: productUpdateData.options !== undefined ? [...productUpdateData.options] : existingProduct.options || [],
-    variants: productUpdateData.variants !== undefined ? [...productUpdateData.variants] : existingProduct.variants || [],
-    aiSummary: productUpdateData.aiSummary ? { ...existingProduct.aiSummary, ...productUpdateData.aiSummary } : existingProduct.aiSummary,
-    updatedAt: new Date().toISOString(),
-  };
-
-  tenantDatabases[tenantId][id] = updatedProduct;
-  return NextResponse.json(updatedProduct);
 }
 
 // DELETE /api/products/[id] - Delete a product by ID
 export async function DELETE(request: NextRequest, { params }: ProductParams) {
-  const tenantId = request.headers.get('x-tenant-id') || 'default_tenant';
+  const tenantId = request.headers.get('x-tenant-id');
   const { id } = params;
 
-  if (!tenantDatabases[tenantId] || !tenantDatabases[tenantId][id]) {
-    return NextResponse.json({ error: 'Product not found for deletion' }, { status: 404 });
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Tenant ID is missing' }, { status: 400 });
+  }
+  if (!id) {
+    return NextResponse.json({ error: 'Product ID is missing' }, { status: 400 });
   }
 
-  delete tenantDatabases[tenantId][id];
-  return NextResponse.json({ message: 'Product deleted successfully' }, { status: 200 });
+  try {
+    const productRef = dbAdmin.collection('tenants').doc(tenantId).collection('products').doc(id);
+    const doc = await productRef.get();
+
+    if (!doc.exists) {
+      // Product already doesn't exist, so from client's perspective, it's "deleted"
+      // Or return 404 if strict "must exist to be deleted" is required
+      // For idempotency, 200 or 204 is often fine.
+      // However, to match the previous error, let's return 404.
+      return NextResponse.json({ error: 'Product not found for deletion' }, { status: 404 });
+    }
+
+    await productRef.delete();
+    return NextResponse.json({ message: 'Product deleted successfully' }, { status: 200 });
+  } catch (error: any) {
+    console.error(`Error deleting product ${id} for tenant ${tenantId}:`, error);
+    return NextResponse.json({ error: 'Failed to delete product', details: error.message }, { status: 500 });
+  }
 }
