@@ -402,7 +402,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     }
   }
 
-  const onError = (errors: FieldErrors<ProductFormData>) => {
+ const onError = (errors: FieldErrors<ProductFormData>) => {
     console.group("Form Submission Error Details");
     // Log the errors object passed to the callback - this one can sometimes be incomplete.
     console.warn(
@@ -768,6 +768,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                 </div>
                             </Card>
                         ))}
+                         {form.formState.errors.options && typeof form.formState.errors.options.message === 'string' && <FormMessage>{form.formState.errors.options.message}</FormMessage>}
                         <Button
                             type="button"
                             variant="outline"
@@ -777,12 +778,12 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                             <ListPlus className="mr-2 h-4 w-4" /> Add Option
                         </Button>
                         {optionsFields.length >= 3 && <FormDescription>Maximum of 3 options reached.</FormDescription>}
-                        {form.formState.errors.options && typeof form.formState.errors.options.message === 'string' && <FormMessage>{form.formState.errors.options.message}</FormMessage>}
                     </div>
 
                     <Button type="button" onClick={generateVariants} className="mt-4" disabled={optionsFields.length === 0}>
                         <Sparkles className="mr-2 h-4 w-4" /> Generate Variants
                     </Button>
+                     {form.formState.errors.variants && typeof form.formState.errors.variants.message === 'string' && <FormMessage>{form.formState.errors.variants.message}</FormMessage>}
 
                     {variantsFields.length > 0 && (
                         <div className="mt-6 space-y-4">
@@ -838,7 +839,6 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                 </TableBody>
                             </Table>
                             </div>
-                             {form.formState.errors.variants && typeof form.formState.errors.variants.message === 'string' && <FormMessage>{form.formState.errors.variants.message}</FormMessage>}
                         </div>
                     )}
                   </ProductFormSection>
