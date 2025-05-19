@@ -25,8 +25,8 @@ export type PriceEntry = {
   id: string; // for react list keys
   currency: string;
   amount: number;
-  validFrom?: string;
-  validTo?: string;
+  validFrom?: string | null; // Changed to allow null
+  validTo?: string | null;   // Changed to allow null
 };
 
 export type CampaignEntry = {
@@ -63,23 +63,23 @@ export interface Product {
   basicInfo: {
     name: MultilingualString;
     sku: string; // Stock Keeping Unit - for products without variants or as a base SKU
-    gtin?: string; // GTIN/EAN/UPC - for products without variants
-    internalId?: string; // PIM-specific ID, could be same as id
+    gtin?: string | null; // Allow null
+    internalId?: string | null; // PIM-specific ID, could be same as id
     descriptionShort: MultilingualString;
     descriptionLong: MultilingualString;
     brand: string;
     status: ProductStatus;
-    launchDate?: string; // ISO date string
-    endDate?: string; // ISO date string for discontinuation
+    launchDate?: string | null; // ISO date string
+    endDate?: string | null; // ISO date string for discontinuation
   };
 
   attributesAndSpecs: {
     categories: string[];
     properties: KeyValueEntry[]; 
     technicalSpecs: KeyValueEntry[];
-    maintenanceInstructions?: MultilingualString;
-    warrantyInfo?: MultilingualString;
-    countryOfOrigin?: string;
+    maintenanceInstructions?: MultilingualString | null;
+    warrantyInfo?: MultilingualString | null;
+    countryOfOrigin?: string | null;
   };
 
   media: {
@@ -94,30 +94,30 @@ export interface Product {
     seoTitle: MultilingualString;
     seoDescription: MultilingualString;
     keywords: string[];
-    marketingTexts?: Array<{ id: string; channel: string; text: MultilingualString }>;
-    campaignCodes?: CampaignEntry[];
+    marketingTexts?: Array<{ id: string; channel: string; text: MultilingualString }> | null;
+    campaignCodes?: CampaignEntry[] | null;
   };
 
-  pricingAndStock?: { // For products without variants or as base pricing
+  pricingAndStock?: { 
     standardPrice: PriceEntry[];
-    salePrice?: PriceEntry[];
-    costPrice?: PriceEntry[];
+    salePrice?: PriceEntry[] | null;
+    costPrice?: PriceEntry[] | null;
   };
 
-  options: ProductOption[]; // Defines the types of options available (e.g., Color, Size)
-  variants: ProductVariant[]; // Actual product variants based on options
+  options: ProductOption[]; 
+  variants: ProductVariant[]; 
 
   relations?: {
-    relatedProducts?: string[];
-    accessories?: string[];
-    replacementProducts?: string[];
+    relatedProducts?: string[] | null;
+    accessories?: string[] | null;
+    replacementProducts?: string[] | null;
   };
 
   localizationNorway?: {
-    norwegianRegulations?: string;
+    norwegianRegulations?: string | null;
   };
 
-  aiSummary?: MultilingualString;
+  aiSummary?: MultilingualString | null;
 
   createdAt: string;
   updatedAt: string;
@@ -129,25 +129,36 @@ export const initialProductData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>
   basicInfo: {
     name: { ...defaultMultilingualString },
     sku: '',
-    gtin: '',
+    gtin: null,
+    internalId: null,
     descriptionShort: { ...defaultMultilingualString },
     descriptionLong: { ...defaultMultilingualString },
     brand: '',
     status: 'development',
+    launchDate: null,
+    endDate: null,
   },
   attributesAndSpecs: {
     categories: [],
     properties: [],
     technicalSpecs: [],
-    countryOfOrigin: '',
+    maintenanceInstructions: null,
+    warrantyInfo: null,
+    countryOfOrigin: null,
   },
   media: {
     images: [],
+    videos: [],
+    models3d: [],
+    manuals: [],
+    certificates: [],
   },
   marketingSEO: {
     seoTitle: { ...defaultMultilingualString },
     seoDescription: { ...defaultMultilingualString },
     keywords: [],
+    marketingTexts: null,
+    campaignCodes: null,
   },
   pricingAndStock: {
     standardPrice: [],
@@ -156,5 +167,13 @@ export const initialProductData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>
   },
   options: [],
   variants: [],
+  relations: {
+    relatedProducts: null,
+    accessories: null,
+    replacementProducts: null,
+  },
+  localizationNorway: {
+    norwegianRegulations: null,
+  },
   aiSummary: { ...defaultMultilingualString },
 };
