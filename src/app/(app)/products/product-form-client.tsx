@@ -58,7 +58,7 @@ const requiredMultilingualStringSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "At least one language (English or Norwegian) is required.",
-      path: ['en'],
+      path: ['en'], // Or ['no'], or a more general path if preferred
     });
   }
 });
@@ -78,15 +78,16 @@ const keyValueEntrySchema = z.object({
 const mediaEntrySchema = z.object({
   id: z.string(),
   url: z.string().refine(val => {
-    if (val === '' || val === undefined) return true;
+    if (val === '' || val === undefined) return true; // Allow empty string for removal/optional
     try {
       const url = new URL(val);
       return url.protocol === "http:" || url.protocol === "https:";
     } catch (_) {
-      return val.startsWith('/');
+      // Allow relative paths starting with '/' for local assets, or handle placeholder logic
+      return val.startsWith('/') || val.startsWith('https://placehold.co');
     }
   }, {
-    message: "Must be a valid HTTP/HTTPS URL or a relative path starting with '/'. Leave empty to remove image.",
+    message: "Must be a valid HTTP/HTTPS URL, a relative path starting with '/', or a placehold.co URL. Leave empty to remove image.",
   }).optional(),
   altText: baseMultilingualStringSchema.optional(),
   type: z.enum(['image', 'video', '3d_model', 'manual', 'certificate']),
@@ -142,8 +143,8 @@ const productFormSchema = z.object({
     images: z.array(mediaEntrySchema).optional(),
   }),
   marketingSEO: z.object({
-    seoTitle: baseMultilingualStringSchema,
-    seoDescription: baseMultilingualStringSchema,
+    seoTitle: baseMultilingualStringSchema.optional(),
+    seoDescription: baseMultilingualStringSchema.optional(),
     keywords: z.array(z.string()).optional(),
   }),
   pricingAndStock: z.object({
@@ -305,8 +306,13 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
           ...data.basicInfo,
           launchDate: data.basicInfo.launchDate ? data.basicInfo.launchDate.toISOString() : null,
           endDate: data.basicInfo.endDate ? data.basicInfo.endDate.toISOString() : null,
+          internalId: existingProduct?.basicInfo.internalId || null, // Preserve existing internalId
         },
-        attributesAndSpecs: data.attributesAndSpecs,
+        attributesAndSpecs: {
+          ...data.attributesAndSpecs,
+          maintenanceInstructions: existingProduct?.attributesAndSpecs.maintenanceInstructions || null,
+          warrantyInfo: existingProduct?.attributesAndSpecs.warrantyInfo || null,
+        },
         media: {
           images: (data.media.images || []).filter(img => {
             if (!img.url || img.url.trim() === '') return false;
@@ -314,11 +320,19 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                 const url = new URL(img.url);
                 return url.protocol === "http:" || url.protocol === "https:";
               } catch (_) {
-                return img.url.startsWith('/');
+                return img.url.startsWith('/') || img.url.startsWith('https://placehold.co');
               }
-          })
+          }),
+          videos: existingProduct?.media.videos || [],
+          models3d: existingProduct?.media.models3d || [],
+          manuals: existingProduct?.media.manuals || [],
+          certificates: existingProduct?.media.certificates || [],
         },
-        marketingSEO: data.marketingSEO,
+        marketingSEO: {
+            ...data.marketingSEO,
+            marketingTexts: existingProduct?.marketingSEO.marketingTexts || null,
+            campaignCodes: existingProduct?.marketingSEO.campaignCodes || null,
+        },
         aiSummary: data.aiSummary || defaultMultilingualString,
         pricingAndStock: {
             standardPrice: [],
@@ -328,7 +342,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         options: (data.options || []).map(opt => ({
             id: opt.id,
             name: opt.name,
-            values: opt.values,
+            values: opt.values, // Already an array from Zod transform
         })),
         variants: (data.variants || []).map(vFormData => {
           const stdPriceEntries: PriceEntry[] = (vFormData.standardPriceAmount !== undefined && vFormData.standardPriceAmount !== null)
@@ -344,11 +358,14 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
             optionValues: vFormData.optionValues,
             standardPrice: stdPriceEntries,
             salePrice: slPriceEntries,
-            costPrice: [], // Assuming no cost price at variant level in form for now
+            costPrice: [],
+            imageIds: [], // Default to empty, can be enhanced later
           };
           if (vFormData.gtin) variantForPayload.gtin = vFormData.gtin;
           return variantForPayload;
         }),
+        relations: existingProduct?.relations || initialProductData.relations,
+        localizationNorway: existingProduct?.localizationNorway || initialProductData.localizationNorway,
       };
 
       if (data.pricingAndStock) {
@@ -380,16 +397,14 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
 
 
       if (existingProduct) {
-        const {id, createdAt, ...updatePayload} = productPayloadForSave;
-        const updatedProd = await storeUpdateProduct(existingProduct.id, updatePayload);
+        const updatedProd = await storeUpdateProduct(existingProduct.id, productPayloadForSave);
         if (updatedProd) {
             toast({ title: "Product Updated", description: `"${updatedProd.basicInfo.name.en || updatedProd.basicInfo.name.no || updatedProd.basicInfo.sku}" has been successfully updated.` });
         } else {
             toast({ title: "Product Update Failed", description: `Failed to update "${data.basicInfo.name.en || data.basicInfo.name.no || data.basicInfo.sku}".`, variant: "destructive" });
         }
       } else {
-        const { id, createdAt, updatedAt, aiSummary: _aiSummaryFromPayload, ...productDataForStore } = productPayloadForSave;
-        const newProd = await addProduct(productDataForStore, productPayloadForSave.aiSummary);
+        const newProd = await addProduct(productPayloadForSave);
         if (newProd) {
            toast({ title: "Product Created", description: `"${newProd.basicInfo.name.en || newProd.basicInfo.name.no || newProd.basicInfo.sku}" has been successfully created.` });
         } else {
@@ -412,37 +427,35 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       "`errors` argument passed to onError callback (may be incomplete for complex validations):",
       errors
     );
-
     // Log form.formState.errors directly for comparison - THIS IS THE SOURCE OF TRUTH.
     const actualErrors = form.formState.errors;
+
     if (Object.keys(actualErrors).length === 0) {
-        console.warn( // Changed to console.warn
-          "Diagnostic: `onError` was called, but `form.formState.errors` (the source of truth) is also empty. " +
-          "This often indicates a Zod schema-level validation (e.g., array.max()) that isn't mapping to a specific field error, " +
+        // This case is unusual: onError called, but form.formState.errors is also empty.
+        console.warn(
+          "Diagnostic: `form.formState.errors` (Source of Truth) is EMPTY when onError was called. " +
+          "This indicates a Zod schema-level validation (e.g., array.max()) that isn't mapping to a specific field, " +
           "or a resolver issue. Review schema for potential unmapped errors.",
-          actualErrors
+          actualErrors // Will log {}
         );
-    } else {
-        console.error(
-          "Validation Failure - Source of Truth (`form.formState.errors`):",
-          actualErrors
-        );
-    }
-
-
-    const hasActualValidationErrors = actualErrors && Object.keys(actualErrors).length > 0;
-
-    if (hasActualValidationErrors) {
-        toast({
-            title: "Validation Error",
-            description: "Please check the form for errors. Specific messages should be visible next to invalid fields. For a full summary, see the 'Validation Failure - Source of Truth' log in your browser console.",
-            variant: "destructive",
-        });
-    } else {
-        // This case is for when actualErrors is empty (after the above console.warn)
         toast({
             title: "Submission Issue",
             description: "The form could not be submitted due to an unexpected issue. Please review your entries or try again. See browser console for diagnostic details.",
+            variant: "destructive",
+        });
+    } else {
+        // actualErrors is NOT empty.
+        console.error(
+          "Validation Failure - Source of Truth (`form.formState.errors`) - Raw Object:",
+          actualErrors
+        );
+        console.error(
+          "Validation Failure - Source of Truth (`form.formState.errors`) - JSON Stringified:",
+          JSON.stringify(actualErrors, null, 2)
+        );
+        toast({
+            title: "Validation Error",
+            description: "Please check the form for errors. Specific messages should be visible next to invalid fields. For a full summary, see the 'Validation Failure - Source of Truth' log in your browser console.",
             variant: "destructive",
         });
     }
@@ -516,9 +529,11 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         return;
     }
 
+    // The Zod schema already transforms opt.values into an array of strings.
+    // So, parsedOptions will use opt.values directly if the transform is correct.
     const parsedOptions = validOptions.map(opt => ({
         name: opt.name.trim(),
-        values: opt.values.split(',').map(v => v.trim()).filter(v => v),
+        values: Array.isArray(opt.values) ? opt.values : opt.values.split(',').map(v => v.trim()).filter(v => v),
     }));
 
 
@@ -1125,12 +1140,12 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                 <h3 className="text-lg font-semibold text-foreground">Image Preview</h3>
                 {watchedImages && watchedImages.length > 0 && watchedImages.some(img => {
                   if (img.type !== 'image' || !img.url || img.url.trim() === '') return false;
-                  try { new URL(img.url); return true; } catch (_) { return img.url.startsWith('/'); }
+                  try { new URL(img.url); return true; } catch (_) { return img.url.startsWith('/') || img.url.startsWith('https://placehold.co'); }
                 }) ? (
                   <div className="space-y-3 max-h-[calc(100vh-10rem)] overflow-y-auto p-2 rounded-md border bg-muted/10">
                     {watchedImages.filter(img => {
                         if (img.type !== 'image' || !img.url || img.url.trim() === '') return false;
-                        try { new URL(img.url); return true; } catch (_) { return img.url.startsWith('/'); }
+                        try { new URL(img.url); return true; } catch (_) { return img.url.startsWith('/') || img.url.startsWith('https://placehold.co');}
                     }).map((image, index) => (
                       <div key={image.id || index} className="border p-3 rounded-lg shadow-sm bg-card">
                         <div className="relative aspect-video w-full rounded-md overflow-hidden border mb-2">
