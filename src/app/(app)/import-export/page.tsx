@@ -88,27 +88,41 @@ export default function ImportExportPage() {
 
     try {
       const fileContent = await file.text();
-      const importedData = JSON.parse(fileContent);
+      const importedData = JSON.parse(fileContent) as Product[];
 
-      if (!Array.isArray(importedData) || !importedData.every(item => typeof item === 'object' && (item.id || (item.basicInfo && item.basicInfo.sku)))) {
-        throw new Error("Invalid JSON format. Expected an array of products.");
+      if (!Array.isArray(importedData) || !importedData.every(item => typeof item === 'object' && item.id && item.basicInfo && item.basicInfo.sku)) {
+        throw new Error("Invalid JSON format. Expected an array of products with id and basicInfo.sku.");
       }
-
-      // Instead of storeImportProducts, we'll now call the API for each product
-      // This is less efficient but aligns with a backend-first approach
-      // A batch import API endpoint would be better for performance.
+      
+      // Instead of direct store manipulation, call API for each product (or a batch API if available)
       let successCount = 0;
-      for (const product of importedData as Product[]) {
-        // Assuming addProduct API exists and is similar to store.addProduct
-        // This part is hypothetical as `storeImportProducts` was client-side.
-        // For a real backend, you'd POST to an `/api/products/batch` or similar.
-        // For now, we'll simulate by just setting products in the store.
-        // This is a deviation if the intent was to truly save via API.
-        // Let's assume storeImportProducts now represents a client-side merge for this demo.
+      let errorCount = 0;
+      for (const product of importedData) {
+        try {
+          // Attempt to save each product via API - this will either create or update (if using SKU as ID)
+          const response = await fetch(`/api/products`, { // Assuming POST to /api/products handles create/update by SKU
+            method: 'POST', // Or PUT to /api/products/${product.id} if ID is not SKU
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(product),
+          });
+          if (!response.ok) {
+            errorCount++;
+            console.warn(`Failed to import product ${product.basicInfo.sku} via API: ${response.statusText}`);
+          } else {
+            successCount++;
+          }
+        } catch (apiError) {
+          errorCount++;
+          console.error(`Error importing product ${product.basicInfo.sku} via API:`, apiError);
+        }
       }
-      storeImportProducts(importedData as Product[]); // This method in store should merge/update
-      toast({ title: 'JSON Import Successful', description: `${importedData.length} products imported/updated locally.` });
+      await fetchPimProducts(); // Re-fetch all products from PIM to reflect changes
 
+      if (errorCount > 0) {
+        toast({ title: 'JSON Import Partially Successful', description: `${successCount} products imported/updated. ${errorCount} products failed.`, variant: successCount > 0 ? 'default' : 'destructive' });
+      } else {
+        toast({ title: 'JSON Import Successful', description: `${successCount} products imported/updated.` });
+      }
 
     } catch (err: any) {
       console.error('JSON Import error:', err);
@@ -125,9 +139,9 @@ export default function ImportExportPage() {
   const handleSaveShopifyConfig = async () => {
     try {
       await saveShopifyConfig({ storeUrl: inputStoreUrl, apiKey: inputApiKey });
-      setLocalShopifyStoreUrl(inputStoreUrl);
+      setLocalShopifyStoreUrl(inputStoreUrl); // these are optimistic updates to local state
       setLocalShopifyApiKey(inputApiKey);
-      setNextPageCursor(null);
+      setNextPageCursor(null); // Reset pagination on config change
       toast({ title: 'Shopify Configuration Saved', description: 'Your Shopify settings have been saved.' });
     } catch (error) {
       toast({ title: 'Save Failed', description: 'Could not save Shopify configuration.', variant: 'destructive' });
@@ -150,25 +164,36 @@ export default function ImportExportPage() {
 
       if (!response.ok) {
         let errorBody = `API request failed: ${response.status} ${response.statusText}`;
-        const responseText = await response.text(); // Read as text first
+        const responseText = await response.text();
         try {
-          const errorData = JSON.parse(responseText); // Try to parse as JSON
+          const errorData = JSON.parse(responseText);
           errorBody = errorData.error || errorData.message || JSON.stringify(errorData);
         } catch (e) {
-          errorBody = responseText || errorBody; // Fallback to text if not JSON
+          errorBody = responseText || errorBody;
         }
         throw new Error(errorBody);
       }
-
+      
       const data = await response.json();
-      // The API now handles saving products to Firestore.
-      // We should re-fetch products from our PIM's API to reflect changes.
-      await fetchPimProducts();
+      console.log('Data from /api/shopify/import:', data); // Log the full response
+
+      await fetchPimProducts(); // Re-fetch products from PIM to reflect changes
       setNextPageCursor(data.nextPageCursor || null);
-      toast({ title: 'Shopify Import Successful', description: data.message });
+      toast({ title: 'Shopify Import Status', description: data.message });
+
+      if (data.errors && data.errors.length > 0) {
+        console.error('Shopify import encountered errors saving some products:', data.errors);
+        toast({
+          title: 'Shopify Import Incomplete',
+          description: `Some products could not be saved. Check console for details. ${data.message}`,
+          variant: 'destructive',
+          duration: 10000,
+        });
+      }
+
     } catch (error: any) {
       console.error('Shopify Import Error:', error);
-      setNextPageCursor(null);
+      setNextPageCursor(null); // Reset pagination on error
       toast({ title: 'Shopify Import Failed', description: error.message || 'An error occurred.', variant: 'destructive' });
     } finally {
       setIsImportingFromShopify(false);
@@ -195,18 +220,27 @@ export default function ImportExportPage() {
 
       if (!response.ok) {
         let errorBody = `API request failed: ${response.status} ${response.statusText}`;
-        const responseText = await response.text(); // Read as text first
+        const responseText = await response.text();
         try {
-          const errorData = JSON.parse(responseText); // Try to parse as JSON
+          const errorData = JSON.parse(responseText);
           errorBody = errorData.error || errorData.message || JSON.stringify(errorData);
         } catch (e) {
-          errorBody = responseText || errorBody; // Fallback to text if not JSON
+          errorBody = responseText || errorBody;
         }
         throw new Error(errorBody);
       }
 
       const data = await response.json();
       toast({ title: 'Shopify Export Successful', description: data.message });
+       if (data.errors && data.errors.length > 0) {
+        console.error('Shopify export encountered errors for some products:', data.errors);
+        toast({
+          title: 'Shopify Export Incomplete',
+          description: `Some products could not be exported. Check console for details. ${data.message}`,
+          variant: 'destructive',
+          duration: 10000,
+        });
+      }
     } catch (error: any) {
       console.error('Shopify Export Error:', error);
       toast({ title: 'Shopify Export Failed', description: error.message || 'An error occurred.', variant: 'destructive' });
@@ -227,7 +261,7 @@ export default function ImportExportPage() {
               <UploadCloud className="h-6 w-6 text-primary" /> Import Products (JSON)
             </CardTitle>
             <CardDescription>
-              Import products from a JSON file. This will merge with existing product data based on SKU.
+              Import products from a JSON file. This will attempt to create or update products in the PIM based on SKU.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -251,7 +285,7 @@ export default function ImportExportPage() {
               </Alert>
             )}
             <p className="text-xs text-muted-foreground">
-              Ensure your JSON file is an array of product objects matching the system's data structure.
+              Ensure your JSON file is an array of product objects matching the PIM's data structure. Products will be created/updated via API.
             </p>
           </CardContent>
         </Card>
@@ -262,7 +296,7 @@ export default function ImportExportPage() {
               <DownloadCloud className="h-6 w-6 text-primary" /> Export Products (JSON)
             </CardTitle>
             <CardDescription>
-              Export all current product data to a JSON file.
+              Export all current product data from the PIM to a JSON file.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -285,8 +319,7 @@ export default function ImportExportPage() {
             <ShoppingCart className="h-6 w-6 text-primary" /> Shopify Sync
           </CardTitle>
           <CardDescription>
-            Connect to your Shopify store to import or export products. Your Store URL and Admin API Access Token are required.
-            These settings are specific to your current tenant and are saved securely to the database.
+            Connect to your Shopify store to import or export products. Your Store URL and Admin API Access Token are required and saved per-tenant to the database.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -335,7 +368,7 @@ export default function ImportExportPage() {
                   className="mt-1"
                 />
                  <p className="text-xs text-muted-foreground mt-1">
-                  Your Admin API Access Token is used to authenticate with Shopify.
+                  Your Admin API Access Token is used to authenticate with Shopify. Stored securely per tenant.
                 </p>
               </div>
               <Button onClick={handleSaveShopifyConfig} disabled={isShopifyConfigLoading}>
@@ -380,3 +413,4 @@ export default function ImportExportPage() {
     </div>
   );
 }
+
