@@ -1,4 +1,3 @@
-
 // src/app/(app)/products/product-form-client.tsx
 "use client";
 
@@ -224,18 +223,16 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         name: opt.name,
         values: opt.values.join(','),
       })),
-      variants: (existingProduct.variants || []).map(v => {
-        return {
-            id: v.id,
-            sku: v.sku,
-            gtin: v.gtin || '',
-            optionValues: v.optionValues,
-            standardPriceAmount: v.standardPrice?.[0]?.amount,
-            standardPriceCurrency: v.standardPrice?.[0]?.currency || "NOK",
-            salePriceAmount: v.salePrice?.[0]?.amount,
-            salePriceCurrency: v.salePrice?.[0]?.currency || "NOK",
-        };
-      }),
+       variants: (existingProduct.variants || []).map(v => ({
+        id: v.id,
+        sku: v.sku,
+        gtin: v.gtin || '',
+        optionValues: v.optionValues,
+        standardPriceAmount: v.standardPrice?.[0]?.amount,
+        standardPriceCurrency: v.standardPrice?.[0]?.currency || "NOK",
+        salePriceAmount: v.salePrice?.[0]?.amount,
+        salePriceCurrency: v.salePrice?.[0]?.currency || "NOK",
+      })),
       aiSummary: existingProduct.aiSummary || { ...defaultMultilingualString },
     } : {
     basicInfo: {
@@ -406,7 +403,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       } else {
         const { id, createdAt, updatedAt, aiSummary: _aiSummaryFromPayload, ...productDataForStore } = productPayloadForSave;
         const newProd = await addProduct(productDataForStore, productPayloadForSave.aiSummary);
-        if (newProd) {
+         if (newProd) {
             toast({ title: "Product Created", description: `"${newProd.basicInfo.name.en || newProd.basicInfo.name.no || newProd.basicInfo.sku}" has been successfully created.` });
         } else {
             toast({ title: "Product Creation Failed", description: `Failed to create "${data.basicInfo.name.en || data.basicInfo.name.no || data.basicInfo.sku}".`, variant: "destructive" });
@@ -430,26 +427,27 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     );
     
     const actualErrors = form.formState.errors;
-    const numActualErrorKeys = Object.keys(actualErrors).length;
-    console.log("Number of keys in `form.formState.errors`:", numActualErrorKeys);
+    console.log("Number of keys in `form.formState.errors` (Source of Truth):", Object.keys(actualErrors).length);
 
-    if (numActualErrorKeys === 0) {
-        console.warn( 
-          "Diagnostic: `form.formState.errors` (Source of Truth) is EMPTY when `onError` was called. " +
-          "This indicates a Zod schema-level validation (e.g., array.max()) that isn't mapping to a specific field, " +
+    if (Object.keys(actualErrors).length === 0) {
+        // This case is unusual: onError called, but form.formState.errors is also empty.
+        console.warn(
+          "Diagnostic: `onError` was called, but `form.formState.errors` (the source of truth) is also empty. " +
+          "This might indicate a Zod schema-level validation (e.g., array.max()) that isn't mapping to a specific field, " +
           "or a resolver issue. Review Zod schema for potential unmapped errors.",
-          actualErrors 
+          actualErrors // Log the empty object for completeness
         );
         toast({
             title: "Submission Issue",
-            description: "The form could not be submitted due to an unexpected issue. Please review your entries or try again. See browser console for diagnostic details.",
+            description: "The form could not be submitted due to an unexpected issue. " +
+                         "Please review your entries or try again. See browser console for diagnostic details.",
             variant: "destructive",
         });
     } else {
         // actualErrors is NOT empty according to Object.keys().length.
         console.log("`form.formState.errors` (Source of Truth) has keys, indicating errors exist.");
         console.error(
-          "Validation Failure - Source of Truth (`form.formState.errors`) - Raw Object (If this appears as '{}' in console, check the JSON stringified version below for reliable details):",
+          "Validation Failure - Source of Truth (`form.formState.errors`) - Raw Object. IMPORTANT: If this appears as '{}' in console, it might be a console preview limitation. ALWAYS check the JSON stringified version logged immediately below for the full error details.",
           actualErrors
         );
         console.error(
@@ -962,7 +960,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                     placeholder="e.g., 999.99"
                                     {...field}
                                     value={field.value ?? ''}
-                                    onChange={e => field.onChange(String(e.target.value).trim() === '' || e.target.value === null ? undefined : parseFloat(e.target.value))}
+                                    onChange={e => field.onChange(String(e.target.value).trim() === '' || e.target.value === null || isNaN(parseFloat(e.target.value)) ? undefined : parseFloat(e.target.value))}
                                 /></FormControl>
                                 <FormMessage />
                                 </FormItem>
@@ -990,7 +988,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                     placeholder="e.g., 799.99"
                                     {...field}
                                     value={field.value ?? ''}
-                                    onChange={e => field.onChange(String(e.target.value).trim() === '' || e.target.value === null ? undefined : parseFloat(e.target.value))}
+                                    onChange={e => field.onChange(String(e.target.value).trim() === '' || e.target.value === null || isNaN(parseFloat(e.target.value)) ? undefined : parseFloat(e.target.value))}
                                 /></FormControl>
                                 <FormDescription>Optional. If set, this is the active selling price.</FormDescription>
                                 <FormMessage />
@@ -1019,7 +1017,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                     placeholder="e.g., 499.99"
                                     {...field}
                                     value={field.value ?? ''}
-                                    onChange={e => field.onChange(String(e.target.value).trim() === '' || e.target.value === null ? undefined : parseFloat(e.target.value))}
+                                    onChange={e => field.onChange(String(e.target.value).trim() === '' || e.target.value === null || isNaN(parseFloat(e.target.value)) ? undefined : parseFloat(e.target.value))}
                                 /></FormControl>
                                 <FormDescription>Optional. Internal cost price.</FormDescription>
                                 <FormMessage />
@@ -1195,4 +1193,3 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     </Card>
   );
 }
-
