@@ -1,3 +1,4 @@
+
 'use client';
 
 import { AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -23,10 +24,11 @@ export function ProductFormSection({ title, description, icon: Icon, children, v
       </AccordionTrigger>
       <AccordionContent className="px-6 py-4 border-t border-border">
         {description && <p className="text-sm text-muted-foreground mb-4">{description}</p>}
-        <div className="space-y-6">
+        <div className="space-y-6" suppressHydrationWarning={true}>
           {children}
         </div>
       </AccordionContent>
     </AccordionItem>
   );
 }
+
