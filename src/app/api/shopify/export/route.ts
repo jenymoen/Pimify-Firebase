@@ -1,7 +1,7 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 import type { Product, ProductStatus as PimStatus, MediaEntry, PriceEntry, ProductOption as PimProductOption, ProductVariant as PimProductVariant } from '@/types/product';
-import { dbAdmin } from '../../../lib/firebase-admin'; // Import dbAdmin
+import { dbAdmin } from '@/lib/firebase-admin'; // Import dbAdmin
 
 const SHOPIFY_CONFIG_DOC_ID = 'configuration'; // Consistent with config route
 
@@ -68,7 +68,7 @@ function mapPimStatusToShopify(pimStatus: PimStatus): ShopifyProductPayload['sta
     case 'development':
       return 'draft';
     case 'inactive':
-      return 'draft';
+      return 'draft'; // Or 'archived' depending on desired behavior
     case 'discontinued':
       return 'archived';
     default:
@@ -95,17 +95,18 @@ function mapPimToShopifyProduct(product: Product): { product: ShopifyProductPayl
       }));
   }
 
+  // Handle options and variants
   if (product.options && product.options.length > 0 && product.variants && product.variants.length > 0) {
     shopifyPayload.options = product.options.map(opt => ({
       name: opt.name,
-      values: opt.values,
+      values: opt.values, // Assuming opt.values is already string[]
     }));
 
     shopifyPayload.variants = product.variants.map(v => {
       const variantPayload: ShopifyProductVariantPayload = {
         sku: v.sku,
         barcode: v.gtin || undefined,
-        price: "0.00",
+        price: "0.00", // Default, will be overridden
       };
 
       const stdPriceEntry = v.standardPrice?.[0];
@@ -117,6 +118,7 @@ function mapPimToShopifyProduct(product: Product): { product: ShopifyProductPayl
       } else if (stdPriceEntry) {
         variantPayload.price = stdPriceEntry.amount.toString();
       } else {
+        // Fallback to main product pricing if variant pricing is missing
         const mainStdPrice = product.pricingAndStock?.standardPrice?.[0];
         const mainSalePrice = product.pricingAndStock?.salePrice?.[0];
         if (mainSalePrice && mainStdPrice && mainSalePrice.amount < mainStdPrice.amount) {
@@ -127,14 +129,16 @@ function mapPimToShopifyProduct(product: Product): { product: ShopifyProductPayl
         }
       }
 
+      // Map option values to option1, option2, option3
       product.options?.forEach((opt, index) => {
-        if (index < 3) {
+        if (index < 3) { // Shopify supports max 3 options
           (variantPayload as any)[`option${index + 1}`] = v.optionValues[opt.name] || null;
         }
       });
       return variantPayload;
     });
   } else {
+    // No PIM variants, create a single default variant for Shopify
     const standardPriceEntry = product.pricingAndStock?.standardPrice?.[0];
     const salePriceEntry = product.pricingAndStock?.salePrice?.[0];
     let shopifyPrice: string = "0.00";
@@ -212,12 +216,13 @@ export async function POST(request: NextRequest) {
               errorDetail = await shopifyResponse.text();
           }
       } catch (e) {
+          // Fallback if reading/parsing the error response fails
           errorDetail = await shopifyResponse.text().catch(() => `Failed to retrieve error details, status: ${shopifyResponse.status}`);
       }
       const errorMessage = `Failed to export product "${product.basicInfo.name.en || product.basicInfo.sku}": ${errorDetail}`;
-      console.error(errorMessage.substring(0,1000));
+      console.error(errorMessage.substring(0,1000)); // Log a truncated version to avoid flooding logs
       errors.push(errorMessage);
-      continue;
+      continue; // Move to the next product
     }
 
     exportedCount++;
@@ -225,12 +230,15 @@ export async function POST(request: NextRequest) {
 
   if (errors.length > 0) {
     const fullMessage = `${exportedCount} products exported. ${errors.length} products failed.`;
-    const status = exportedCount === 0 && errors.length === productsToExport.length ? 500 : 207;
+    // Use 207 Multi-Status if some succeeded and some failed
+    // Use 500 if all failed due to backend/Shopify issues
+    const status = exportedCount === 0 && errors.length === productsToExport.length ? 500 : 207; 
     return NextResponse.json({
       message: fullMessage,
-      errors,
+      errors, // Send back the list of errors
     }, { status });
   }
 
   return NextResponse.json({ message: `${exportedCount} products exported successfully to Shopify.` });
 }
+
