@@ -1,23 +1,34 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 import type { Product, ProductStatus as PimStatus, MediaEntry, PriceEntry, ProductOption as PimProductOption, ProductVariant as PimProductVariant } from '@/types/product';
+import { dbAdmin } from '../../../lib/firebase-admin'; // Import dbAdmin
 
-// Placeholder for Shopify Config API
+const SHOPIFY_CONFIG_DOC_ID = 'configuration'; // Consistent with config route
+
+// Updated function to fetch Shopify config directly from Firestore
 async function getShopifyConfigForTenant(tenantId: string): Promise<{ storeUrl: string; apiKey: string } | null> {
-  // SIMULATION: This should fetch from your tenant-specific Shopify config storage (e.g., Firestore)
-  // This is a HACK. In a real app, API routes should not call other API routes directly like this.
-  try {
-    const configResponse = await fetch(new URL('/api/shopify/config', process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'), {
-      method: 'GET',
-      headers: { 'x-tenant-id': tenantId },
-    });
-    if (configResponse.ok) {
-      return await configResponse.json();
-    }
-  } catch (e) {
-     console.error("Error fetching shopify config within export route:", e);
+  if (!tenantId) {
+    console.error('getShopifyConfigForTenant called without tenantId in export route');
+    return null;
   }
-  return null;
+  try {
+    const configRef = dbAdmin.collection('tenants').doc(tenantId).collection('shopifyConfigs').doc(SHOPIFY_CONFIG_DOC_ID);
+    const doc = await configRef.get();
+
+    if (!doc.exists) {
+      console.log(`Shopify config not found in Firestore for tenant ${tenantId} in export route.`);
+      return null; // Config not found
+    }
+    const configData = doc.data() as { storeUrl: string; apiKey: string };
+     if (!configData.storeUrl || !configData.apiKey) {
+        console.log(`Shopify config incomplete in Firestore for tenant ${tenantId} in export route.`);
+        return null; // Config incomplete
+    }
+    return configData;
+  } catch (error: any) {
+    console.error(`Error fetching Shopify config from Firestore for tenant ${tenantId} in export route:`, error);
+    return null;
+  }
 }
 
 interface ShopifyOptionPayload {
@@ -26,14 +37,14 @@ interface ShopifyOptionPayload {
 }
 interface ShopifyProductVariantPayload {
   sku?: string;
-  price: string; 
-  compare_at_price?: string | null; 
+  price: string;
+  compare_at_price?: string | null;
   barcode?: string; // GTIN
   option1?: string | null;
   option2?: string | null;
   option3?: string | null;
-  // inventory_quantity?: number; 
-  // image_id?: number; 
+  // inventory_quantity?: number;
+  // image_id?: number;
 }
 interface ShopifyProductPayload {
   title: string;
@@ -41,7 +52,7 @@ interface ShopifyProductPayload {
   vendor?: string;
   product_type?: string;
   status?: 'active' | 'draft' | 'archived';
-  tags?: string; 
+  tags?: string;
   options?: ShopifyOptionPayload[];
   variants?: ShopifyProductVariantPayload[];
   images?: Array<{
@@ -57,7 +68,7 @@ function mapPimStatusToShopify(pimStatus: PimStatus): ShopifyProductPayload['sta
     case 'development':
       return 'draft';
     case 'inactive':
-      return 'draft'; 
+      return 'draft';
     case 'discontinued':
       return 'archived';
     default:
@@ -67,19 +78,19 @@ function mapPimStatusToShopify(pimStatus: PimStatus): ShopifyProductPayload['sta
 
 function mapPimToShopifyProduct(product: Product): { product: ShopifyProductPayload } {
   const shopifyPayload: ShopifyProductPayload = {
-    title: product.basicInfo.name.en || product.basicInfo.name.no || 'Untitled Product', 
+    title: product.basicInfo.name.en || product.basicInfo.name.no || 'Untitled Product',
     body_html: product.basicInfo.descriptionLong.en || product.basicInfo.descriptionLong.no,
     vendor: product.basicInfo.brand,
-    product_type: product.attributesAndSpecs.categories?.[0] || undefined, 
+    product_type: product.attributesAndSpecs.categories?.[0] || undefined,
     status: mapPimStatusToShopify(product.basicInfo.status),
     tags: product.marketingSEO.keywords?.join(', ') || undefined,
   };
 
   if (product.media.images && product.media.images.length > 0) {
     shopifyPayload.images = product.media.images
-      .filter(img => img.type === 'image' && img.url && (img.url.startsWith('http') || img.url.startsWith('/'))) 
+      .filter(img => img.type === 'image' && img.url && (img.url.startsWith('http') || img.url.startsWith('/')))
       .map(img => ({
-        src: img.url!, 
+        src: img.url!,
         alt: img.altText?.en || product.basicInfo.name.en || '',
       }));
   }
@@ -94,7 +105,7 @@ function mapPimToShopifyProduct(product: Product): { product: ShopifyProductPayl
       const variantPayload: ShopifyProductVariantPayload = {
         sku: v.sku,
         barcode: v.gtin || undefined,
-        price: "0.00", 
+        price: "0.00",
       };
 
       const stdPriceEntry = v.standardPrice?.[0];
@@ -115,9 +126,9 @@ function mapPimToShopifyProduct(product: Product): { product: ShopifyProductPayl
             variantPayload.price = mainStdPrice.amount.toString();
         }
       }
-      
+
       product.options?.forEach((opt, index) => {
-        if (index < 3) { 
+        if (index < 3) {
           (variantPayload as any)[`option${index + 1}`] = v.optionValues[opt.name] || null;
         }
       });
@@ -135,7 +146,7 @@ function mapPimToShopifyProduct(product: Product): { product: ShopifyProductPayl
     } else if (standardPriceEntry) {
       shopifyPrice = standardPriceEntry.amount.toString();
     }
-    
+
     shopifyPayload.variants = [{
       sku: product.basicInfo.sku,
       price: shopifyPrice,
@@ -143,13 +154,17 @@ function mapPimToShopifyProduct(product: Product): { product: ShopifyProductPayl
       barcode: product.basicInfo.gtin || undefined,
     }];
   }
-  
+
   return { product: shopifyPayload };
 }
 
 
 export async function POST(request: NextRequest) {
-  const tenantId = request.headers.get('x-tenant-id') || 'default_tenant';
+  const tenantId = request.headers.get('x-tenant-id');
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Tenant ID is missing from request headers.' }, { status: 400 });
+  }
+
   let productsToExport: Product[];
 
   try {
@@ -176,7 +191,7 @@ export async function POST(request: NextRequest) {
   for (const product of productsToExport) {
     const shopifyApiUrl = `https://${storeUrl.replace(/^https?:\/\//, '')}/admin/api/2024-04/products.json`;
     const shopifyPayload = mapPimToShopifyProduct(product);
-    
+
     const shopifyResponse = await fetch(shopifyApiUrl, {
       method: 'POST',
       headers: {
@@ -200,21 +215,21 @@ export async function POST(request: NextRequest) {
           errorDetail = await shopifyResponse.text().catch(() => `Failed to retrieve error details, status: ${shopifyResponse.status}`);
       }
       const errorMessage = `Failed to export product "${product.basicInfo.name.en || product.basicInfo.sku}": ${errorDetail}`;
-      console.error(errorMessage.substring(0,1000)); 
+      console.error(errorMessage.substring(0,1000));
       errors.push(errorMessage);
-      continue; 
+      continue;
     }
-    
+
     exportedCount++;
   }
 
   if (errors.length > 0) {
     const fullMessage = `${exportedCount} products exported. ${errors.length} products failed.`;
-    const status = exportedCount === 0 && errors.length === productsToExport.length ? 500 : 207; 
-    return NextResponse.json({ 
+    const status = exportedCount === 0 && errors.length === productsToExport.length ? 500 : 207;
+    return NextResponse.json({
       message: fullMessage,
-      errors, 
-    }, { status }); 
+      errors,
+    }, { status });
   }
 
   return NextResponse.json({ message: `${exportedCount} products exported successfully to Shopify.` });

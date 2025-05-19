@@ -5,54 +5,48 @@ import { type NextRequest, NextResponse } from 'next/server';
 import type { Product, ProductStatus as PimStatus, MediaEntry, KeyValueEntry, PriceEntry, ProductOption as PimProductOption, ProductVariant as PimProductVariant, MultilingualString } from '@/types/product';
 import { initialProductData, defaultMultilingualString } from '@/types/product';
 import { v4 as uuidv4 } from 'uuid';
+import { dbAdmin } from '../../../lib/firebase-admin'; // Import dbAdmin
 
-// Placeholder for Shopify Config API - In real app, fetch from DB via tenantId
+const SHOPIFY_CONFIG_DOC_ID = 'configuration'; // Consistent with config route
+
+// Updated function to fetch Shopify config directly from Firestore
 async function getShopifyConfigForTenant(tenantId: string): Promise<{ storeUrl: string; apiKey: string } | null> {
-  // SIMULATION: This should fetch from your tenant-specific Shopify config storage (e.g., Firestore)
-  // For now, this is a HACK. In a real app, API routes should not call other API routes directly like this.
-  // This will use the tenantShopifyConfigs in-memory object from the config route.
-  // This assumes that the API route for config is running in the same process, which is not guaranteed in serverless.
-  try {
-    const configResponse = await fetch(new URL('/api/shopify/config', process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'), { // Base URL needed
-      method: 'GET', // Method for GET request
-      headers: { 'x-tenant-id': tenantId },
-    });
-    if (configResponse.ok) {
-      return await configResponse.json();
-    }
-  } catch (e) {
-    console.error("Error fetching shopify config within import route:", e);
+  if (!tenantId) {
+    console.error('getShopifyConfigForTenant called without tenantId in import route');
+    return null;
   }
-  return null;
+  try {
+    const configRef = dbAdmin.collection('tenants').doc(tenantId).collection('shopifyConfigs').doc(SHOPIFY_CONFIG_DOC_ID);
+    const doc = await configRef.get();
+
+    if (!doc.exists) {
+      console.log(`Shopify config not found in Firestore for tenant ${tenantId} in import route.`);
+      return null; // Config not found
+    }
+    const configData = doc.data() as { storeUrl: string; apiKey: string };
+    if (!configData.storeUrl || !configData.apiKey) {
+        console.log(`Shopify config incomplete in Firestore for tenant ${tenantId} in import route.`);
+        return null; // Config incomplete
+    }
+    return configData;
+  } catch (error: any) {
+    console.error(`Error fetching Shopify config from Firestore for tenant ${tenantId} in import route:`, error);
+    return null;
+  }
 }
 
 // Placeholder for Product Create API - In real app, save to DB via tenantId
 async function saveProductForTenant(tenantId: string, product: Product): Promise<Product | null> {
-    // SIMULATION: This should call your actual /api/products POST endpoint logic or save directly to Firestore
-    // For simulation:
-    // This is a HACK. In a real app, API routes should not call other API routes directly like this.
+    if (!tenantId) {
+        console.error("saveProductForTenant called without tenantId in import route");
+        return null;
+    }
     try {
-        const productPayload = { ...product };
-        // Remove id, createdAt, updatedAt if your /api/products create logic handles them
-        const { id, createdAt, updatedAt, ...creatableProductData } = productPayload;
-
-
-        const saveResponse = await fetch(new URL('/api/products', process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'), { // Base URL needed
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-tenant-id': tenantId,
-            },
-            body: JSON.stringify(creatableProductData),
-        });
-        if (saveResponse.ok) {
-            return await saveResponse.json();
-        } else {
-            const error = await saveResponse.json().catch(() => ({error: "Failed to save product (non-json response)"}));
-            console.error("Failed to save product via API:", saveResponse.status, error);
-        }
+        const productRef = dbAdmin.collection('tenants').doc(tenantId).collection('products').doc(product.id);
+        await productRef.set(product);
+        return product;
     } catch (e) {
-        console.error("Error saving product within import route:", e);
+        console.error(`Error saving product ${product.id} to Firestore for tenant ${tenantId} in import route:`, e);
     }
     return null;
 }
@@ -70,7 +64,7 @@ interface ShopifyImageShopify {
 
 interface ShopifyOptionShopify {
   id: number;
-  product_id: number; 
+  product_id: number;
   name: string;
   position: number;
   values: string[];
@@ -79,9 +73,9 @@ interface ShopifyOptionShopify {
 interface ShopifyVariantShopify {
   id: number;
   product_id: number;
-  title: string; 
-  price: string; 
-  compare_at_price: string | null; 
+  title: string;
+  price: string;
+  compare_at_price: string | null;
   sku: string | null;
   barcode: string | null; // GTIN
   inventory_quantity: number;
@@ -93,15 +87,15 @@ interface ShopifyVariantShopify {
 
 interface ShopifyProductShopify {
   id: number;
-  title: string; 
-  body_html: string | null; 
-  vendor: string; 
-  product_type: string; 
+  title: string;
+  body_html: string | null;
+  vendor: string;
+  product_type: string;
   created_at: string;
   updated_at: string;
-  published_at: string | null; 
-  status: 'active' | 'archived' | 'draft'; 
-  tags: string; 
+  published_at: string | null;
+  status: 'active' | 'archived' | 'draft';
+  tags: string;
   options: ShopifyOptionShopify[];
   variants: ShopifyVariantShopify[];
   images: ShopifyImageShopify[];
@@ -112,7 +106,7 @@ function mapShopifyStatusToPim(shopifyStatus: ShopifyProductShopify['status']): 
     case 'active':
       return 'active';
     case 'archived':
-      return 'inactive'; 
+      return 'inactive';
     case 'draft':
       return 'development';
     default:
@@ -127,7 +121,6 @@ function stripHtml(html: string | null): string {
 
 
 function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify, storeCurrency: string = "NOK"): Product {
-  // Use Shopify's product ID as the PIM's internalId for easier mapping if needed later
   const pimId = shopifyProduct.variants?.[0]?.sku || `SHOPIFY-${shopifyProduct.id}` || uuidv4();
   const firstVariant = shopifyProduct.variants?.[0];
 
@@ -136,7 +129,7 @@ function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify, storeCurr
 
   const baseStandardPrice: PriceEntry[] = [];
   const baseSalePrice: PriceEntry[] = [];
-  
+
   if (firstVariant) {
     const currentPrice = parseFloat(firstVariant.price);
     const originalPrice = firstVariant.compare_at_price ? parseFloat(firstVariant.compare_at_price) : null;
@@ -145,14 +138,14 @@ function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify, storeCurr
       baseStandardPrice.push({
         id: uuidv4(),
         amount: originalPrice,
-        currency: storeCurrency, 
+        currency: storeCurrency,
       });
       baseSalePrice.push({
         id: uuidv4(),
         amount: currentPrice,
         currency: storeCurrency,
       });
-    } else { 
+    } else {
       baseStandardPrice.push({
         id: uuidv4(),
         amount: currentPrice,
@@ -177,7 +170,7 @@ function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify, storeCurr
 
       const variantStandardPrice: PriceEntry[] = [];
       const variantSalePrice: PriceEntry[] = [];
-      
+
       const varCurrentPrice = parseFloat(sv.price);
       const varOriginalPrice = sv.compare_at_price ? parseFloat(sv.compare_at_price) : null;
 
@@ -189,32 +182,32 @@ function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify, storeCurr
       }
 
       pimVariants.push({
-        id: String(sv.id), 
+        id: String(sv.id),
         sku: sv.sku || `SHOPIFY-VAR-${sv.id}`,
         gtin: sv.barcode || undefined,
         optionValues,
         standardPrice: variantStandardPrice,
         salePrice: variantSalePrice.length > 0 ? variantSalePrice : [],
-        costPrice: [], 
+        costPrice: [],
       });
     });
   }
 
 
   return {
-    ...initialProductData, 
-    id: pimId, // This ID might conflict if SKU is used and not unique across imports.
-              // Consider prefixing with tenant or using Shopify's ID more directly as the PIM ID.
+    ...initialProductData,
+    id: pimId,
     basicInfo: {
       name: { ...defaultMultilingualString, en: shopifyProduct.title },
-      sku: firstVariant?.sku || `SKU-SHOPIFY-${shopifyProduct.id}`, // Ensure unique SKU
+      sku: firstVariant?.sku || `SKU-SHOPIFY-${shopifyProduct.id}`,
       gtin: firstVariant?.barcode || undefined,
       descriptionShort: { ...defaultMultilingualString, en: shortDescriptionEn },
       descriptionLong: { ...defaultMultilingualString, en: longDescriptionEn },
       brand: shopifyProduct.vendor || 'Unknown Brand',
       status: mapShopifyStatusToPim(shopifyProduct.status),
       launchDate: shopifyProduct.published_at || undefined,
-      internalId: String(shopifyProduct.id), 
+      endDate: undefined, // Shopify doesn't have a direct 'end date' for products
+      internalId: String(shopifyProduct.id),
     },
     attributesAndSpecs: {
       ...initialProductData.attributesAndSpecs,
@@ -226,23 +219,23 @@ function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify, storeCurr
         url: img.src,
         altText: { ...defaultMultilingualString, en: img.alt || shopifyProduct.title },
         type: 'image',
-        dataAiHint: 'product image' 
+        dataAiHint: 'product image'
       })),
     },
     marketingSEO: {
       ...initialProductData.marketingSEO,
-      seoTitle: { ...defaultMultilingualString, en: shopifyProduct.title }, 
-      seoDescription: { ...defaultMultilingualString, en: shortDescriptionEn }, 
+      seoTitle: { ...defaultMultilingualString, en: shopifyProduct.title },
+      seoDescription: { ...defaultMultilingualString, en: shortDescriptionEn },
       keywords: shopifyProduct.tags ? shopifyProduct.tags.split(',').map(tag => tag.trim()).filter(tag => tag) : [],
     },
-    pricingAndStock: { 
+    pricingAndStock: {
         standardPrice: baseStandardPrice,
         salePrice: baseSalePrice.length > 0 ? baseSalePrice : [],
-        costPrice: [], 
+        costPrice: [],
     },
     options: pimOptions,
     variants: pimVariants,
-    aiSummary: { ...defaultMultilingualString }, 
+    aiSummary: { ...defaultMultilingualString },
     createdAt: shopifyProduct.created_at || new Date().toISOString(),
     updatedAt: shopifyProduct.updated_at || new Date().toISOString(),
   };
@@ -269,7 +262,11 @@ function parseLinkHeader(linkHeader: string | null): string | null {
 
 
 export async function POST(request: NextRequest) {
-  const tenantId = request.headers.get('x-tenant-id') || 'default_tenant';
+  const tenantId = request.headers.get('x-tenant-id');
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Tenant ID is missing from request headers.' }, { status: 400 });
+  }
+
   let pageInfo: string | null = null;
   try {
       const body = await request.json();
@@ -278,7 +275,6 @@ export async function POST(request: NextRequest) {
       // No body or invalid JSON, proceed without pageInfo
   }
 
-
   const shopifyConfig = await getShopifyConfigForTenant(tenantId);
 
   if (!shopifyConfig || !shopifyConfig.storeUrl || !shopifyConfig.apiKey) {
@@ -286,7 +282,7 @@ export async function POST(request: NextRequest) {
   }
   const { storeUrl, apiKey } = shopifyConfig;
 
-  let shopifyApiUrl = `https://${storeUrl.replace(/^https?:\/\//, '')}/admin/api/2024-04/products.json?limit=50`; 
+  let shopifyApiUrl = `https://${storeUrl.replace(/^https?:\/\//, '')}/admin/api/2024-04/products.json?limit=50`;
   if (pageInfo) {
     shopifyApiUrl += `&page_info=${pageInfo}`;
   }
@@ -308,7 +304,7 @@ export async function POST(request: NextRequest) {
           const errorData = await shopifyResponse.json();
           errorDetail = errorData.errors || errorData.error || JSON.stringify(errorData);
         } else {
-          errorDetail = await shopifyResponse.text(); 
+          errorDetail = await shopifyResponse.text();
         }
       } catch (e) {
         errorDetail = await shopifyResponse.text().catch(() => `Failed to get error details, status: ${shopifyResponse.status}`);
@@ -316,16 +312,16 @@ export async function POST(request: NextRequest) {
       console.error('Shopify API Error (Import):', errorDetail.substring(0, 500));
       return NextResponse.json({ error: errorDetail }, { status: shopifyResponse.status });
     }
-    
+
     const contentType = shopifyResponse.headers.get("content-type");
     if (!contentType || !contentType.includes("application/json")) {
         const textResponse = await shopifyResponse.text();
         console.error('Shopify API Error (Import): Expected JSON for successful response, got different content type.', textResponse.substring(0, 500));
         return NextResponse.json({ error: 'Invalid success response format from Shopify. Expected JSON.', details: textResponse.substring(0,500) }, { status: 502 });
     }
-    
+
     const shopifyData = await shopifyResponse.json();
-    
+
     if (!shopifyData.products || !Array.isArray(shopifyData.products)) {
         return NextResponse.json({ error: 'Invalid product data received from Shopify.' }, { status: 500 });
     }
@@ -344,7 +340,6 @@ export async function POST(request: NextRequest) {
     const importedPimProducts: Product[] = [];
     for (const shopifyProd of shopifyData.products as ShopifyProductShopify[]) {
         const pimProduct = mapShopifyToPimProduct(shopifyProd, storeCurrency);
-        // Instead of just mapping, now we "save" it via our product API simulation
         const savedProduct = await saveProductForTenant(tenantId, pimProduct);
         if (savedProduct) {
             importedPimProducts.push(savedProduct);
@@ -352,13 +347,13 @@ export async function POST(request: NextRequest) {
             console.warn(`Failed to save imported product ${pimProduct.id} for tenant ${tenantId}`);
         }
     }
-    
+
     const nextPageCursor = parseLinkHeader(shopifyResponse.headers.get('Link'));
 
-    return NextResponse.json({ 
-      products: importedPimProducts, // Return the products that were successfully "saved"
+    return NextResponse.json({
+      products: importedPimProducts,
       message: `${importedPimProducts.length} products imported and processed for ${storeUrl}. ${nextPageCursor ? 'More products available.' : 'All products imported.'}`,
-      nextPageCursor 
+      nextPageCursor
     });
 
   } catch (error: any) {
