@@ -20,6 +20,9 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 
+const ALL_STATUSES_SELECT_VALUE = "__all_statuses__";
+const ALL_BRANDS_SELECT_VALUE = "__all_brands__";
+
 export default function ProductsPage() {
   const {
     products: allProducts,
@@ -37,12 +40,22 @@ export default function ProductsPage() {
     setMounted(true);
   }, [fetchProducts]);
 
-  const productStatuses: Array<Product['basicInfo']['status'] | ''> = ['', 'active', 'inactive', 'development', 'discontinued'];
+  const productStatusesOptions: Array<{ value: Product['basicInfo']['status'] | typeof ALL_STATUSES_SELECT_VALUE, label: string }> = [
+    { value: ALL_STATUSES_SELECT_VALUE, label: 'All Statuses' },
+    { value: 'active', label: 'Active' },
+    { value: 'inactive', label: 'Inactive' },
+    { value: 'development', label: 'Development' },
+    { value: 'discontinued', label: 'Discontinued' },
+  ];
 
-  const uniqueBrands = useMemo(() => {
-    if (!allProducts || allProducts.length === 0) return [''];
-    const brands = allProducts.map(p => p.basicInfo.brand).filter((brand): brand is string => !!brand);
-    return ['', ...Array.from(new Set(brands)).sort()];
+  const uniqueBrandOptions = useMemo(() => {
+    if (!allProducts || allProducts.length === 0) return [{ label: 'All Brands', value: ALL_BRANDS_SELECT_VALUE }];
+    const brands = allProducts.map(p => p.basicInfo.brand).filter((brand): brand is string => !!brand && brand.trim() !== '');
+    const distinctBrands = Array.from(new Set(brands)).sort();
+    return [
+      { label: 'All Brands', value: ALL_BRANDS_SELECT_VALUE },
+      ...distinctBrands.map(b => ({ label: b, value: b }))
+    ];
   }, [allProducts]);
 
   const filteredProducts = useMemo(() => {
@@ -142,14 +155,17 @@ export default function ProductsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 items-end">
             <div>
                 <Label htmlFor="status-filter" className="text-sm font-medium text-muted-foreground">Status</Label>
-                <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as Product['basicInfo']['status'] | '')}>
+                <Select
+                  value={filterStatus === '' ? ALL_STATUSES_SELECT_VALUE : filterStatus}
+                  onValueChange={(value) => setFilterStatus(value === ALL_STATUSES_SELECT_VALUE ? '' : value as Product['basicInfo']['status'])}
+                >
                     <SelectTrigger id="status-filter" className="w-full mt-1">
                         <SelectValue placeholder="All Statuses" />
                     </SelectTrigger>
                     <SelectContent>
-                        {productStatuses.map(status => (
-                        <SelectItem key={status || 'all-statuses'} value={status || ''}>
-                            {status ? status.charAt(0).toUpperCase() + status.slice(1) : 'All Statuses'}
+                        {productStatusesOptions.map(option => (
+                        <SelectItem key={option.value} value={option.value}>
+                            {option.label}
                         </SelectItem>
                         ))}
                     </SelectContent>
@@ -157,19 +173,23 @@ export default function ProductsPage() {
             </div>
             <div>
                 <Label htmlFor="brand-filter" className="text-sm font-medium text-muted-foreground">Brand</Label>
-                <Select value={filterBrand} onValueChange={setFilterBrand} disabled={uniqueBrands.length <= 1 && !isLoading}>
+                <Select
+                  value={filterBrand === '' ? ALL_BRANDS_SELECT_VALUE : filterBrand}
+                  onValueChange={(value) => setFilterBrand(value === ALL_BRANDS_SELECT_VALUE ? '' : value)}
+                  disabled={uniqueBrandOptions.length <= 1 && !isLoading}
+                >
                     <SelectTrigger id="brand-filter" className="w-full mt-1">
                         <SelectValue placeholder="All Brands" />
                     </SelectTrigger>
                     <SelectContent>
-                        {uniqueBrands.map(brand => (
-                        <SelectItem key={brand || 'all-brands'} value={brand || ''}>
-                            {brand || 'All Brands'}
+                        {uniqueBrandOptions.map(option => (
+                        <SelectItem key={option.value} value={option.value}>
+                            {option.label}
                         </SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
-                 {uniqueBrands.length <= 1 && !isLoading && (
+                 {uniqueBrandOptions.length <= 1 && !isLoading && (
                     <p className="text-xs text-muted-foreground mt-1">No brands available to filter.</p>
                 )}
             </div>
@@ -198,7 +218,7 @@ export default function ProductsPage() {
           <p className="text-muted-foreground mb-6">
             Try adjusting your search or filter criteria.
             {searchTerm && <span className="block mt-1 text-xs">Search term: "{searchTerm}"</span>}
-            {filterStatus && <span className="block mt-1 text-xs">Status: {filterStatus.charAt(0).toUpperCase() + filterStatus.slice(1)}</span>}
+            {filterStatus && <span className="block mt-1 text-xs">Status: {productStatusesOptions.find(opt => opt.value === filterStatus)?.label || filterStatus}</span>}
             {filterBrand && <span className="block mt-1 text-xs">Brand: {filterBrand}</span>}
           </p>
         </div>
@@ -212,5 +232,3 @@ export default function ProductsPage() {
     </div>
   );
 }
-
-    
