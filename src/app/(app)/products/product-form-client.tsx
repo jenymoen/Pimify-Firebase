@@ -508,16 +508,22 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     }
   };
 
-  const keywords = form.watch("marketingSEO.keywords") || [];
+  const keywordsValue = form.watch("marketingSEO.keywords") || [];
   const handleKeywordsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newKeywords = e.target.value.split(',').map(k => k.trim()).filter(k => k !== "");
-    form.setValue("marketingSEO.keywords", newKeywords, { shouldValidate: true, shouldDirty: true });
+    const inputText = e.target.value;
+    console.log("Keywords input changed:", inputText); // For debugging
+    const newKeywordsArray = inputText.split(',').map(k => k.trim()).filter(k => k !== "");
+    console.log("Keywords array to set:", newKeywordsArray); // For debugging
+    form.setValue("marketingSEO.keywords", newKeywordsArray, { shouldValidate: true, shouldDirty: true });
   };
 
-  const categories = form.watch("attributesAndSpecs.categories") || [];
+  const categoriesValue = form.watch("attributesAndSpecs.categories") || [];
   const handleCategoriesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newCategories = e.target.value.split(',').map(c => c.trim()).filter(c => c !== "");
-    form.setValue("attributesAndSpecs.categories", newCategories, { shouldValidate: true, shouldDirty: true });
+    const inputText = e.target.value;
+    console.log("Categories input changed:", inputText); // For debugging
+    const newCategoriesArray = inputText.split(',').map(c => c.trim()).filter(c => c !== "");
+    console.log("Categories array to set:", newCategoriesArray); // For debugging
+    form.setValue("attributesAndSpecs.categories", newCategoriesArray, { shouldValidate: true, shouldDirty: true });
   };
 
   const generateVariants = () => {
@@ -887,7 +893,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                           <FormControl>
                             <Input
                               placeholder="e.g., Electronics, Audio, Headphones (comma-separated)"
-                              value={categories.join(', ')}
+                              value={categoriesValue.join(', ')}
                               onChange={handleCategoriesChange}
                             />
                           </FormControl>
@@ -1075,13 +1081,13 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                     <FormField
                       control={form.control}
                       name="marketingSEO.keywords"
-                      render={({ field }) => (
+                      render={({ field }) => ( // field.value here is an array
                          <FormItem>
                           <FormLabel>Keywords/Tags</FormLabel>
                           <FormControl>
                             <Input
                               placeholder="e.g., laptop, gaming, high-performance (comma-separated)"
-                              value={keywords.join(', ')}
+                              value={keywordsValue.join(', ')}
                               onChange={handleKeywordsChange}
                             />
                           </FormControl>
