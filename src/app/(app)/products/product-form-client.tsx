@@ -36,10 +36,11 @@ import { useProductStore } from "@/lib/product-store";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { summarizeProductInformation } from "@/ai/flows/summarize-product-information";
-import { Info, Package, Tag, Image as ImageIconLucide, BarChart3, Brain, CalendarDays, CheckCircle, Save, Trash2, Sparkles, Languages, Edit as EditIcon, DollarSign, ListPlus, Cog } from "lucide-react";
+import { Info, Package, Tag, Image as ImageIconLucide, BarChart3, Brain, CalendarDays, CheckCircle, Save, Trash2, Sparkles, Languages, Edit as EditIcon, DollarSign, ListPlus, Cog, X } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
 import { v4 as uuidv4 } from 'uuid';
@@ -125,8 +126,8 @@ const productFormSchema = z.object({
     name: requiredMultilingualStringSchema,
     sku: z.string().min(1, "SKU is required"),
     gtin: z.string().optional(),
-    descriptionShort: baseMultilingualStringSchema, // Changed to base
-    descriptionLong: baseMultilingualStringSchema,  // Changed to base
+    descriptionShort: baseMultilingualStringSchema, 
+    descriptionLong: baseMultilingualStringSchema,  
     brand: z.string().min(1, "Brand is required"),
     status: z.enum(['active', 'inactive', 'development', 'discontinued']),
     launchDate: z.date().optional(),
@@ -516,6 +517,12 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     console.log("Keywords array to set:", newKeywordsArray); 
     form.setValue("marketingSEO.keywords", newKeywordsArray, { shouldValidate: true, shouldDirty: true });
   };
+  const removeKeyword = (keywordToRemove: string) => {
+    const currentKeywords = form.getValues("marketingSEO.keywords") || [];
+    const newKeywords = currentKeywords.filter(kw => kw !== keywordToRemove);
+    form.setValue("marketingSEO.keywords", newKeywords, { shouldValidate: true, shouldDirty: true });
+  };
+
 
   const categoriesValue = form.watch("attributesAndSpecs.categories") || [];
   const handleCategoriesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -525,16 +532,20 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     console.log("Categories array to set:", newCategoriesArray); 
     form.setValue("attributesAndSpecs.categories", newCategoriesArray, { shouldValidate: true, shouldDirty: true });
   };
+  const removeCategory = (categoryToRemove: string) => {
+    const currentCategories = form.getValues("attributesAndSpecs.categories") || [];
+    const newCategories = currentCategories.filter(cat => cat !== categoryToRemove);
+    form.setValue("attributesAndSpecs.categories", newCategories, { shouldValidate: true, shouldDirty: true });
+  };
 
-  const watchedCategories = form.watch("attributesAndSpecs.categories");
-  useEffect(() => {
-    console.log("RHF_WATCH_CATEGORIES:", watchedCategories);
-  }, [watchedCategories]);
 
-  const watchedKeywords = form.watch("marketingSEO.keywords");
   useEffect(() => {
-    console.log("RHF_WATCH_KEYWORDS:", watchedKeywords);
-  }, [watchedKeywords]);
+    console.log("RHF_WATCH_CATEGORIES:", form.watch("attributesAndSpecs.categories"));
+  }, [form.watch("attributesAndSpecs.categories")]);
+
+  useEffect(() => {
+    console.log("RHF_WATCH_KEYWORDS:", form.watch("marketingSEO.keywords"));
+  }, [form.watch("marketingSEO.keywords")]);
 
 
   const generateVariants = () => {
@@ -910,6 +921,23 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                           </FormControl>
                           <FormDescription>Enter categories separated by commas.</FormDescription>
                           <FormMessage />
+                           {categoriesValue.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {categoriesValue.map((category, index) => (
+                                <Badge key={`${category}-${index}`} variant="secondary" className="flex items-center gap-1">
+                                  {category}
+                                  <button
+                                    type="button"
+                                    onClick={() => removeCategory(category)}
+                                    className="ml-1 p-0.5 rounded-full hover:bg-destructive/20 text-destructive"
+                                    aria-label={`Remove ${category}`}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
                         </FormItem>
                       )}
                     />
@@ -1092,7 +1120,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                     <FormField
                       control={form.control}
                       name="marketingSEO.keywords"
-                      render={({ field }) => ( // field.value here is an array
+                      render={({ field }) => ( 
                          <FormItem>
                           <FormLabel>Keywords/Tags</FormLabel>
                           <FormControl>
@@ -1104,6 +1132,23 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                           </FormControl>
                           <FormDescription>Enter keywords separated by commas. These help in product search and SEO.</FormDescription>
                           <FormMessage />
+                          {keywordsValue.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {keywordsValue.map((keyword, index) => (
+                                <Badge key={`${keyword}-${index}`} variant="secondary" className="flex items-center gap-1">
+                                  {keyword}
+                                  <button
+                                    type="button"
+                                    onClick={() => removeKeyword(keyword)}
+                                    className="ml-1 p-0.5 rounded-full hover:bg-destructive/20 text-destructive"
+                                    aria-label={`Remove ${keyword}`}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
                         </FormItem>
                       )}
                     />
@@ -1196,5 +1241,3 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     </Card>
   );
 }
-
-    
