@@ -511,20 +511,31 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
   const keywordsValue = form.watch("marketingSEO.keywords") || [];
   const handleKeywordsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const inputText = e.target.value;
-    console.log("Keywords input changed:", inputText); // For debugging
+    console.log("Keywords input changed:", inputText); 
     const newKeywordsArray = inputText.split(',').map(k => k.trim()).filter(k => k !== "");
-    console.log("Keywords array to set:", newKeywordsArray); // For debugging
+    console.log("Keywords array to set:", newKeywordsArray); 
     form.setValue("marketingSEO.keywords", newKeywordsArray, { shouldValidate: true, shouldDirty: true });
   };
 
   const categoriesValue = form.watch("attributesAndSpecs.categories") || [];
   const handleCategoriesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const inputText = e.target.value;
-    console.log("Categories input changed:", inputText); // For debugging
+    console.log("Categories input changed:", inputText); 
     const newCategoriesArray = inputText.split(',').map(c => c.trim()).filter(c => c !== "");
-    console.log("Categories array to set:", newCategoriesArray); // For debugging
+    console.log("Categories array to set:", newCategoriesArray); 
     form.setValue("attributesAndSpecs.categories", newCategoriesArray, { shouldValidate: true, shouldDirty: true });
   };
+
+  const watchedCategories = form.watch("attributesAndSpecs.categories");
+  useEffect(() => {
+    console.log("RHF_WATCH_CATEGORIES:", watchedCategories);
+  }, [watchedCategories]);
+
+  const watchedKeywords = form.watch("marketingSEO.keywords");
+  useEffect(() => {
+    console.log("RHF_WATCH_KEYWORDS:", watchedKeywords);
+  }, [watchedKeywords]);
+
 
   const generateVariants = () => {
     const options = form.getValues("options");
