@@ -6,29 +6,17 @@ import { useProductStore } from '@/lib/product-store';
 import type { Product } from '@/types/product';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { PlusCircle, Search } from 'lucide-react';
+import { PlusCircle, Search, Package } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 
 export default function ProductsPage() {
-  const { products: allProducts, setProducts } = useProductStore();
+  const { products: allProducts } = useProductStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    // Hydrate Zustand store from localStorage on mount
-    if (typeof window !== 'undefined') {
-      const storedProducts = localStorage.getItem('products');
-      if (storedProducts) {
-        try {
-          setProducts(JSON.parse(storedProducts));
-        } catch (e) {
-          console.error("Error parsing products from local storage", e);
-        }
-      }
-    }
     setMounted(true);
-  }, [setProducts]);
-
+  }, []);
 
   const filteredProducts = allProducts.filter(product => {
     const nameMatch = product.basicInfo.name.en?.toLowerCase().includes(searchTerm.toLowerCase()) ||

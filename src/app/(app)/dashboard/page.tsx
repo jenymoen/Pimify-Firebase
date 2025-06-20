@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -7,15 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Package, Users, DollarSign, CheckCircle, AlertCircle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { isProductComplete } from '@/lib/product-utils';
-import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend as RechartsLegend, ResponsiveContainer } from 'recharts';
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  ChartLegend,
-  ChartLegendContent,
-  type ChartConfig
-} from "@/components/ui/chart"
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { ClientOnly } from '@/components/ui/client-only';
 
 interface ProductCompletenessData {
   name: string;
@@ -24,40 +16,38 @@ interface ProductCompletenessData {
 }
 
 export default function DashboardPage() {
-  const { products, setProducts } = useProductStore();
+  const { products } = useProductStore();
   const [mounted, setMounted] = useState(false);
   const [completenessData, setCompletenessData] = useState<ProductCompletenessData[]>([]);
+  const [chartError, setChartError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const storedProducts = localStorage.getItem('products');
-      if (storedProducts) {
-        try {
-          setProducts(JSON.parse(storedProducts));
-        } catch (e) {
-          console.error("Error parsing products from local storage for dashboard", e);
-        }
-      }
-    }
     setMounted(true);
-  }, [setProducts]);
+  }, []);
 
   useEffect(() => {
     if (mounted && products.length > 0) {
-      let completeCount = 0;
-      products.forEach(p => {
-        if (isProductComplete(p)) {
-          completeCount++;
-        }
-      });
-      const incompleteCount = products.length - completeCount;
-      
-      setCompletenessData([
-        { name: 'Complete', value: completeCount, fill: 'hsl(var(--chart-2))' }, // Using chart-2 (greenish) for complete
-        { name: 'Incomplete', value: incompleteCount, fill: 'hsl(var(--chart-4))' }, // Using chart-4 (yellowish) for incomplete
-      ]);
+      try {
+        let completeCount = 0;
+        products.forEach(p => {
+          if (isProductComplete(p)) {
+            completeCount++;
+          }
+        });
+        const incompleteCount = products.length - completeCount;
+        
+        setCompletenessData([
+          { name: 'Complete', value: completeCount, fill: '#10b981' }, // Green
+          { name: 'Incomplete', value: incompleteCount, fill: '#f59e0b' }, // Yellow
+        ]);
+        setChartError(null);
+      } catch (error) {
+        console.error('Error calculating completeness data:', error);
+        setChartError('Failed to calculate completeness data');
+      }
     } else if (mounted && products.length === 0) {
       setCompletenessData([]);
+      setChartError(null);
     }
   }, [products, mounted]);
 
@@ -67,17 +57,70 @@ export default function DashboardPage() {
     ? products.reduce((acc, p) => acc + (p.pricingAndStock?.standardPrice?.[0]?.amount || 0), 0) / productCount
     : 0;
 
-  const chartConfig = {
-    complete: {
-      label: "Complete",
-      color: "hsl(var(--chart-2))",
-    },
-    incomplete: {
-      label: "Incomplete",
-      color: "hsl(var(--chart-4))",
-    },
-  } satisfies ChartConfig;
+  const renderChart = () => {
+    if (chartError) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center">
+            <AlertCircle className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+            <p className="text-sm text-muted-foreground">{chartError}</p>
+          </div>
+        </div>
+      );
+    }
 
+    if (!mounted) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <Skeleton className="h-32 w-32 rounded-full" />
+        </div>
+      );
+    }
+
+    if (products.length === 0) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <p className="text-sm text-muted-foreground">No product data to display.</p>
+        </div>
+      );
+    }
+
+    try {
+      return (
+        <ClientOnly fallback={<Skeleton className="h-32 w-32 rounded-full" />}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={completenessData}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                outerRadius={60}
+                labelLine={false}
+              >
+                {completenessData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.fill} />
+                ))}
+              </Pie>
+              <Tooltip />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        </ClientOnly>
+      );
+    } catch (error) {
+      console.error('Error rendering chart:', error);
+      return (
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center">
+            <AlertCircle className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+            <p className="text-sm text-muted-foreground">Failed to render chart</p>
+          </div>
+        </div>
+      );
+    }
+  };
 
   return (
     <div className="container mx-auto py-8">
@@ -145,51 +188,7 @@ export default function DashboardPage() {
             <CheckCircle className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent className="h-[200px] aspect-square"> {/* Ensure CardContent can hold the chart */}
-            {!mounted ? (
-              <div className="flex items-center justify-center h-full">
-                <Skeleton className="h-32 w-32 rounded-full" />
-              </div>
-            ) : products.length === 0 ? (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-sm text-muted-foreground">No product data to display.</p>
-              </div>
-            ) : (
-              <ChartContainer config={chartConfig} className="h-full w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <ChartTooltip
-                      cursor={false}
-                      content={<ChartTooltipContent hideLabel />}
-                    />
-                    <Pie
-                      data={completenessData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={60}
-                      labelLine={false}
-                      // label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, index }) => {
-                      //   const RADIAN = Math.PI / 180;
-                      //   const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-                      //   const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                      //   const y = cy + radius * Math.sin(-midAngle * RADIAN);
-                      //   return (
-                      //     <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central">
-                      //       {`${(percent * 100).toFixed(0)}%`}
-                      //     </text>
-                      //   );
-                      // }}
-                    >
-                      {completenessData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                     <ChartLegend content={<ChartLegendContent nameKey="name" />} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </ChartContainer>
-            )}
+            {renderChart()}
           </CardContent>
         </Card>
 

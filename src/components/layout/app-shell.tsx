@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { ReactNode } from 'react';
@@ -95,6 +94,7 @@ export function AppShell({ children }: AppShellProps) {
     </>
   );
 
+  // Show loading state while determining mobile state
   if (isMobile === undefined) { 
     return <div className="flex h-screen items-center justify-center"><p>Loading...</p></div>; 
   }
