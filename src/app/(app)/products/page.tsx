@@ -19,9 +19,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { isProductComplete } from '@/lib/product-utils';
 
 const ALL_STATUSES_SELECT_VALUE = "__all_statuses__";
 const ALL_BRANDS_SELECT_VALUE = "__all_brands__";
+const ALL_COMPLETENESS_SELECT_VALUE = "__all_completeness__";
 
 export default function ProductsPage() {
   const {
@@ -33,6 +35,7 @@ export default function ProductsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<Product['basicInfo']['status'] | ''>('');
   const [filterBrand, setFilterBrand] = useState('');
+  const [filterCompleteness, setFilterCompleteness] = useState<'complete' | 'incomplete' | ''>('');
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -46,6 +49,12 @@ export default function ProductsPage() {
     { value: 'inactive', label: 'Inactive' },
     { value: 'development', label: 'Development' },
     { value: 'discontinued', label: 'Discontinued' },
+  ];
+
+  const completenessOptions: Array<{ value: 'complete' | 'incomplete' | typeof ALL_COMPLETENESS_SELECT_VALUE, label: string }> = [
+    { value: ALL_COMPLETENESS_SELECT_VALUE, label: 'All Completeness' },
+    { value: 'complete', label: 'Complete' },
+    { value: 'incomplete', label: 'Incomplete' },
   ];
 
   const uniqueBrandOptions = useMemo(() => {
@@ -75,8 +84,15 @@ export default function ProductsPage() {
       .filter(product => {
         if (!filterBrand) return true;
         return product.basicInfo.brand === filterBrand;
+      })
+      .filter(product => {
+        if (!filterCompleteness) return true;
+        const complete = isProductComplete(product);
+        if (filterCompleteness === 'complete') return complete;
+        if (filterCompleteness === 'incomplete') return !complete;
+        return true;
       });
-  }, [allProducts, searchTerm, filterStatus, filterBrand]);
+  }, [allProducts, searchTerm, filterStatus, filterBrand, filterCompleteness]);
 
   if (!mounted || isLoading && allProducts.length === 0) {
     return (
@@ -89,6 +105,7 @@ export default function ProductsPage() {
           </div>
         </div>
         <div className="mb-6 flex flex-col sm:flex-row gap-4 items-center">
+            <Skeleton className="h-10 w-full sm:w-48" />
             <Skeleton className="h-10 w-full sm:w-48" />
             <Skeleton className="h-10 w-full sm:w-48" />
         </div>
@@ -152,7 +169,7 @@ export default function ProductsPage() {
         <h2 className="text-lg font-semibold text-foreground mb-3 flex items-center">
             <Filter className="mr-2 h-5 w-5 text-primary" /> Filters
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
             <div>
                 <Label htmlFor="status-filter" className="text-sm font-medium text-muted-foreground">Status</Label>
                 <Select
@@ -193,7 +210,25 @@ export default function ProductsPage() {
                     <p className="text-xs text-muted-foreground mt-1">No brands available to filter.</p>
                 )}
             </div>
-             <Button onClick={() => {setSearchTerm(''); setFilterStatus(''); setFilterBrand('');}} variant="outline" className="w-full sm:w-auto self-end">
+            <div>
+                <Label htmlFor="completeness-filter" className="text-sm font-medium text-muted-foreground">Completeness</Label>
+                <Select
+                  value={filterCompleteness === '' ? ALL_COMPLETENESS_SELECT_VALUE : filterCompleteness}
+                  onValueChange={(value) => setFilterCompleteness(value === ALL_COMPLETENESS_SELECT_VALUE ? '' : value as 'complete' | 'incomplete')}
+                >
+                    <SelectTrigger id="completeness-filter" className="w-full mt-1">
+                        <SelectValue placeholder="All Completeness" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {completenessOptions.map(option => (
+                        <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                        </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+             <Button onClick={() => {setSearchTerm(''); setFilterStatus(''); setFilterBrand(''); setFilterCompleteness('');}} variant="outline" className="w-full sm:w-auto self-end">
                 Clear Filters
             </Button>
         </div>
@@ -220,6 +255,7 @@ export default function ProductsPage() {
             {searchTerm && <span className="block mt-1 text-xs">Search term: "{searchTerm}"</span>}
             {filterStatus && <span className="block mt-1 text-xs">Status: {productStatusesOptions.find(opt => opt.value === filterStatus)?.label || filterStatus}</span>}
             {filterBrand && <span className="block mt-1 text-xs">Brand: {filterBrand}</span>}
+            {filterCompleteness && <span className="block mt-1 text-xs">Completeness: {completenessOptions.find(opt => opt.value === filterCompleteness)?.label || filterCompleteness}</span>}
           </p>
         </div>
       ) : (
