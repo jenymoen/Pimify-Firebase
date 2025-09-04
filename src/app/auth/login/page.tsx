@@ -1,3 +1,4 @@
+
 // src/app/auth/login/page.tsx
 'use client';
 
@@ -110,9 +111,9 @@ export default function LoginPage() {
           </form>
         </CardContent>
         <CardFooter className="flex flex-col items-center gap-2 pt-4">
-           <p className="text-sm text-muted-foreground">
-            Forgot your password? (Not implemented)
-          </p>
+           <Link href="/auth/forgot-password" passHref className="text-sm text-primary hover:underline">
+            Forgot your password?
+          </Link>
           <p className="text-sm text-muted-foreground">
             Don't have an account?{' '}
             <Link href="/auth/signup" className="font-medium text-primary hover:underline">
