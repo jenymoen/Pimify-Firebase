@@ -1,7 +1,7 @@
 // src/components/dashboard/quality-widget.tsx
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +35,8 @@ export function QualityWidget() {
   const [selectedStatuses, setSelectedStatuses] = useState<ProductStatus[]>([
     'active', 'development', 'inactive'
   ]);
+  const [isCalculating, setIsCalculating] = useState(false);
+  const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null);
 
   // Parse URL parameters on mount to restore filter state
   useEffect(() => {
@@ -58,21 +60,45 @@ export function QualityWidget() {
     router.replace(newUrl);
   }, [selectedStatuses, router, searchParams]);
 
+  // Debounced recalculation function
+  const debouncedRecalculate = useCallback(() => {
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+    
+    const timer = setTimeout(() => {
+      setIsCalculating(true);
+      recalculateAllQuality();
+      setTimeout(() => setIsCalculating(false), 100); // Brief loading state
+    }, 300);
+    
+    setDebounceTimer(timer);
+  }, [debounceTimer, recalculateAllQuality]);
+
   // Real-time updates: ensure quality metrics are up-to-date when products change
   useEffect(() => {
     // Check if any products are missing quality metrics and recalculate if needed
     const productsNeedingMetrics = products.filter(product => !product.qualityMetrics);
     if (productsNeedingMetrics.length > 0) {
-      recalculateAllQuality();
+      debouncedRecalculate();
     }
-  }, [products, recalculateAllQuality]);
+  }, [products, debouncedRecalculate]);
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+    };
+  }, [debounceTimer]);
 
   // Filter products based on selected statuses
   const filteredProducts = useMemo(() => {
     return products.filter(product => selectedStatuses.includes(product.basicInfo.status));
   }, [products, selectedStatuses]);
 
-  // Calculate quality metrics for filtered products
+  // Calculate quality metrics for filtered products with optimized memoization
   const qualityMetrics = useMemo(() => {
     if (filteredProducts.length === 0) {
       return {
@@ -85,7 +111,10 @@ export function QualityWidget() {
       };
     }
 
-    const metrics = filteredProducts.map(product => calculateQualityMetrics(product));
+    // Use existing quality metrics when available to avoid recalculation
+    const metrics = filteredProducts.map(product => 
+      product.qualityMetrics || calculateQualityMetrics(product)
+    );
     const averageCompleteness = Math.round(
       metrics.reduce((sum, metric) => sum + metric.completenessScore, 0) / metrics.length
     );
@@ -175,13 +204,31 @@ export function QualityWidget() {
   };
 
   const handleRefresh = () => {
+    setIsCalculating(true);
     recalculateAllQuality();
+    setTimeout(() => setIsCalculating(false), 100);
   };
 
   const allStatuses: ProductStatus[] = ['active', 'development', 'inactive', 'discontinued'];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      {/* Loading overlay for large catalog calculations */}
+      {isCalculating && filteredProducts.length > 50 && (
+        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center rounded-lg">
+          <div className="bg-card border rounded-lg p-6 shadow-lg">
+            <div className="flex items-center gap-3">
+              <RefreshCw className="h-5 w-5 animate-spin text-primary" />
+              <div>
+                <p className="font-medium">Calculating Quality Metrics</p>
+                <p className="text-sm text-muted-foreground">
+                  Processing {filteredProducts.length} products...
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header with filters */}
       <Card>
         <CardHeader>
@@ -195,9 +242,14 @@ export function QualityWidget() {
                 Monitor and improve product data quality
               </p>
             </div>
-            <Button variant="outline" size="sm" onClick={handleRefresh}>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleRefresh}
+              disabled={isCalculating}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${isCalculating ? 'animate-spin' : ''}`} />
+              {isCalculating ? 'Calculating...' : 'Refresh'}
             </Button>
           </div>
           

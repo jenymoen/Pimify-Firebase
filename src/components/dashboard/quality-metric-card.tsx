@@ -1,6 +1,7 @@
 // src/components/dashboard/quality-metric-card.tsx
 "use client";
 
+import React from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
@@ -41,7 +42,7 @@ const colorStyles = {
   },
 };
 
-export function QualityMetricCard({
+export const QualityMetricCard = React.memo(function QualityMetricCard({
   title,
   value,
   icon: Icon,
@@ -87,5 +88,5 @@ export function QualityMetricCard({
       </CardContent>
     </Card>
   );
-}
+});
 

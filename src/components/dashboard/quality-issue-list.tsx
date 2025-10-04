@@ -1,6 +1,7 @@
 // src/components/dashboard/quality-issue-list.tsx
 "use client";
 
+import React from "react";
 import { ChevronRight } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -17,7 +18,7 @@ interface QualityIssueListProps {
   onIssueClick?: (issueType: string) => void;
 }
 
-export function QualityIssueList({ issues, onIssueClick }: QualityIssueListProps) {
+export const QualityIssueList = React.memo(function QualityIssueList({ issues, onIssueClick }: QualityIssueListProps) {
   if (issues.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
@@ -70,5 +71,5 @@ export function QualityIssueList({ issues, onIssueClick }: QualityIssueListProps
       })}
     </div>
   );
-}
+});
 
