@@ -108,20 +108,20 @@
   - [x] 5.5 Add new action `recalculateAllQuality()` that iterates all products and updates their qualityMetrics
   - [x] 5.6 Ensure qualityMetrics includes current timestamp in lastChecked field
 
-- [ ] 6.0 Implement Product Filtering and Navigation
-  - [ ] 6.1 Modify `src/app/(app)/products/page.tsx` to read URL query parameters:
-    - [ ] 6.1.1 Extract `quality` parameter (issueType: 'incomplete', 'missing-images', 'validation-errors', etc.)
-    - [ ] 6.1.2 Extract `status` parameter (comma-separated list of statuses)
-  - [ ] 6.2 Implement `filterProductsByQuality(products, qualityFilter, statusFilter)` helper function:
-    - [ ] 6.2.1 Filter by status if statusFilter provided
-    - [ ] 6.2.2 Filter by quality issue type if qualityFilter provided
-    - [ ] 6.2.3 For 'incomplete': show products with completenessScore < 100
-    - [ ] 6.2.4 For 'missing-images': show products with empty images array
-    - [ ] 6.2.5 For 'missing-[field]': show products missing that specific field
-    - [ ] 6.2.6 For 'validation-errors': show products with validationErrors.length > 0
-  - [ ] 6.3 Apply filters to product list before rendering
-  - [ ] 6.4 Display active filter badges above product list with remove/clear options
-  - [ ] 6.5 Add "Clear all filters" button when filters are active
+- [x] 6.0 Implement Product Filtering and Navigation
+  - [x] 6.1 Modify `src/app/(app)/products/page.tsx` to read URL query parameters:
+    - [x] 6.1.1 Extract `quality` parameter (issueType: 'incomplete', 'missing-images', 'validation-errors', etc.)
+    - [x] 6.1.2 Extract `status` parameter (comma-separated list of statuses)
+  - [x] 6.2 Implement `filterProductsByQuality(products, qualityFilter, statusFilter)` helper function:
+    - [x] 6.2.1 Filter by status if statusFilter provided
+    - [x] 6.2.2 Filter by quality issue type if qualityFilter provided
+    - [x] 6.2.3 For 'incomplete': show products with completenessScore < 100
+    - [x] 6.2.4 For 'missing-images': show products with empty images array
+    - [x] 6.2.5 For 'missing-[field]': show products missing that specific field
+    - [x] 6.2.6 For 'validation-errors': show products with validationErrors.length > 0
+  - [x] 6.3 Apply filters to product list before rendering
+  - [x] 6.4 Display active filter badges above product list with remove/clear options
+  - [x] 6.5 Add "Clear all filters" button when filters are active
 
 - [ ] 7.0 Add Status Filter and Real-time Updates
   - [ ] 7.1 In `quality-widget.tsx`, implement status filter dropdown with multi-select:

@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,7 +29,8 @@ import type { ProductStatus } from "@/types/product";
 import type { QualityIssue } from "@/types/quality";
 
 export function QualityWidget() {
-  const { products } = useProductStore();
+  const { products, recalculateAllQuality } = useProductStore();
+  const router = useRouter();
   const [selectedStatuses, setSelectedStatuses] = useState<ProductStatus[]>([
     'active', 'development', 'inactive'
   ]);
@@ -126,13 +128,14 @@ export function QualityWidget() {
   };
 
   const handleIssueClick = (issueType: string) => {
-    // TODO: Navigate to filtered product list
-    console.log(`Navigate to products with issue: ${issueType}`);
+    const params = new URLSearchParams();
+    params.set('quality', issueType);
+    params.set('status', selectedStatuses.join(','));
+    router.push(`/products?${params.toString()}`);
   };
 
   const handleRefresh = () => {
-    // TODO: Refresh quality metrics
-    console.log('Refresh quality metrics');
+    recalculateAllQuality();
   };
 
   const allStatuses: ProductStatus[] = ['active', 'development', 'inactive', 'discontinued'];
