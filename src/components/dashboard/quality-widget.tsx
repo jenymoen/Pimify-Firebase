@@ -1,8 +1,8 @@
 // src/components/dashboard/quality-widget.tsx
 "use client";
 
-import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useMemo, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,9 +31,41 @@ import type { QualityIssue } from "@/types/quality";
 export function QualityWidget() {
   const { products, recalculateAllQuality } = useProductStore();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [selectedStatuses, setSelectedStatuses] = useState<ProductStatus[]>([
     'active', 'development', 'inactive'
   ]);
+
+  // Parse URL parameters on mount to restore filter state
+  useEffect(() => {
+    const statusParam = searchParams.get('status');
+    if (statusParam) {
+      const statuses = statusParam.split(',') as ProductStatus[];
+      setSelectedStatuses(statuses);
+    }
+  }, [searchParams]);
+
+  // Update URL when selectedStatuses changes
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (selectedStatuses.length > 0 && selectedStatuses.length < 4) {
+      params.set('status', selectedStatuses.join(','));
+    } else {
+      params.delete('status');
+    }
+    const queryString = params.toString();
+    const newUrl = queryString ? `?${queryString}` : window.location.pathname;
+    router.replace(newUrl);
+  }, [selectedStatuses, router, searchParams]);
+
+  // Real-time updates: ensure quality metrics are up-to-date when products change
+  useEffect(() => {
+    // Check if any products are missing quality metrics and recalculate if needed
+    const productsNeedingMetrics = products.filter(product => !product.qualityMetrics);
+    if (productsNeedingMetrics.length > 0) {
+      recalculateAllQuality();
+    }
+  }, [products, recalculateAllQuality]);
 
   // Filter products based on selected statuses
   const filteredProducts = useMemo(() => {
@@ -127,6 +159,14 @@ export function QualityWidget() {
     );
   };
 
+  const handleSelectAllStatuses = () => {
+    setSelectedStatuses(['active', 'development', 'inactive', 'discontinued']);
+  };
+
+  const handleClearStatusFilter = () => {
+    setSelectedStatuses([]);
+  };
+
   const handleIssueClick = (issueType: string) => {
     const params = new URLSearchParams();
     params.set('quality', issueType);
@@ -166,7 +206,19 @@ export function QualityWidget() {
               <Filter className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm font-medium">Filter by Status:</span>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="all-statuses"
+                  checked={selectedStatuses.length === allStatuses.length}
+                  onCheckedChange={handleSelectAllStatuses}
+                />
+                <label htmlFor="all-statuses" className="text-sm">
+                  <Badge variant={selectedStatuses.length === allStatuses.length ? "default" : "outline"}>
+                    All Statuses
+                  </Badge>
+                </label>
+              </div>
               {allStatuses.map(status => (
                 <div key={status} className="flex items-center space-x-2">
                   <Checkbox
@@ -181,6 +233,16 @@ export function QualityWidget() {
                   </label>
                 </div>
               ))}
+              {selectedStatuses.length > 0 && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleClearStatusFilter}
+                  className="h-6 px-2 text-xs"
+                >
+                  Clear Filter
+                </Button>
+              )}
             </div>
           </div>
           

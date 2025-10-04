@@ -123,16 +123,16 @@
   - [x] 6.4 Display active filter badges above product list with remove/clear options
   - [x] 6.5 Add "Clear all filters" button when filters are active
 
-- [ ] 7.0 Add Status Filter and Real-time Updates
-  - [ ] 7.1 In `quality-widget.tsx`, implement status filter dropdown with multi-select:
-    - [ ] 7.1.1 Use Checkbox components for each status option (Active, Development, Inactive, Discontinued)
-    - [ ] 7.1.2 Update selectedStatuses state on checkbox change
-    - [ ] 7.1.3 Update URL query parameters when filter changes (e.g., `?status=active,development`)
-  - [ ] 7.2 Implement `filterProductsByStatus(products, statuses)` helper function
-  - [ ] 7.3 Use useEffect to recalculate metrics when selectedStatuses changes
-  - [ ] 7.4 Parse URL query params on mount to restore filter state from bookmarked URLs
-  - [ ] 7.5 Add "All Statuses" option that clears the filter
-  - [ ] 7.6 Ensure quality metrics update in real-time when products are added/updated in store
+- [x] 7.0 Add Status Filter and Real-time Updates
+  - [x] 7.1 In `quality-widget.tsx`, implement status filter dropdown with multi-select:
+    - [x] 7.1.1 Use Checkbox components for each status option (Active, Development, Inactive, Discontinued)
+    - [x] 7.1.2 Update selectedStatuses state on checkbox change
+    - [x] 7.1.3 Update URL query parameters when filter changes (e.g., `?status=active,development`)
+  - [x] 7.2 Implement `filterProductsByStatus(products, statuses)` helper function
+  - [x] 7.3 Use useEffect to recalculate metrics when selectedStatuses changes
+  - [x] 7.4 Parse URL query params on mount to restore filter state from bookmarked URLs
+  - [x] 7.5 Add "All Statuses" option that clears the filter
+  - [x] 7.6 Ensure quality metrics update in real-time when products are added/updated in store
 
 - [ ] 8.0 Performance Optimization and Caching
   - [ ] 8.1 Wrap quality metric calculations in useMemo with proper dependencies
