@@ -4,6 +4,7 @@ import type { Product, PriceEntry, ProductOption, ProductVariant } from '@/types
 import { initialProductData, defaultMultilingualString } from '@/types/product';
 import { v4 as uuidv4 } from 'uuid';
 import { getCurrentTenantId } from './tenant';
+import { calculateQualityMetrics } from './product-quality';
 
 interface ProductState {
   products: Product[];
@@ -13,6 +14,7 @@ interface ProductState {
   findProductById: (productId:string) => Product | undefined;
   importProducts: (newProducts: Product[]) => void;
   setProducts: (products: Product[]) => void;
+  recalculateAllQuality: () => void;
 }
 
 const getProductStorageName = () => {
@@ -38,6 +40,9 @@ export const useProductStore = create<ProductState>()(
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
+
+        // Calculate and attach quality metrics
+        newProduct.qualityMetrics = calculateQualityMetrics(newProduct);
 
         const updatedProducts = [...get().products, newProduct];
         set({ products: updatedProducts });
@@ -67,6 +72,10 @@ export const useProductStore = create<ProductState>()(
                 aiSummary: productUpdateData.aiSummary ? { ...p.aiSummary, ...productUpdateData.aiSummary } : p.aiSummary,
                 updatedAt: new Date().toISOString(),
               };
+
+              // Recalculate quality metrics after update
+              updatedProduct.qualityMetrics = calculateQualityMetrics(updatedProduct);
+              
               return updatedProduct;
             }
             return p;
@@ -92,7 +101,7 @@ export const useProductStore = create<ProductState>()(
         newProducts.forEach(np => {
           const id = np.id || np.basicInfo?.sku || uuidv4();
           const existingP = productMap.get(id);
-          productMap.set(id, {
+          const importedProduct = {
             ...initialProductData,
             ...existingP,
             ...np,
@@ -106,7 +115,12 @@ export const useProductStore = create<ProductState>()(
              variants: np.variants || existingP?.variants || [],
             updatedAt: new Date().toISOString(),
             createdAt: existingP?.createdAt || new Date().toISOString()
-          });
+          };
+
+          // Calculate quality metrics for imported product
+          importedProduct.qualityMetrics = calculateQualityMetrics(importedProduct);
+          
+          productMap.set(id, importedProduct);
         });
 
         const updatedProducts = Array.from(productMap.values());
@@ -114,6 +128,15 @@ export const useProductStore = create<ProductState>()(
       },
       setProducts: (products) => {
         set({ products });
+      },
+      recalculateAllQuality: () => {
+        set(state => ({
+          products: state.products.map(product => ({
+            ...product,
+            qualityMetrics: calculateQualityMetrics(product),
+            updatedAt: new Date().toISOString(),
+          }))
+        }));
       }
     }),
     {
@@ -199,6 +222,9 @@ if (typeof window !== 'undefined') {
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
           };
+
+          // Calculate quality metrics for example product
+          exampleProduct.qualityMetrics = calculateQualityMetrics(exampleProduct);
           currentStoreState.setProducts([exampleProduct]);
           console.log(`Seeded example product for tenant: ${tenantId} because store was empty after initialization and init flag not set.`);
         }

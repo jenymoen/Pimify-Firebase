@@ -100,13 +100,13 @@
     - [x] 4.4.11 Implement handleRefresh function that recalculates all quality metrics
     - [x] 4.4.12 Implement handleMetricClick to navigate to `/products?quality=[issueType]&status=[statuses]`
 
-- [ ] 5.0 Integrate Quality Checks into Product Store
-  - [ ] 5.1 Import `calculateQualityMetrics` into `src/lib/product-store.ts`
-  - [ ] 5.2 Modify `addProduct` function to calculate and attach qualityMetrics before saving
-  - [ ] 5.3 Modify `updateProduct` function to recalculate qualityMetrics on every update
-  - [ ] 5.4 Update `importProducts` function to calculate quality for all imported products
-  - [ ] 5.5 Add new action `recalculateAllQuality()` that iterates all products and updates their qualityMetrics
-  - [ ] 5.6 Ensure qualityMetrics includes current timestamp in lastChecked field
+- [x] 5.0 Integrate Quality Checks into Product Store
+  - [x] 5.1 Import `calculateQualityMetrics` into `src/lib/product-store.ts`
+  - [x] 5.2 Modify `addProduct` function to calculate and attach qualityMetrics before saving
+  - [x] 5.3 Modify `updateProduct` function to recalculate qualityMetrics on every update
+  - [x] 5.4 Update `importProducts` function to calculate quality for all imported products
+  - [x] 5.5 Add new action `recalculateAllQuality()` that iterates all products and updates their qualityMetrics
+  - [x] 5.6 Ensure qualityMetrics includes current timestamp in lastChecked field
 
 - [ ] 6.0 Implement Product Filtering and Navigation
   - [ ] 6.1 Modify `src/app/(app)/products/page.tsx` to read URL query parameters:
