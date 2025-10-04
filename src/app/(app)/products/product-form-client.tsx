@@ -183,7 +183,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
 
-  const defaultValues: ProductFormData = existingProduct ? {
+  const defaultValues = existingProduct ? {
       basicInfo: {
         ...existingProduct.basicInfo,
         name: existingProduct.basicInfo.name || defaultMultilingualString,
@@ -214,11 +214,11 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         keywords: existingProduct.marketingSEO.keywords || [],
       },
       pricingAndStock: {
-        standardPriceAmount: existingProduct.pricingAndStock?.standardPrice?.[0]?.amount,
+        standardPriceAmount: existingProduct.pricingAndStock?.standardPrice?.[0]?.amount ?? undefined,
         standardPriceCurrency: existingProduct.pricingAndStock?.standardPrice?.[0]?.currency || "NOK",
-        salePriceAmount: existingProduct.pricingAndStock?.salePrice?.[0]?.amount,
+        salePriceAmount: existingProduct.pricingAndStock?.salePrice?.[0]?.amount ?? undefined,
         salePriceCurrency: existingProduct.pricingAndStock?.salePrice?.[0]?.currency || "NOK",
-        costPriceAmount: existingProduct.pricingAndStock?.costPrice?.[0]?.amount,
+        costPriceAmount: existingProduct.pricingAndStock?.costPrice?.[0]?.amount ?? undefined,
         costPriceCurrency: existingProduct.pricingAndStock?.costPrice?.[0]?.currency || "NOK",
       },
       options: (existingProduct.options || []).map(opt => ({ 
@@ -279,7 +279,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
 
   const form = useForm<ProductFormData>({
     resolver: zodResolver(productFormSchema),
-    defaultValues,
+    defaultValues: defaultValues as any,
     mode: "onChange",
   });
 
@@ -504,16 +504,16 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         return;
     }
 
-    const validOptions = options.filter(opt => opt.name && opt.name.trim() && opt.values && typeof opt.values === 'string' && opt.values.trim() !== '');
+    const validOptions = options.filter(opt => opt.name && opt.name.trim() && opt.values && Array.isArray(opt.values) && opt.values.length > 0);
     if (validOptions.length !== options.length || validOptions.length === 0) {
-        toast({ title: "Incomplete Options", description: "Ensure all defined options have a name and a non-empty values string.", variant: "destructive" });
+        toast({ title: "Incomplete Options", description: "Ensure all defined options have a name and at least one value.", variant: "destructive" });
         replaceVariants([]); 
         return;
     }
 
     const parsedOptions = validOptions.map(opt => ({
         name: opt.name.trim(),
-        values: opt.values.split(',').map(v => v.trim()).filter(v => v),
+        values: opt.values,
     }));
 
 
@@ -577,7 +577,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                         <FormItem>
                           <FormLabel>Product Name <span className="text-destructive">*</span></FormLabel>
                            <FormControl>
-                            <MultilingualInput id="name" label="" {...field} value={field.value || defaultMultilingualString} />
+                            <MultilingualInput id="name" label="" {...field} value={{ en: field.value?.en || '', no: field.value?.no || '' }} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -642,7 +642,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                          <FormItem>
                           <FormLabel>Short Description <span className="text-destructive">*</span></FormLabel>
                            <FormControl>
-                            <MultilingualInput id="descriptionShort" label="" type="textarea" {...field} value={field.value || defaultMultilingualString} />
+                            <MultilingualInput id="descriptionShort" label="" type="textarea" {...field} value={{ en: field.value?.en || '', no: field.value?.no || '' }} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -655,7 +655,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                         <FormItem>
                           <FormLabel>Long Description <span className="text-destructive">*</span></FormLabel>
                            <FormControl>
-                            <MultilingualInput id="descriptionLong" label="" type="textarea" {...field} value={field.value || defaultMultilingualString} />
+                            <MultilingualInput id="descriptionLong" label="" type="textarea" {...field} value={{ en: field.value?.en || '', no: field.value?.no || '' }} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -777,7 +777,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                             </Card>
                         ))}
                         {optionsFields.length < 3 && (
-                            <Button type="button" variant="outline" onClick={() => appendOption({ id: uuidv4(), name: '', values: '' })}>
+                            <Button type="button" variant="outline" onClick={() => appendOption({ id: uuidv4(), name: '', values: [] })}>
                                 <ListPlus className="mr-2 h-4 w-4" /> Add Option
                             </Button>
                         )}
@@ -1011,7 +1011,11 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       render={({ field }) => (
                         <MediaEditor
                           label="Images"
-                          entries={field.value || []}
+                          entries={(field.value || []).map(img => ({
+                            ...img,
+                            url: img.url || '',
+                            altText: img.altText ? { en: img.altText.en || '', no: img.altText.no || '' } : undefined
+                          }))}
                           onChange={field.onChange}
                           allowedTypes={['image']}
                         />
@@ -1030,7 +1034,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                          <FormItem>
                            <FormLabel>SEO Title</FormLabel>
                            <FormControl>
-                            <MultilingualInput id="seoTitle" label="" {...field} value={field.value || defaultMultilingualString} />
+                            <MultilingualInput id="seoTitle" label="" {...field} value={{ en: field.value?.en || '', no: field.value?.no || '' }} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -1043,7 +1047,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                         <FormItem>
                            <FormLabel>SEO Meta Description</FormLabel>
                           <FormControl>
-                            <MultilingualInput id="seoDescription" label="" type="textarea" {...field} value={field.value || defaultMultilingualString} />
+                            <MultilingualInput id="seoDescription" label="" type="textarea" {...field} value={{ en: field.value?.en || '', no: field.value?.no || '' }} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -1086,7 +1090,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                               label=""
                               type="textarea"
                               disabled={true}
-                              value={field.value || defaultMultilingualString}
+                              value={{ en: field.value?.en || '', no: field.value?.no || '' }}
                               onChange={field.onChange}
                             />
                           </FormControl>
