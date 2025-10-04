@@ -23,6 +23,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useProductStore } from '@/lib/product-store';
 import { useToast } from "@/hooks/use-toast";
 import { isProductComplete } from '@/lib/product-utils'; // Import the utility function
+import { QualityBadge } from './quality-badge';
 
 interface ProductCardProps {
   product: Product;
@@ -89,20 +90,11 @@ export function ProductCard({ product }: ProductCardProps) {
       </CardContent>
       <CardFooter className="p-4 bg-muted/30 flex justify-between items-center">
         <div className="flex items-center gap-2">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                {complete ? (
-                  <CheckCircle2 className="h-5 w-5 text-green-600" />
-                ) : (
-                  <AlertTriangle className="h-5 w-5 text-yellow-500" />
-                )}
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{complete ? 'Product Complete' : 'Product Incomplete'}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <QualityBadge 
+            completenessScore={product.qualityMetrics?.completenessScore || 0}
+            size="sm"
+            showIcon={true}
+          />
           <Link href={`/products/${product.id}`} passHref>
             <Button variant="outline" size="sm">
               View Details <ArrowRight className="ml-2 h-4 w-4" />
