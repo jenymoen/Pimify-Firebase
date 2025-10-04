@@ -186,8 +186,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
   const defaultValues: ProductFormData = existingProduct ? {
       basicInfo: {
         ...existingProduct.basicInfo,
-        name: existingProduct.basicInfo.name || {...defaultMultilingualString},
-        descriptionShort: existingProduct.basicInfo.descriptionShort || {...defaultMultilingualString},
+        name: existingProduct.basicInfo.name || defaultMultilingualString,
+        descriptionShort: existingProduct.basicInfo.descriptionShort || defaultMultilingualString,
         descriptionLong: existingProduct.basicInfo.descriptionLong || {...defaultMultilingualString},
         gtin: existingProduct.basicInfo.gtin || '',
         launchDate: existingProduct.basicInfo.launchDate ? parseISO(existingProduct.basicInfo.launchDate) : undefined,
@@ -224,7 +224,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       options: (existingProduct.options || []).map(opt => ({ 
         id: opt.id,
         name: opt.name,
-        values: opt.values.join(','), 
+        values: Array.isArray(opt.values) ? opt.values.join(',') : opt.values, 
       })),
       variants: (existingProduct.variants || []).map(v => { 
         return { 
@@ -305,23 +305,62 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         updatedAt: new Date().toISOString(),
         basicInfo: {
           ...data.basicInfo,
+          name: {
+            en: data.basicInfo.name.en || '',
+            no: data.basicInfo.name.no || ''
+          },
+          descriptionShort: {
+            en: data.basicInfo.descriptionShort.en || '',
+            no: data.basicInfo.descriptionShort.no || ''
+          },
+          descriptionLong: {
+            en: data.basicInfo.descriptionLong.en || '',
+            no: data.basicInfo.descriptionLong.no || ''
+          },
           launchDate: data.basicInfo.launchDate ? data.basicInfo.launchDate.toISOString() : undefined,
           endDate: data.basicInfo.endDate ? data.basicInfo.endDate.toISOString() : undefined,
         },
-        attributesAndSpecs: data.attributesAndSpecs,
+        attributesAndSpecs: {
+          categories: data.attributesAndSpecs.categories || [],
+          properties: data.attributesAndSpecs.properties || [],
+          technicalSpecs: data.attributesAndSpecs.technicalSpecs || [],
+          countryOfOrigin: data.attributesAndSpecs.countryOfOrigin,
+        },
         media: {
-          images: (data.media.images || []).filter(img => {
-            if (!img.url || img.url.trim() === '') return false;
-             try {
+          images: (data.media.images || [])
+            .filter(img => {
+              if (!img.url || img.url.trim() === '') return false;
+              try {
                 const url = new URL(img.url); 
                 return url.protocol === "http:" || url.protocol === "https:";
               } catch (_) {
                 return img.url.startsWith('/');
               }
-          })
+            })
+            .map(img => ({ 
+              ...img, 
+              url: img.url!,
+              altText: img.altText ? {
+                en: img.altText.en || '',
+                no: img.altText.no || ''
+              } : undefined
+            }))
         },
-        marketingSEO: data.marketingSEO,
-        aiSummary: data.aiSummary,
+        marketingSEO: {
+          seoTitle: {
+            en: data.marketingSEO.seoTitle.en || '',
+            no: data.marketingSEO.seoTitle.no || ''
+          },
+          seoDescription: {
+            en: data.marketingSEO.seoDescription.en || '',
+            no: data.marketingSEO.seoDescription.no || ''
+          },
+          keywords: data.marketingSEO.keywords || [],
+        },
+        aiSummary: {
+          en: data.aiSummary?.en || '',
+          no: data.aiSummary?.no || ''
+        },
         pricingAndStock: { 
             standardPrice: [],
             salePrice: [],
