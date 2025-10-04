@@ -68,37 +68,37 @@
   - [x] 3.7 Export `useQualityConfigStore` hook
 
 - [ ] 4.0 Build Dashboard Widget UI Components
-  - [ ] 4.1 Create `src/components/dashboard/quality-metric-card.tsx`:
-    - [ ] 4.1.1 Accept props: title, value, icon, color, onClick handler
-    - [ ] 4.1.2 Render Card component with colored border based on severity
-    - [ ] 4.1.3 Display icon, title, and large value (number or percentage)
-    - [ ] 4.1.4 Make entire card clickable, add hover effect
-    - [ ] 4.1.5 Add aria-label for accessibility
-  - [ ] 4.2 Create `src/components/dashboard/quality-issue-list.tsx`:
-    - [ ] 4.2.1 Accept props: issues array with {icon, label, count, issueType}
-    - [ ] 4.2.2 Render list of clickable issue rows
-    - [ ] 4.2.3 Each row shows icon, label, count, and arrow indicator
-    - [ ] 4.2.4 Emit onClick with issueType for navigation
-    - [ ] 4.2.5 Add empty state message when no issues
-  - [ ] 4.3 Create `src/components/dashboard/quality-chart.tsx`:
-    - [ ] 4.3.1 Accept props: completeCount, incompleteCount
-    - [ ] 4.3.2 Use Recharts PieChart with 'complete' and 'incomplete' data
-    - [ ] 4.3.3 Apply green color to complete, yellow to incomplete
-    - [ ] 4.3.4 Add Tooltip and Legend components
-    - [ ] 4.3.5 Wrap in ClientOnly component for SSR compatibility
-  - [ ] 4.4 Create `src/components/dashboard/quality-widget.tsx`:
-    - [ ] 4.4.1 Import and use useProductStore to get all products
-    - [ ] 4.4.2 Add useState for selectedStatuses filter (default: all)
-    - [ ] 4.4.3 Use useMemo to calculate quality metrics for filtered products
-    - [ ] 4.4.4 Calculate: completenessScore, missingFieldsCount, validationErrorsCount
-    - [ ] 4.4.5 Render Card with "Data Quality Overview" title
-    - [ ] 4.4.6 Add status filter Select dropdown in header
-    - [ ] 4.4.7 Render 3 QualityMetricCard components in grid layout
-    - [ ] 4.4.8 Render QualityChart component
-    - [ ] 4.4.9 Render QualityIssueList component with breakdown
-    - [ ] 4.4.10 Add "Last updated" timestamp and Refresh button in footer
-    - [ ] 4.4.11 Implement handleRefresh function that recalculates all quality metrics
-    - [ ] 4.4.12 Implement handleMetricClick to navigate to `/products?quality=[issueType]&status=[statuses]`
+  - [x] 4.1 Create `src/components/dashboard/quality-metric-card.tsx`:
+    - [x] 4.1.1 Accept props: title, value, icon, color, onClick handler
+    - [x] 4.1.2 Render Card component with colored border based on severity
+    - [x] 4.1.3 Display icon, title, and large value (number or percentage)
+    - [x] 4.1.4 Make entire card clickable, add hover effect
+    - [x] 4.1.5 Add aria-label for accessibility
+  - [x] 4.2 Create `src/components/dashboard/quality-issue-list.tsx`:
+    - [x] 4.2.1 Accept props: issues array with {icon, label, count, issueType}
+    - [x] 4.2.2 Render list of clickable issue rows
+    - [x] 4.2.3 Each row shows icon, label, count, and arrow indicator
+    - [x] 4.2.4 Emit onClick with issueType for navigation
+    - [x] 4.2.5 Add empty state message when no issues
+  - [x] 4.3 Create `src/components/dashboard/quality-chart.tsx`:
+    - [x] 4.3.1 Accept props: completeCount, incompleteCount
+    - [x] 4.3.2 Use Recharts PieChart with 'complete' and 'incomplete' data
+    - [x] 4.3.3 Apply green color to complete, yellow to incomplete
+    - [x] 4.3.4 Add Tooltip and Legend components
+    - [x] 4.3.5 Wrap in ClientOnly component for SSR compatibility
+  - [x] 4.4 Create `src/components/dashboard/quality-widget.tsx`:
+    - [x] 4.4.1 Import and use useProductStore to get all products
+    - [x] 4.4.2 Add useState for selectedStatuses filter (default: all)
+    - [x] 4.4.3 Use useMemo to calculate quality metrics for filtered products
+    - [x] 4.4.4 Calculate: completenessScore, missingFieldsCount, validationErrorsCount
+    - [x] 4.4.5 Render Card with "Data Quality Overview" title
+    - [x] 4.4.6 Add status filter Select dropdown in header
+    - [x] 4.4.7 Render 3 QualityMetricCard components in grid layout
+    - [x] 4.4.8 Render QualityChart component
+    - [x] 4.4.9 Render QualityIssueList component with breakdown
+    - [x] 4.4.10 Add "Last updated" timestamp and Refresh button in footer
+    - [x] 4.4.11 Implement handleRefresh function that recalculates all quality metrics
+    - [x] 4.4.12 Implement handleMetricClick to navigate to `/products?quality=[issueType]&status=[statuses]`
 
 - [ ] 5.0 Integrate Quality Checks into Product Store
   - [ ] 5.1 Import `calculateQualityMetrics` into `src/lib/product-store.ts`
