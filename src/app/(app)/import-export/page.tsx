@@ -9,17 +9,23 @@ import { Label } from '@/components/ui/label';
 import { useProductStore } from '@/lib/product-store';
 import type { Product } from '@/types/product';
 import { useToast } from '@/hooks/use-toast';
-import { UploadCloud, DownloadCloud, FileJson, AlertTriangle, ShoppingCart, Save, Settings, RefreshCw } from 'lucide-react';
+import { UploadCloud, DownloadCloud, FileJson, AlertTriangle, ShoppingCart, Save, Settings, RefreshCw, FileText, Download } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useShopifyConfigStore } from '@/lib/shopify-config-store';
+import { productsToCSV, parseCSV, csvRowToProduct, validateCSVData } from '@/lib/csv-utils';
+import { downloadCSVTemplate } from '@/lib/csv-template';
 
 export default function ImportExportPage() {
   const { products, importProducts: storeImportProducts } = useProductStore();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const csvFileInputRef = useRef<HTMLInputElement>(null);
   const [isImportingJson, setIsImportingJson] = useState(false);
+  const [isImportingCsv, setIsImportingCsv] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [csvFileName, setCsvFileName] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [csvImportError, setCsvImportError] = useState<string | null>(null);
 
   const { 
     storeUrl, 
@@ -61,6 +67,24 @@ export default function ImportExportPage() {
     toast({ title: 'Export Successful', description: 'Product data has been exported to JSON.' });
   };
 
+  const handleExportCsv = () => {
+    try {
+      const csvContent = productsToCSV(products);
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Pimify_export_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({ title: 'CSV Export Successful', description: 'Product data has been exported to CSV.' });
+    } catch (error: any) {
+      toast({ title: 'CSV Export Failed', description: error.message || 'Failed to export CSV file.', variant: 'destructive' });
+    }
+  };
+
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     setImportError(null);
     setFileName(null);
@@ -89,6 +113,51 @@ export default function ImportExportPage() {
       setIsImportingJson(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleCSVFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    setCsvImportError(null);
+    setCsvFileName(null);
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setCsvFileName(file.name);
+    setIsImportingCsv(true);
+
+    try {
+      const fileContent = await file.text();
+      const csvRows = parseCSV(fileContent);
+      
+      if (csvRows.length === 0) {
+        throw new Error("No valid data found in CSV file.");
+      }
+
+      // Validate CSV data
+      const validation = validateCSVData(csvRows);
+      if (!validation.valid) {
+        throw new Error(`Validation errors found:\n${validation.errors.join('\n')}`);
+      }
+
+      // Convert CSV rows to products
+      const products = csvRows.map(row => csvRowToProduct(row)).filter(Boolean) as Product[];
+      
+      if (products.length === 0) {
+        throw new Error("No valid products could be created from the CSV data.");
+      }
+
+      storeImportProducts(products);
+      toast({ title: 'CSV Import Successful', description: `${products.length} products imported from CSV.` });
+
+    } catch (err: any) {
+      console.error('CSV Import error:', err);
+      setCsvImportError(`Failed to import: ${err.message || 'Invalid CSV file.'}`);
+      toast({ title: 'CSV Import Failed', description: err.message || 'Please check the file format and try again.', variant: 'destructive' });
+    } finally {
+      setIsImportingCsv(false);
+      if (csvFileInputRef.current) {
+        csvFileInputRef.current.value = '';
       }
     }
   };
@@ -232,6 +301,69 @@ export default function ImportExportPage() {
           <CardContent>
             <Button onClick={handleExportJson} disabled={products.length === 0} className="w-full">
               <FileJson className="mr-2 h-5 w-5" /> Export All Products
+            </Button>
+            {products.length === 0 && (
+              <p className="text-sm text-muted-foreground mt-4 text-center">
+                There are no products to export.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+        <Card className="shadow-lg">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <UploadCloud className="h-6 w-6 text-primary" /> Import Products (CSV)
+            </CardTitle>
+            <CardDescription>
+              Import products from a CSV file. Download the template first to see the required format.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Input
+              type="file"
+              accept=".csv"
+              ref={csvFileInputRef}
+              onChange={handleCSVFileChange}
+              className="hidden"
+              id="import-csv-file-input"
+            />
+            <div className="space-y-2">
+              <Button onClick={() => csvFileInputRef.current?.click()} disabled={isImportingCsv} className="w-full">
+                <FileText className="mr-2 h-5 w-5" /> {isImportingCsv ? 'Importing...' : 'Choose CSV File'}
+              </Button>
+              <Button onClick={downloadCSVTemplate} variant="outline" className="w-full">
+                <Download className="mr-2 h-4 w-4" /> Download Template
+              </Button>
+            </div>
+            {csvFileName && <p className="text-sm text-muted-foreground">Selected file: {csvFileName}</p>}
+            {csvImportError && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>CSV Import Error</AlertTitle>
+                <AlertDescription className="whitespace-pre-line">{csvImportError}</AlertDescription>
+              </Alert>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Use the template to ensure proper CSV format. Required fields: SKU, English name, brand.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-lg">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <DownloadCloud className="h-6 w-6 text-primary" /> Export Products (CSV)
+            </CardTitle>
+            <CardDescription>
+              Export all current product data to a CSV file for spreadsheet editing.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={handleExportCsv} disabled={products.length === 0} className="w-full">
+              <FileText className="mr-2 h-5 w-5" /> Export All Products
             </Button>
             {products.length === 0 && (
               <p className="text-sm text-muted-foreground mt-4 text-center">
