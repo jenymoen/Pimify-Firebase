@@ -34,6 +34,8 @@
 - `src/lib/database-schema.ts` - Database schema definitions and SQL DDL statements for workflow system.
 - `src/lib/migration-scripts.ts` - Migration scripts for adding workflow functionality to existing data.
 - `src/lib/__tests__/migration-scripts.test.ts` - Unit tests for migration scripts.
+- `src/lib/workflow-state-manager.ts` - Core workflow state management with transition validation.
+- `src/lib/__tests__/workflow-state-manager.test.ts` - Unit tests for workflow state manager.
 
 ### Notes
 
@@ -56,7 +58,7 @@
   - [x] 1.11 Add database indexes for efficient workflow state and audit trail queries
 
 - [ ] 2.0 Core Workflow State Management System
-  - [ ] 2.1 Implement WorkflowStateManager class with state transition validation
+  - [x] 2.1 Implement WorkflowStateManager class with state transition validation
   - [ ] 2.2 Create state transition rules: Draft→Review, Review→Approved/Rejected, Approved→Published, Rejected→Draft
   - [ ] 2.3 Implement automatic state transitions (e.g., Rejected→Draft)
   - [ ] 2.4 Add state transition logging to audit trail
