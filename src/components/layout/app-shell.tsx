@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation'; // Added useRouter
-import { LayoutDashboard, PackagePlus, Package, UploadCloud, Settings, Menu, LogOut } from 'lucide-react'; // Added LogOut
+import { LayoutDashboard, PackagePlus, Package, UploadCloud, Settings, Menu, LogOut, TrendingUp } from 'lucide-react'; // Added LogOut
 import {
   SidebarProvider,
   Sidebar,
@@ -45,6 +45,7 @@ export function AppShell({ children }: AppShellProps) {
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/products', label: 'Products', icon: Package },
     { href: '/products/new', label: 'Add Product', icon: PackagePlus },
+    { href: '/quality', label: 'Quality Dashboard', icon: TrendingUp },
     { href: '/import-export', label: 'Import/Export', icon: UploadCloud },
   ];
 
@@ -64,7 +65,7 @@ export function AppShell({ children }: AppShellProps) {
             <SidebarMenuItem key={item.label}>
               <Link href={item.href} passHref legacyBehavior>
                 <SidebarMenuButton
-                  isActive={pathname === item.href || (item.href !== '/products' && item.href !== '/dashboard' && pathname.startsWith(item.href)) || (item.href === '/dashboard' && pathname === '/dashboard') }
+                  isActive={pathname === item.href || (item.href !== '/products' && item.href !== '/dashboard' && item.href !== '/quality' && pathname.startsWith(item.href)) || (item.href === '/dashboard' && pathname === '/dashboard') || (item.href === '/quality' && pathname === '/quality') }
                   asChild={false} 
                   tooltip={item.label}
                 >

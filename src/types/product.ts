@@ -1,3 +1,4 @@
+import type { QualityMetrics } from './quality';
 
 export type MultilingualString = {
   en: string;
@@ -118,6 +119,8 @@ export interface Product {
   };
 
   aiSummary?: MultilingualString;
+
+  qualityMetrics?: QualityMetrics; // Quality assessment data
 
   createdAt: string;
   updatedAt: string;
