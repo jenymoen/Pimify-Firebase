@@ -1,0 +1,83 @@
+﻿id;sku;name_en;name_no;description_short_en;description_short_no;description_long_en;description_long_no;brand;status;gtin;launch_date;end_date;categories;properties;technical_specs;country_of_origin;image_urls;seo_title_en;seo_title_no;seo_description_en;seo_description_no;keywords;standard_price_amount;standard_price_currency;sale_price_amount;sale_price_currency;cost_price_amount;cost_price_currency;quality_score;created_at;updated_at
+sample-product-1;SAMPLE-001;Sample Product;Eksempel Produkt;A sample product for demonstration;Et eksempelprodukt for demonstrasjon;This is a detailed description of the sample product. It can contain multiple sentences and provide comprehensive information about the product.;Dette er en detaljert beskrivelse av eksempelproduktet. Det kan inneholde flere setninger og gi omfattende informasjon om produktet.;Sample Brand;active;1,23E+12;01/01/2024;;Electronics;;;;;;;;;;;;;;;;;;
+TMS24054H;TMS24054H;Road cycling shoes TI-TECH;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+TMS24054W;TMS24054W;Road cycling shoes TI-TECH;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+CZS25055H;CZS25055H;Unisex  road cycling shoes-OSCAR;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+CZS25055R;CZS25055R;Unisex  road cycling shoes-OSCAR;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+CZS25055W;CZS25055W;Unisex  road cycling shoes-OSCAR;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+WS23041H;WS23041H;"Road cycling shoes
+TPU +Nylon 25%GF";;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+WS23041W;WS23041W;"Road cycling shoes
+TPU +Nylon 25%GF";;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+WS23041C;WS23041C;"Road cycling shoes
+TPU +Nylon 25%GF";;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+WZS24043W;WZS24043W;Road cycling shoes??;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+WZS24043H;WZS24043H;Road cycling shoes??;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+WZS24043S;WZS24043S;Road cycling shoes??;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+WZS24043C;WZS24043C;Road cycling shoes??;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+WZS24047W;WZS24047W;"Unisex  road cycling shoes
+Nylon Sole
+Picasso 2.0";;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+WZS24047H;WZS24047H;"Unisex  road cycling shoes
+Nylon Sole
+Picasso 2.0";;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+TZS24046H;TZS24046H;"Road cycling shoes
+carbon sole
+??LY";;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+MS21033A;MS21033A;"Road cycling shoes
+carbon sole
+???";;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+S22036W;S22036W;"Road cycling shoes 
+Nylon Sole
+????";;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+S22036H;S22036H;"Road cycling shoes 
+Nylon Sole
+????";;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+CLS24044W;CLS24044W; Lady road cycling shoes-???;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+S12021W;S12021W;"Road cycling shoes
+carbon sole
+????";;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+S12021JUER;S12021JUER;"Road cycling shoes
+carbon sole
+????";;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+TMS24052H;TMS24052H;Road cycling shoes??2.0;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+TMS24050V;TMS24050V;Mtb cycling shoes????;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+S23038H;S23038H;"Mtb cycling shoes
+Nylon Sole
+??2.0";;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+S23038G;S23038G;"Mtb cycling shoes
+Nylon Sole
+??2.0";;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+S21031MY;S21031MY;"Mtb cycling shoes
+Carbon Sole
+??";;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+WMS24051H;WMS24051H;Triathlon Road Shoes-??;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+WMS24051B;WMS24051B;Triathlon Road Shoes-??;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+TZS25057H;TZS25057H;Triathlon Road Shoes-??;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+TZS25057W;TZS25057W;Triathlon Road Shoes-??;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+TZS25058W;TZS25058W;"Cycling shoes
+unlock ??";;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+TZS25058H;TZS25058H;"Cycling shoes
+unlock ??";;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+TZS25058G;TZS25058G;"Cycling shoes
+unlock ??";;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+WS23042G;WS23042G;"Cycling shoes for road & mtb
+unlock ???2.0";;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+WS23042H;WS23042H;"Cycling shoes for road & mtb
+unlock ???2.0";;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+WLS24048P;WLS24048P;"Sport shoes?for road & mtb)
+unlock ???";;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+WLS24048G;WLS24048G;"Sport shoes?for road & mtb)
+unlock ???";;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+LS22035N;LS22035N;"Sport shoes?for road & mtb)
+unlock";;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+LS22035W;LS22035W;"Sport shoes?for road & mtb)
+unlock";;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+WZ24P185;WZ24P185;Road Bicycle Pedals Cleats Set;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+WZ24P186;WZ24P186;Road Bicycle Pedals Cleats Set;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+WZ24P187;WZ24P187;Road Bicycle Pedals Cleats Set;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+W0P082;W0P082;Road Bicycle Cleat Set;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+W0P081;W0P081;"MTB 
+Pedals Cleats Set";;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+W0P083;W0P083;"MTB 
+Cleat Set";;;;;;;;;;;;;;;;;;;;;;;;;;;;;

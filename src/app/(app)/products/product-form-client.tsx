@@ -504,17 +504,25 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         return;
     }
 
-    const validOptions = options.filter(opt => opt.name && opt.name.trim() && opt.values && Array.isArray(opt.values) && opt.values.length > 0);
-    if (validOptions.length !== options.length || validOptions.length === 0) {
-        toast({ title: "Incomplete Options", description: "Ensure all defined options have a name and at least one value.", variant: "destructive" });
-        replaceVariants([]); 
-        return;
-    }
+    const validOptions = options.filter(opt => {
+      const hasName = opt.name && opt.name.trim();
+      const hasValues = Array.isArray(opt.values) ? opt.values.length > 0 : opt.values && typeof opt.values === 'string' && opt.values.trim();
+      const parsedValues = Array.isArray(opt.values) ? opt.values : (opt.values && typeof opt.values === 'string' ? opt.values.split(',').map(v => v.trim()).filter(v => v) : []);
+      const hasValidValues = parsedValues.length > 0;
+      
+      return hasName && hasValidValues;
+  });
 
-    const parsedOptions = validOptions.map(opt => ({
-        name: opt.name.trim(),
-        values: opt.values,
-    }));
+  if (validOptions.length !== options.length || validOptions.length === 0) {
+      toast({ title: "Incomplete Options", description: "Ensure all defined options have a name and at least one value.", variant: "destructive" });
+      replaceVariants([]); 
+      return;
+  }
+
+  const parsedOptions = validOptions.map(opt => ({
+      name: opt.name.trim(),
+      values: Array.isArray(opt.values) ? opt.values : opt.values.split(',').map(v => v.trim()).filter(v => v),
+  }));
 
 
     if (parsedOptions.some(opt => opt.values.length === 0)) {
@@ -777,7 +785,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                             </Card>
                         ))}
                         {optionsFields.length < 3 && (
-                            <Button type="button" variant="outline" onClick={() => appendOption({ id: uuidv4(), name: '', values: [] })}>
+                            <Button type="button" variant="outline" onClick={() => appendOption({ id: uuidv4(), name: '', values: '' })}>
                                 <ListPlus className="mr-2 h-4 w-4" /> Add Option
                             </Button>
                         )}
@@ -801,9 +809,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                         <TableHead>SKU</TableHead>
                                         <TableHead>GTIN</TableHead>
                                         <TableHead>Std. Price</TableHead>
-                                        <TableHead>Std. Currency</TableHead>
                                         <TableHead>Sale Price</TableHead>
-                                        <TableHead>Sale Currency</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -826,16 +832,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                                                  <FormMessage>{form.formState.errors.variants?.[index]?.standardPriceAmount?.message}</FormMessage>
                                             </TableCell>
                                             <TableCell>
-                                                <FormField control={form.control} name={`variants.${index}.standardPriceCurrency`} render={({ field }) => ( <Input {...field} value={field.value ?? 'NOK'} placeholder="NOK" maxLength={3}/> )} />
-                                                 <FormMessage>{form.formState.errors.variants?.[index]?.standardPriceCurrency?.message}</FormMessage>
-                                            </TableCell>
-                                            <TableCell>
                                                 <FormField control={form.control} name={`variants.${index}.salePriceAmount`} render={({ field }) => ( <Input type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))} placeholder="Amount"/> )} />
                                                  <FormMessage>{form.formState.errors.variants?.[index]?.salePriceAmount?.message}</FormMessage>
-                                            </TableCell>
-                                            <TableCell>
-                                                <FormField control={form.control} name={`variants.${index}.salePriceCurrency`} render={({ field }) => ( <Input {...field} value={field.value ?? 'NOK'} placeholder="NOK" maxLength={3}/> )} />
-                                                 <FormMessage>{form.formState.errors.variants?.[index]?.salePriceCurrency?.message}</FormMessage>
                                             </TableCell>
                                         </TableRow>
                                     ))}

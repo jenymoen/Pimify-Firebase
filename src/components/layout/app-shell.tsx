@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation'; // Added useRouter
-import { LayoutDashboard, PackagePlus, Package, UploadCloud, Settings, Menu, LogOut, TrendingUp } from 'lucide-react'; // Added LogOut
+import { LayoutDashboard, PackagePlus, Package, UploadCloud, Settings, Menu, LogOut, TrendingUp, PanelLeft } from 'lucide-react'; // Added LogOut
 import {
   SidebarProvider,
   Sidebar,
@@ -126,10 +126,13 @@ export function AppShell({ children }: AppShellProps) {
         </div>
       ) : (
         <div className="flex min-h-screen">
-          <Sidebar collapsible="icon" variant="sidebar" side="left" className="flex flex-col"> {/* Added flex flex-col */}
+          <Sidebar collapsible="icon" variant="sidebar" side="left" className="flex flex-col">
             {sidebarContent}
           </Sidebar>
-          <SidebarInset className="flex-1"> 
+          <SidebarInset className="flex-1">
+            <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+              <SidebarTrigger className="-ml-1" />
+            </header>
             <div className="p-6">{children}</div>
           </SidebarInset>
         </div>
