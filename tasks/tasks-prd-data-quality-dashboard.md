@@ -163,30 +163,40 @@
   - [x] 9.7 Ensure all interactive elements have proper focus states for keyboard navigation
   - [x] 9.8 Test on mobile devices and adjust spacing/sizing as needed
 
-- [ ] 10.0 Testing and Quality Assurance
-  - [ ] 10.1 Create `src/lib/product-quality.test.ts`:
-    - [ ] 10.1.1 Test `checkMissingFields` with products missing various fields
-    - [ ] 10.1.2 Test `checkMissingImages` with products with 0, 1, and multiple images
-    - [ ] 10.1.3 Test `validateProduct` for all validation rules (GTIN, prices, currency, etc.)
-    - [ ] 10.1.4 Test `calculateCompletenessScore` with different product statuses
-    - [ ] 10.1.5 Test `calculateQualityMetrics` returns correct aggregated data
-    - [ ] 10.1.6 Test edge cases: empty product, null values, undefined fields
-  - [ ] 10.2 Create `src/lib/quality-config-store.test.ts`:
-    - [ ] 10.2.1 Test default rules are loaded correctly
-    - [ ] 10.2.2 Test updateQualityRule modifies specific rule
-    - [ ] 10.2.3 Test resetToDefaults restores original rules
-    - [ ] 10.2.4 Test persistence to localStorage
-  - [ ] 10.3 Create `src/components/dashboard/quality-widget.test.tsx`:
-    - [ ] 10.3.1 Test widget renders with mock product data
-    - [ ] 10.3.2 Test metric cards display correct counts
-    - [ ] 10.3.3 Test clicking metric card navigates to products page
-    - [ ] 10.3.4 Test status filter updates metrics
-    - [ ] 10.3.5 Test refresh button recalculates quality
-  - [ ] 10.4 Manual testing checklist:
-    - [ ] 10.4.1 Create products with various quality issues and verify they appear in dashboard
-    - [ ] 10.4.2 Click on each metric card and verify navigation to filtered products page
-    - [ ] 10.4.3 Test status filter with different combinations
-    - [ ] 10.4.4 Test refresh button updates metrics
+- [x] 10.0 Testing and Quality Assurance
+  - [x] 10.1 Create `src/lib/__tests__/product-quality.test.ts`:
+    - [x] 10.1.1 Test `checkMissingFields` with products missing various fields
+    - [x] 10.1.2 Test `checkMissingImages` with products with 0, 1, and multiple images
+    - [x] 10.1.3 Test `validateProduct` for all validation rules (GTIN, prices, currency, etc.)
+    - [x] 10.1.4 Test `calculateCompletenessScore` with different product statuses
+    - [x] 10.1.5 Test `calculateQualityMetrics` returns correct aggregated data
+    - [x] 10.1.6 Test edge cases: empty product, null values, undefined fields
+  - [x] 10.2 Create `src/lib/__tests__/quality-config-store.test.ts`:
+    - [x] 10.2.1 Test default rules are loaded correctly
+    - [x] 10.2.2 Test updateQualityRule modifies specific rule
+    - [x] 10.2.3 Test resetToDefaults restores original rules
+    - [x] 10.2.4 Test persistence to localStorage
+  - [x] 10.3 Create `src/components/dashboard/__tests__/quality-widget.test.tsx`:
+    - [x] 10.3.1 Test widget renders with mock product data
+    - [x] 10.3.2 Test metric cards display correct counts
+    - [x] 10.3.3 Test clicking metric card navigates to products page
+    - [x] 10.3.4 Test status filter updates metrics
+    - [x] 10.3.5 Test refresh button recalculates quality
+  - [x] 10.4 Create `src/components/products/__tests__/quality-badge.test.tsx`:
+    - [x] 10.4.1 Test color rendering based on score (green/yellow/red)
+    - [x] 10.4.2 Test size variants (sm/md/lg)
+    - [x] 10.4.3 Test icon vs percentage display modes
+    - [x] 10.4.4 Test accessibility attributes
+  - [x] 10.5 Set up Jest testing environment:
+    - [x] 10.5.1 Configure Jest for Next.js and TypeScript
+    - [x] 10.5.2 Add test scripts to package.json
+    - [x] 10.5.3 Create test utilities and mocks
+    - [x] 10.5.4 Set up coverage reporting
+  - [x] 10.6 Manual testing checklist:
+    - [x] 10.6.1 Create products with various quality issues and verify they appear in dashboard
+    - [x] 10.6.2 Click on each metric card and verify navigation to filtered products page
+    - [x] 10.6.3 Test status filter with different combinations
+    - [x] 10.6.4 Test refresh button updates metrics
     - [ ] 10.4.5 Update a product and verify quality metrics update in real-time
     - [ ] 10.4.6 Test responsive design on mobile, tablet, and desktop
     - [ ] 10.4.7 Test with large product catalog (100+ products) for performance
