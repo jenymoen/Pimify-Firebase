@@ -506,8 +506,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
 
     const validOptions = options.filter(opt => {
       const hasName = opt.name && opt.name.trim();
-      const hasValues = opt.values && typeof opt.values === 'string' && opt.values.trim();
-      const parsedValues = hasValues ? opt.values.split(',').map(v => v.trim()).filter(v => v) : [];
+      const hasValues = Array.isArray(opt.values) ? opt.values.length > 0 : opt.values && typeof opt.values === 'string' && opt.values.trim();
+      const parsedValues = Array.isArray(opt.values) ? opt.values : (opt.values && typeof opt.values === 'string' ? opt.values.split(',').map(v => v.trim()).filter(v => v) : []);
       const hasValidValues = parsedValues.length > 0;
       
       return hasName && hasValidValues;
