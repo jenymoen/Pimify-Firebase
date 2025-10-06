@@ -55,6 +55,13 @@ export class WorkflowStateManager {
   }
 
   /**
+   * Set the audit trail callback function
+   */
+  setAuditTrailCallback(callback: (entry: AuditTrailEntry) => void): void {
+    this.auditTrailCallback = callback;
+  }
+
+  /**
    * Validates if a state transition is allowed
    */
   validateStateTransition(request: StateTransitionRequest): WorkflowValidationResult {

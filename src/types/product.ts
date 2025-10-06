@@ -1,4 +1,5 @@
 import type { QualityMetrics } from './quality';
+import type { WorkflowState, UserRole } from './workflow';
 
 export type MultilingualString = {
   en: string;
@@ -122,6 +123,24 @@ export interface Product {
 
   qualityMetrics?: QualityMetrics; // Quality assessment data
 
+  // Workflow state management
+  workflowState?: WorkflowState;
+  assignedReviewer?: {
+    userId: string;
+    userName: string;
+    userRole: UserRole;
+  };
+  workflowHistory?: Array<{
+    id: string;
+    action: string;
+    fromState: WorkflowState;
+    toState: WorkflowState;
+    userId: string;
+    userName: string;
+    timestamp: string;
+    reason?: string;
+  }>;
+
   createdAt: string;
   updatedAt: string;
 }
@@ -160,5 +179,7 @@ export const initialProductData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>
   options: [],
   variants: [],
   aiSummary: { ...defaultMultilingualString },
+  workflowState: 'DRAFT' as WorkflowState,
+  workflowHistory: [],
 };
 

@@ -1,6 +1,7 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 import type { Product, ProductStatus as PimStatus, MediaEntry, PriceEntry, ProductOption as PimProductOption, ProductVariant as PimProductVariant } from '@/types/product';
+import { WorkflowState } from '@/types/workflow';
 
 interface ShopifyOptionPayload {
   name: string;
@@ -32,7 +33,24 @@ interface ShopifyProductPayload {
   }>;
 }
 
-function mapPimStatusToShopify(pimStatus: PimStatus): ShopifyProductPayload['status'] {
+function mapPimStatusToShopify(pimStatus: PimStatus, workflowState?: WorkflowState): ShopifyProductPayload['status'] {
+  // Workflow state takes precedence over product status for Shopify export
+  if (workflowState) {
+    switch (workflowState) {
+      case 'PUBLISHED':
+        return 'active';
+      case 'APPROVED':
+        return 'active';
+      case 'DRAFT':
+      case 'REVIEW':
+      case 'REJECTED':
+        return 'draft';
+      default:
+        return 'draft';
+    }
+  }
+
+  // Fallback to original product status mapping
   switch (pimStatus) {
     case 'active':
       return 'active';
@@ -53,7 +71,7 @@ function mapPimToShopifyProduct(product: Product): { product: ShopifyProductPayl
     body_html: product.basicInfo.descriptionLong.en || product.basicInfo.descriptionLong.no,
     vendor: product.basicInfo.brand,
     product_type: product.attributesAndSpecs.categories?.[0] || undefined, 
-    status: mapPimStatusToShopify(product.basicInfo.status),
+    status: mapPimStatusToShopify(product.basicInfo.status, product.workflowState),
     tags: product.marketingSEO.keywords?.join(', ') || undefined,
   };
 
@@ -137,7 +155,7 @@ function mapPimToShopifyProduct(product: Product): { product: ShopifyProductPayl
 
 export async function POST(request: NextRequest) {
   try {
-    const { storeUrl, apiKey, productsToExport } = await request.json();
+    const { storeUrl, apiKey, productsToExport, workflowStates } = await request.json();
 
     if (!storeUrl) {
       return NextResponse.json({ error: 'Shopify store URL is required.' }, { status: 400 });
@@ -152,7 +170,15 @@ export async function POST(request: NextRequest) {
     let exportedCount = 0;
     const errors: string[] = [];
 
-    for (const product of productsToExport as Product[]) {
+    // Filter products by workflow state if specified
+    let filteredProducts = productsToExport as Product[];
+    if (workflowStates && Array.isArray(workflowStates) && workflowStates.length > 0) {
+      filteredProducts = filteredProducts.filter(product => 
+        workflowStates.includes(product.workflowState)
+      );
+    }
+
+    for (const product of filteredProducts) {
       const shopifyApiUrl = `https://${storeUrl.replace(/^https?:\/\//, '')}/admin/api/2024-04/products.json`;
       const shopifyPayload = mapPimToShopifyProduct(product);
       
@@ -190,7 +216,7 @@ export async function POST(request: NextRequest) {
     if (errors.length > 0) {
       const fullMessage = `${exportedCount} products exported. ${errors.length} products failed.`;
       // If all failed, return 500, otherwise 207 (Multi-Status)
-      const status = errors.length === productsToExport.length ? 500 : 207; 
+      const status = errors.length === filteredProducts.length ? 500 : 207; 
       return NextResponse.json({ 
         message: fullMessage,
         errors, // Send back the detailed errors

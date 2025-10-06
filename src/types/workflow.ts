@@ -36,7 +36,15 @@ export enum WorkflowAction {
   BULK_APPROVE = 'bulk_approve',
   BULK_REJECT = 'bulk_reject',
   BULK_PUBLISH = 'bulk_publish',
-  ASSIGN_REVIEWER = 'assign_reviewer'
+  ASSIGN_REVIEWER = 'assign_reviewer',
+  VIEW_AUDIT_TRAIL = 'view_audit_trail',
+  MANAGE_USERS = 'manage_users',
+  CONFIGURE_WORKFLOW = 'configure_workflow',
+  VIEW_ALL_PRODUCTS = 'view_all_products',
+  VIEW_PRODUCT_HISTORY = 'view_product_history',
+  MANAGE_NOTIFICATIONS = 'manage_notifications',
+  PERFORM_BULK_OPERATIONS = 'perform_bulk_operations',
+  EXPORT_PRODUCTS = 'export_products',
 }
 
 // Field Change Tracking
@@ -187,6 +195,7 @@ export interface StateTransitionRule {
 // Workflow Configuration
 export interface WorkflowConfig {
   stateTransitionRules: StateTransitionRule[];
+  defaultNotificationPreferences: NotificationPreferences;
   autoAssignmentRules?: {
     reviewerAssignment: 'manual' | 'round_robin' | 'workload_based';
     defaultReviewer?: string;
@@ -301,6 +310,7 @@ export const defaultWorkflowConfig: WorkflowConfig = {
       isAutomatic: true,
     },
   ],
+  defaultNotificationPreferences: defaultNotificationPreferences,
   autoAssignmentRules: {
     reviewerAssignment: 'manual',
   },
@@ -315,3 +325,43 @@ export const defaultWorkflowConfig: WorkflowConfig = {
     enableExport: true,
   },
 };
+
+// Permission System Types
+export interface DynamicPermission {
+  id: string;
+  permission: string;
+  context?: Record<string, any>;
+  expiresAt?: string;
+  assignedBy: string;
+  assignedAt: string;
+}
+
+export interface Permission {
+  name: string;
+  description: string;
+  resource?: string;
+  action: string;
+}
+
+export interface PermissionContext {
+  userId: string;
+  userRole: UserRole;
+  resourceId?: string;
+  resourceType?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface PermissionResult {
+  hasPermission: boolean;
+  reason: string;
+  source: 'role' | 'dynamic' | 'hierarchy' | 'ownership' | 'assignment' | 'admin_override' | 'denied';
+  cached?: boolean;
+  checkTime?: number;
+}
+
+export interface RolePermissionConfig {
+  role: UserRole;
+  permissions: string[];
+  inheritsFrom?: UserRole[];
+  restrictions?: string[];
+}

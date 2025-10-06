@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Product, PriceEntry, ProductOption, ProductVariant } from '@/types/product';
 import { initialProductData, defaultMultilingualString } from '@/types/product';
+import { WorkflowState } from '@/types/workflow';
 import { v4 as uuidv4 } from 'uuid';
 import { getCurrentTenantId } from './tenant';
 import { calculateQualityMetrics } from './product-quality';
@@ -37,6 +38,9 @@ export const useProductStore = create<ProductState>()(
           options: productDataWithoutMeta.options ? [...productDataWithoutMeta.options] : [],
           variants: productDataWithoutMeta.variants ? [...productDataWithoutMeta.variants] : [],
           aiSummary: aiSummaryArgument || { ...defaultMultilingualString },
+          // Ensure workflow state is set
+          workflowState: productDataWithoutMeta.workflowState || WorkflowState.DRAFT,
+          workflowHistory: productDataWithoutMeta.workflowHistory || [],
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
@@ -219,6 +223,8 @@ if (typeof window !== 'undefined') {
                 { id: uuidv4(), sku: "EX-LT-GRY-512", optionValues: {"Color": "Space Gray", "Storage": "512GB"}, standardPrice: [{id: uuidv4(), amount: 10999, currency: 'NOK'}], salePrice: []}
               ],
               aiSummary: { en: 'A high-performance Silver laptop with 16GB RAM and 512GB SSD.', no: 'En høytytende sølvfarget bærbar PC med 16 GB RAM og 512 GB SSD.' },
+              workflowState: WorkflowState.DRAFT,
+              workflowHistory: [],
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
           };

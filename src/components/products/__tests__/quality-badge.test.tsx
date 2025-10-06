@@ -4,6 +4,14 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { QualityBadge } from '../quality-badge';
 
+// Mock lucide-react icons used inside QualityBadge to avoid ESM issues
+jest.mock('lucide-react', () => {
+  const MockIcon = (props: any) => <span {...props} />;
+  return new Proxy({}, {
+    get: () => MockIcon,
+  });
+});
+
 describe('QualityBadge', () => {
   describe('Score-based Colors', () => {
     it('should render green color for scores >= 90', () => {

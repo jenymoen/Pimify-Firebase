@@ -24,6 +24,7 @@ import { useProductStore } from '@/lib/product-store';
 import { useToast } from "@/hooks/use-toast";
 import { isProductComplete } from '@/lib/product-utils'; // Import the utility function
 import { QualityBadge } from './quality-badge';
+import { WorkflowStateBadge } from '@/components/workflow/workflow-state-badge';
 
 interface ProductCardProps {
   product: Product;
@@ -62,9 +63,14 @@ export function ProductCard({ product }: ProductCardProps) {
           />
         </div>
         <div className="p-6">
-          <Badge variant={product.basicInfo.status === 'active' ? 'default' : 'secondary'} className="mb-2">
-            {product.basicInfo.status.charAt(0).toUpperCase() + product.basicInfo.status.slice(1)}
-          </Badge>
+          <div className="mb-2 flex items-center gap-2 flex-wrap">
+            <Badge variant={product.basicInfo.status === 'active' ? 'default' : 'secondary'}>
+              {product.basicInfo.status.charAt(0).toUpperCase() + product.basicInfo.status.slice(1)}
+            </Badge>
+            {product.workflowState && (
+              <WorkflowStateBadge state={product.workflowState as any} size="sm" />
+            )}
+          </div>
           <CardTitle className="text-xl mb-1 truncate" title={product.basicInfo.name.en || product.basicInfo.sku}>
             {product.basicInfo.name.en || product.basicInfo.sku}
           </CardTitle>

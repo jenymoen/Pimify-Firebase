@@ -4,6 +4,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import type { Product, ProductStatus as PimStatus, MediaEntry, KeyValueEntry, PriceEntry, ProductOption as PimProductOption, ProductVariant as PimProductVariant } from '@/types/product';
 import { initialProductData, defaultMultilingualString } from '@/types/product';
+import { WorkflowState } from '@/types/workflow';
 import { v4 as uuidv4 } from 'uuid';
 
 // Shopify API types (simplified)
@@ -63,6 +64,19 @@ function mapShopifyStatusToPim(shopifyStatus: ShopifyProductShopify['status']): 
       return 'development';
     default:
       return 'development';
+  }
+}
+
+function mapShopifyStatusToWorkflowState(shopifyStatus: ShopifyProductShopify['status']): WorkflowState {
+  switch (shopifyStatus) {
+    case 'active':
+      return 'PUBLISHED';
+    case 'archived':
+      return 'REJECTED';
+    case 'draft':
+      return 'DRAFT';
+    default:
+      return 'DRAFT';
   }
 }
 
@@ -190,7 +204,18 @@ function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify): Product 
     },
     options: pimOptions,
     variants: pimVariants,
-    aiSummary: { ...defaultMultilingualString }, 
+    aiSummary: { ...defaultMultilingualString },
+    workflowState: mapShopifyStatusToWorkflowState(shopifyProduct.status),
+    workflowHistory: [{
+      id: uuidv4(),
+      action: 'IMPORT_FROM_SHOPIFY',
+      fromState: 'DRAFT' as WorkflowState,
+      toState: mapShopifyStatusToWorkflowState(shopifyProduct.status),
+      userId: 'system',
+      userName: 'System Import',
+      timestamp: new Date().toISOString(),
+      reason: `Imported from Shopify with status: ${shopifyProduct.status}`,
+    }],
     createdAt: shopifyProduct.created_at || new Date().toISOString(),
     updatedAt: shopifyProduct.updated_at || new Date().toISOString(),
   };
