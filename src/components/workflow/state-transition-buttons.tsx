@@ -149,16 +149,6 @@ const TRANSITION_CONFIG = {
     requiredRole: UserRole.REVIEWER,
     isCommentAction: true,
   },
-  [WorkflowAction.VIEW_DETAILS]: {
-    label: 'View Details',
-    description: 'View detailed product information',
-    icon: Eye,
-    color: 'bg-gray-500 hover:bg-gray-600',
-    textColor: 'text-white',
-    nextState: null,
-    requiredRole: UserRole.VIEWER,
-    isViewAction: true,
-  },
   [WorkflowAction.EDIT]: {
     label: 'Edit',
     description: 'Edit product information',
@@ -307,10 +297,7 @@ export const StateTransitionButtons: React.FC<StateTransitionButtonsProps> = ({
         break;
     }
 
-    // Always allow view action
-    if (hasPermission(WorkflowAction.VIEW_DETAILS)) {
-      actions.push(WorkflowAction.VIEW_DETAILS);
-    }
+    // Note: VIEW_DETAILS is handled by the main ProductCard button, not here
 
     return actions;
   }, [currentState, hasPermission, hasValidationErrors]);
@@ -417,61 +404,60 @@ export const StateTransitionButtons: React.FC<StateTransitionButtonsProps> = ({
   return (
     <TooltipProvider>
       <div className={cn('flex items-center gap-2 flex-wrap', className)}>
-        {availableActions.map((action) => {
-          const config = TRANSITION_CONFIG[action];
-          if (!config) return null;
+        {availableActions
+          .filter((action) => TRANSITION_CONFIG[action]) // Filter out invalid actions first
+          .map((action) => {
+            const config = TRANSITION_CONFIG[action];
+            const Icon = config.icon;
+            const isDisabled = disabled || loading || !hasPermission(action);
 
-          const Icon = config.icon;
-          const isDisabled = disabled || loading || !hasPermission(action);
-
-          const button = (
-            <Button
-              key={action}
-              variant={getButtonVariant(action)}
-              size={size}
-              disabled={isDisabled}
-              onClick={() => handleActionClick(action)}
-              className={cn(
-                'transition-all duration-200',
-                config.color,
-                config.textColor,
-                isDisabled && 'opacity-50 cursor-not-allowed',
-                loading && 'animate-pulse'
-              )}
-            >
-              <Icon className="w-4 h-4 mr-2" />
-              {config.label}
-              {loading && <Clock className="w-4 h-4 ml-2 animate-spin" />}
-            </Button>
-          );
-
-          if (showTooltips && !isDisabled) {
-            return (
-              <Tooltip key={action}>
-                <TooltipTrigger asChild>
-                  {button}
-                </TooltipTrigger>
-                <TooltipContent>
-                  <div className="max-w-xs">
-                    <p className="font-medium">{config.label}</p>
-                    <p className="text-sm text-gray-600 mt-1">{config.description}</p>
-                    {showDescriptions && config.requiredRole && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        Requires: {config.requiredRole}
-                      </p>
-                    )}
-                  </div>
-                </TooltipContent>
-              </Tooltip>
+            const button = (
+              <Button
+                variant={getButtonVariant(action)}
+                size={size}
+                disabled={isDisabled}
+                onClick={() => handleActionClick(action)}
+                className={cn(
+                  'transition-all duration-200',
+                  config.color,
+                  config.textColor,
+                  isDisabled && 'opacity-50 cursor-not-allowed',
+                  loading && 'animate-pulse'
+                )}
+              >
+                <Icon className="w-4 h-4 mr-2" />
+                {config.label}
+                {loading && <Clock className="w-4 h-4 ml-2 animate-spin" />}
+              </Button>
             );
-          }
 
-          return button;
-        })}
+            if (showTooltips && !isDisabled) {
+              return (
+                <Tooltip key={action}>
+                  <TooltipTrigger asChild>
+                    {button}
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <div className="max-w-xs">
+                      <p className="font-medium">{config.label}</p>
+                      <p className="text-sm text-gray-600 mt-1">{config.description}</p>
+                      {showDescriptions && config.requiredRole && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Requires: {config.requiredRole}
+                        </p>
+                      )}
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              );
+            }
+            
+            return <React.Fragment key={action}>{button}</React.Fragment>;
+          })}
 
         {/* Validation Error Indicator */}
         {hasValidationErrors && (
-          <Tooltip>
+          <Tooltip key="validation-errors">
             <TooltipTrigger asChild>
               <Badge variant="destructive" className="cursor-help">
                 <AlertTriangle className="w-3 h-3 mr-1" />
@@ -486,7 +472,7 @@ export const StateTransitionButtons: React.FC<StateTransitionButtonsProps> = ({
 
         {/* Locked State Indicator */}
         {isLocked && (
-          <Tooltip>
+          <Tooltip key="locked-indicator">
             <TooltipTrigger asChild>
               <Badge variant="secondary" className="cursor-help">
                 <FileText className="w-3 h-3 mr-1" />
@@ -570,7 +556,7 @@ export const StateTransitionButtonGroup: React.FC<StateTransitionButtonGroupProp
   return (
     <div className={cn('space-y-4', className)}>
       {buttonGroups.map((group, index) => (
-        <div key={index} className="space-y-2">
+        <div key={`group-${index}-${group.title}`} className="space-y-2">
           <h4 className="text-sm font-medium text-gray-700">{group.title}</h4>
           <StateTransitionButtons
             currentState={group.currentState}

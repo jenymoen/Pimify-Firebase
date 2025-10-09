@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { AuditTrailViewer } from './audit-trail-viewer';
-import { AuditTrailEntry, WorkflowState, UserRole } from '@/types/workflow';
+import { AuditTrailEntry, WorkflowState, UserRole, WorkflowAction } from '@/types/workflow';
 
 // Mock the UI components
 jest.mock('@/components/ui/card', () => ({
@@ -162,48 +162,48 @@ describe('AuditTrailViewer', () => {
     {
       id: 'entry-1',
       timestamp: '2024-01-15T10:30:00Z',
-      action: 'CREATE',
-      user: { id: 'user-1', name: 'John Doe', role: UserRole.EDITOR },
+      action: WorkflowAction.CREATE,
+      userId: 'user-1',
+      userEmail: 'john.doe@example.com',
       productId: 'product-1',
       productState: WorkflowState.DRAFT,
       reason: 'Product created',
-      priority: 'medium',
       fieldChanges: [
         {
           field: 'name',
-          beforeValue: null,
-          afterValue: 'Test Product',
-          type: 'create',
+          previousValue: null,
+          newValue: 'Test Product',
+          fieldType: 'string',
         },
       ],
     },
     {
       id: 'entry-2',
       timestamp: '2024-01-15T11:00:00Z',
-      action: 'UPDATE',
-      user: { id: 'user-2', name: 'Jane Smith', role: UserRole.REVIEWER },
+      action: WorkflowAction.EDIT,
+      userId: 'user-2',
+      userEmail: 'jane.smith@example.com',
       productId: 'product-1',
       productState: WorkflowState.REVIEW,
       reason: 'Updated product details',
-      priority: 'high',
       fieldChanges: [
         {
           field: 'description',
-          beforeValue: 'Old description',
-          afterValue: 'New description',
-          type: 'update',
+          previousValue: 'Old description',
+          newValue: 'New description',
+          fieldType: 'string',
         },
       ],
     },
     {
       id: 'entry-3',
       timestamp: '2024-01-15T12:00:00Z',
-      action: 'APPROVE',
-      user: { id: 'user-2', name: 'Jane Smith', role: UserRole.REVIEWER },
+      action: WorkflowAction.APPROVE,
+      userId: 'user-2',
+      userEmail: 'jane.smith@example.com',
       productId: 'product-1',
       productState: WorkflowState.APPROVED,
       reason: 'Product approved for publication',
-      priority: 'critical',
       fieldChanges: [],
     },
   ];

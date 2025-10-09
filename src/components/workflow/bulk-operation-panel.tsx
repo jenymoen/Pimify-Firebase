@@ -506,13 +506,13 @@ export const BulkOperationPanel: React.FC<BulkOperationPanelProps> = ({
                 <div className="flex items-center gap-2">
                   <Select
                     value={filters.workflowState || ''}
-                    onValueChange={(value) => handleFilterChange({ workflowState: value || undefined })}
+                    onValueChange={(value) => handleFilterChange({ workflowState: value === 'all' ? undefined : value })}
                   >
                     <SelectTrigger className="w-40">
                       <SelectValue placeholder="State" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All States</SelectItem>
+                      <SelectItem value="all">All States</SelectItem>
                       <SelectItem value="DRAFT">Draft</SelectItem>
                       <SelectItem value="REVIEW">Review</SelectItem>
                       <SelectItem value="APPROVED">Approved</SelectItem>
@@ -523,13 +523,13 @@ export const BulkOperationPanel: React.FC<BulkOperationPanelProps> = ({
                   
                   <Select
                     value={filters.priority || ''}
-                    onValueChange={(value) => handleFilterChange({ priority: value as any || undefined })}
+                    onValueChange={(value) => handleFilterChange({ priority: value === 'all' ? undefined : value as any })}
                   >
                     <SelectTrigger className="w-32">
                       <SelectValue placeholder="Priority" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All Priorities</SelectItem>
+                      <SelectItem value="all">All Priorities</SelectItem>
                       <SelectItem value="low">Low</SelectItem>
                       <SelectItem value="medium">Medium</SelectItem>
                       <SelectItem value="high">High</SelectItem>

@@ -9,11 +9,19 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
-import { ArrowLeft, Edit, Tag, Info, ImageIcon, BarChart3, Brain, Package, DollarSign, Cog } from 'lucide-react';
+import { ArrowLeft, Edit, Tag, Info, ImageIcon, BarChart3, Brain, Package, DollarSign, Cog, History, UserPlus, GitBranch } from 'lucide-react';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format, parseISO } from 'date-fns';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { WorkflowStateBadge } from '@/components/workflow/workflow-state-badge';
+import { StateTransitionButtons } from '@/components/workflow/state-transition-buttons';
+import { WorkflowProgressIndicator } from '@/components/workflow/workflow-progress-indicator';
+import { AuditTrailViewer } from '@/components/workflow/audit-trail-viewer';
+import { ReviewerAssignment } from '@/components/workflow/reviewer-assignment';
+import { WorkflowState, UserRole } from '@/types/workflow';
+import type { ProductWorkflow } from '@/types/workflow';
 
 const DetailSection: React.FC<{ title: string; icon: React.ElementType; children: React.ReactNode }> = ({ title, icon: Icon, children }) => (
   <div className="mb-8">
@@ -90,6 +98,10 @@ export default function ProductDetailsPage() {
 
   const { findProductById } = useProductStore();
   const [product, setProduct] = useState<Product | undefined | null>(undefined);
+  
+  // Mock current user - in a real app, this would come from auth context
+  const currentUserRole = UserRole.ADMIN;
+  const currentUserId = 'user-1';
 
   useEffect(() => {
     if (productId) {
@@ -97,6 +109,16 @@ export default function ProductDetailsPage() {
       setProduct(foundProduct || null);
     }
   }, [productId, findProductById]);
+
+  const handleWorkflowAction = (action: string, reason?: string) => {
+    console.log(`Workflow action: ${action}`, reason);
+    // In a real app, this would call an API endpoint
+  };
+
+  const handleReviewerAssign = (assignment: any) => {
+    console.log('Reviewer assigned:', assignment);
+    // In a real app, this would call an API endpoint
+  };
 
   if (product === undefined) {
     return (
@@ -131,6 +153,10 @@ export default function ProductDetailsPage() {
   }
 
   const { basicInfo, attributesAndSpecs, media, marketingSEO, pricingAndStock, options, variants } = product;
+  
+  // Cast to ProductWorkflow to access workflow fields
+  const productWorkflow = product as ProductWorkflow;
+  const workflowState = productWorkflow.workflowState || WorkflowState.DRAFT;
 
   return (
     <div className="container mx-auto py-8 px-4 md:px-6 lg:px-8">
@@ -141,7 +167,10 @@ export default function ProductDetailsPage() {
       <Card className="mb-8 shadow-lg">
         <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <CardTitle className="text-3xl font-bold text-primary">{basicInfo.name.en || basicInfo.sku}</CardTitle>
+            <div className="flex items-center gap-3 mb-2">
+              <CardTitle className="text-3xl font-bold text-primary">{basicInfo.name.en || basicInfo.sku}</CardTitle>
+              <WorkflowStateBadge state={workflowState} size="lg" />
+            </div>
             {basicInfo.name.no && basicInfo.name.no !== basicInfo.name.en && <CardDescription className="text-lg">{basicInfo.name.no}</CardDescription>}
             <p className="text-sm text-muted-foreground mt-1">Base SKU: {basicInfo.sku} {basicInfo.gtin && `| Base GTIN: ${basicInfo.gtin}`}</p>
           </div>
@@ -149,13 +178,33 @@ export default function ProductDetailsPage() {
             <Badge variant={basicInfo.status === 'active' ? 'default' : 'secondary'} className="text-sm px-3 py-1">
               Status: {basicInfo.status.charAt(0).toUpperCase() + basicInfo.status.slice(1)}
             </Badge>
-            <Link href={`/products/${product.id}/edit`} passHref>
-              <Button variant="outline" size="sm">
-                <Edit className="mr-2 h-4 w-4" /> Edit Product
-              </Button>
-            </Link>
+            <div className="flex gap-2">
+              <Link href={`/products/${product.id}/edit`} passHref>
+                <Button variant="outline" size="sm">
+                  <Edit className="mr-2 h-4 w-4" /> Edit Product
+                </Button>
+              </Link>
+            </div>
           </div>
         </CardHeader>
+        <CardContent className="pb-6">
+          <WorkflowProgressIndicator
+            currentState={workflowState}
+            history={productWorkflow.workflowHistory}
+            size="md"
+            showHistory={true}
+          />
+          <div className="mt-4">
+            <StateTransitionButtons
+              currentState={workflowState}
+              userRole={currentUserRole}
+              productId={product.id}
+              onAction={handleWorkflowAction}
+              layout="horizontal"
+              size="default"
+            />
+          </div>
+        </CardContent>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
             <div className="md:col-span-1">
@@ -261,6 +310,62 @@ export default function ProductDetailsPage() {
           <MediaDisplay label="Images" items={media.images.slice(1)} />
         </DetailSection>
       )}
+
+      {/* Workflow Management Tabs */}
+      <Card className="shadow-lg">
+        <CardContent className="p-6">
+          <Tabs defaultValue="workflow" className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="workflow">
+                <GitBranch className="mr-2 h-4 w-4" />
+                Workflow
+              </TabsTrigger>
+              <TabsTrigger value="audit">
+                <History className="mr-2 h-4 w-4" />
+                Audit Trail
+              </TabsTrigger>
+              <TabsTrigger value="reviewer">
+                <UserPlus className="mr-2 h-4 w-4" />
+                Reviewer
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="workflow" className="mt-6">
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Workflow Progress</h3>
+                <WorkflowProgressIndicator
+                  currentState={workflowState}
+                  history={productWorkflow.workflowHistory}
+                  variant="vertical"
+                  size="lg"
+                  showHistory={true}
+                  colorScheme="status"
+                />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="audit" className="mt-6">
+              <AuditTrailViewer
+                productId={product.id}
+                userRole={currentUserRole}
+                showFilters={true}
+                enableExport={true}
+              />
+            </TabsContent>
+
+            <TabsContent value="reviewer" className="mt-6">
+              <ReviewerAssignment
+                productId={product.id}
+                productName={basicInfo.name.en || basicInfo.sku}
+                currentReviewer={productWorkflow.assignedReviewer}
+                userRole={currentUserRole}
+                onAssign={handleReviewerAssign}
+                showReviewerDetails={true}
+              />
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
     </div>
   );
 }

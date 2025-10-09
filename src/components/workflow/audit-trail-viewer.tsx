@@ -39,9 +39,11 @@ import {
  */
 export interface AuditTrailViewerProps {
   /** Array of audit trail entries */
-  entries: AuditTrailEntry[];
+  entries?: AuditTrailEntry[];
   /** Current user role */
-  userRole: UserRole;
+  userRole?: UserRole;
+  /** Product ID to fetch audit trail for */
+  productId?: string;
   /** Whether the viewer is in read-only mode */
   readOnly?: boolean;
   /** Whether to show detailed field changes */
@@ -132,8 +134,9 @@ const PRIORITY_CONFIG = {
  * AuditTrailViewer component for displaying audit trail entries with filtering and search
  */
 export const AuditTrailViewer: React.FC<AuditTrailViewerProps> = ({
-  entries,
-  userRole,
+  entries = [],
+  userRole = UserRole.VIEWER,
+  productId,
   readOnly = false,
   showFieldChanges = true,
   showAvatars = true,
@@ -206,6 +209,7 @@ export const AuditTrailViewer: React.FC<AuditTrailViewerProps> = ({
    * Paginate entries
    */
   const paginatedEntries = useMemo(() => {
+    if (!filteredEntries) return [];
     if (!showPagination) return filteredEntries;
     
     const startIndex = (currentPage - 1) * pageSize;
@@ -596,13 +600,13 @@ export const AuditTrailViewer: React.FC<AuditTrailViewerProps> = ({
                   <div className="flex items-center gap-2">
                     <Select
                       value={filters.action || ''}
-                      onValueChange={(value) => handleFilterChange({ action: value || undefined })}
+                      onValueChange={(value) => handleFilterChange({ action: value === 'all' ? undefined : value })}
                     >
                       <SelectTrigger className="w-40">
                         <SelectValue placeholder="Action" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All Actions</SelectItem>
+                        <SelectItem value="all">All Actions</SelectItem>
                         <SelectItem value="CREATE">Create</SelectItem>
                         <SelectItem value="UPDATE">Update</SelectItem>
                         <SelectItem value="DELETE">Delete</SelectItem>
@@ -614,13 +618,13 @@ export const AuditTrailViewer: React.FC<AuditTrailViewerProps> = ({
                     
                     <Select
                       value={filters.priority || ''}
-                      onValueChange={(value) => handleFilterChange({ priority: value as any || undefined })}
+                      onValueChange={(value) => handleFilterChange({ priority: value === 'all' ? undefined : value as any })}
                     >
                       <SelectTrigger className="w-32">
                         <SelectValue placeholder="Priority" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All Priorities</SelectItem>
+                        <SelectItem value="all">All Priorities</SelectItem>
                         <SelectItem value="low">Low</SelectItem>
                         <SelectItem value="medium">Medium</SelectItem>
                         <SelectItem value="high">High</SelectItem>

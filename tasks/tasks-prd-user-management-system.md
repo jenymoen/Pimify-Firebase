@@ -1,0 +1,752 @@
+# Task List: User Management System
+
+## Relevant Files
+
+### Database & Core Services
+- `src/lib/database-schema.ts` - User management database schema definitions and migrations
+- `src/lib/user-service.ts` - Core user management service with CRUD operations
+- `src/lib/user-service.test.ts` - Unit tests for user service
+- `src/lib/auth-service.ts` - Authentication service (login, logout, session management)
+- `src/lib/auth-service.test.ts` - Unit tests for authentication service
+- `src/lib/password-service.ts` - Password hashing, validation, and policy enforcement
+- `src/lib/password-service.test.ts` - Unit tests for password service
+- `src/lib/invitation-service.ts` - User invitation and onboarding logic
+- `src/lib/invitation-service.test.ts` - Unit tests for invitation service
+- `src/lib/session-service.ts` - Session management and tracking
+- `src/lib/session-service.test.ts` - Unit tests for session service
+- `src/lib/two-factor-auth-service.ts` - 2FA implementation (TOTP, backup codes)
+- `src/lib/two-factor-auth-service.test.ts` - Unit tests for 2FA service
+- `src/lib/user-activity-logger.ts` - User activity tracking and logging
+- `src/lib/user-activity-logger.test.ts` - Unit tests for activity logger
+
+### Reviewer Management
+- `src/lib/reviewer-service.ts` - Reviewer-specific features (workload, availability, metrics)
+- `src/lib/reviewer-service.test.ts` - Unit tests for reviewer service
+- `src/lib/reviewer-auto-assignment.ts` - Auto-assignment algorithm for reviewers
+- `src/lib/reviewer-auto-assignment.test.ts` - Unit tests for auto-assignment
+- `src/lib/reviewer-delegation-service.ts` - Reviewer delegation and backup management
+- `src/lib/reviewer-delegation-service.test.ts` - Unit tests for delegation service
+
+### Bulk Operations & Import/Export
+- `src/lib/bulk-user-operations.ts` - Bulk operations service (role changes, status changes)
+- `src/lib/bulk-user-operations.test.ts` - Unit tests for bulk operations
+- `src/lib/user-import-service.ts` - CSV import with validation
+- `src/lib/user-import-service.test.ts` - Unit tests for import service
+- `src/lib/user-export-service.ts` - CSV export functionality
+- `src/lib/user-export-service.test.ts` - Unit tests for export service
+
+### Search & Filtering
+- `src/lib/user-search-service.ts` - User search and filtering logic
+- `src/lib/user-search-service.test.ts` - Unit tests for search service
+- `src/lib/saved-search-service.ts` - Saved search management
+- `src/lib/saved-search-service.test.ts` - Unit tests for saved search service
+
+### Validation & Utils
+- `src/lib/user-validation.ts` - User data validation schemas (Zod)
+- `src/lib/user-validation.test.ts` - Unit tests for validation
+- `src/lib/user-utils.ts` - Utility functions (avatar generation, email validation, etc.)
+- `src/lib/user-utils.test.ts` - Unit tests for utilities
+
+### External Integrations
+- `src/lib/sso-service.ts` - SSO/OAuth integration (Google, Microsoft, SAML)
+- `src/lib/sso-service.test.ts` - Unit tests for SSO service
+- `src/lib/ldap-service.ts` - LDAP/Active Directory integration
+- `src/lib/ldap-service.test.ts` - Unit tests for LDAP service
+- `src/lib/user-email-service.ts` - Email service integration for user management
+- `src/lib/user-email-service.test.ts` - Unit tests for email service
+
+### API Routes
+- `src/app/api/users/route.ts` - User list and create endpoints
+- `src/app/api/users/[id]/route.ts` - User detail, update, delete endpoints
+- `src/app/api/users/[id]/activate/route.ts` - User activation endpoint
+- `src/app/api/users/[id]/deactivate/route.ts` - User deactivation endpoint
+- `src/app/api/users/[id]/suspend/route.ts` - User suspension endpoint
+- `src/app/api/users/[id]/unlock/route.ts` - User unlock endpoint
+- `src/app/api/users/[id]/reset-password/route.ts` - Password reset endpoint
+- `src/app/api/users/[id]/change-role/route.ts` - Role change endpoint
+- `src/app/api/users/[id]/permissions/route.ts` - Permission grant/revoke endpoints
+- `src/app/api/users/[id]/activity/route.ts` - User activity log endpoint
+- `src/app/api/users/[id]/sessions/route.ts` - Session management endpoints
+- `src/app/api/users/invite/route.ts` - User invitation endpoints
+- `src/app/api/users/bulk/route.ts` - Bulk operations endpoints
+- `src/app/api/users/import/route.ts` - User import endpoint
+- `src/app/api/users/export/route.ts` - User export endpoint
+- `src/app/api/reviewers/route.ts` - Reviewer list and dashboard endpoints
+- `src/app/api/reviewers/[id]/availability/route.ts` - Reviewer availability endpoint
+- `src/app/api/reviewers/[id]/delegate/route.ts` - Reviewer delegation endpoint
+- `src/app/api/auth/login/route.ts` - Login endpoint
+- `src/app/api/auth/logout/route.ts` - Logout endpoint
+- `src/app/api/auth/refresh/route.ts` - Token refresh endpoint
+- `src/app/api/auth/forgot-password/route.ts` - Password reset request endpoint
+- `src/app/api/auth/reset-password/route.ts` - Password reset with token endpoint
+- `src/app/api/auth/2fa/route.ts` - 2FA setup and verification endpoints
+- `src/app/api/auth/sso/[provider]/route.ts` - SSO provider endpoints
+- `src/app/api/invitations/[token]/route.ts` - Invitation acceptance endpoint
+
+### UI Components - User Management
+- `src/components/users/user-list.tsx` - Main user list/table view
+- `src/components/users/user-list.test.tsx` - Unit tests for user list
+- `src/components/users/user-card.tsx` - Individual user card component
+- `src/components/users/user-card.test.tsx` - Unit tests for user card
+- `src/components/users/user-detail.tsx` - User detail/profile page
+- `src/components/users/user-detail.test.tsx` - Unit tests for user detail
+- `src/components/users/user-form.tsx` - User creation/edit form
+- `src/components/users/user-form.test.tsx` - Unit tests for user form
+- `src/components/users/user-status-badge.tsx` - User status badge component
+- `src/components/users/user-status-badge.test.tsx` - Unit tests for status badge
+- `src/components/users/user-avatar.tsx` - User avatar component with upload
+- `src/components/users/user-avatar.test.tsx` - Unit tests for avatar
+- `src/components/users/user-search.tsx` - Search and filter interface
+- `src/components/users/user-search.test.tsx` - Unit tests for search
+- `src/components/users/saved-search-manager.tsx` - Saved search management UI
+- `src/components/users/saved-search-manager.test.tsx` - Unit tests for saved search
+
+### UI Components - Role & Permissions
+- `src/components/users/role-assignment.tsx` - Role assignment interface
+- `src/components/users/role-assignment.test.tsx` - Unit tests for role assignment
+- `src/components/users/permission-manager.tsx` - Custom permission management UI
+- `src/components/users/permission-manager.test.tsx` - Unit tests for permission manager
+- `src/components/users/permission-matrix.tsx` - Permission visualization matrix
+- `src/components/users/permission-matrix.test.tsx` - Unit tests for permission matrix
+- `src/components/users/role-comparison-table.tsx` - Role comparison display
+- `src/components/users/role-comparison-table.test.tsx` - Unit tests for role comparison
+
+### UI Components - Bulk Operations
+- `src/components/users/bulk-selection-bar.tsx` - Floating bulk action bar
+- `src/components/users/bulk-selection-bar.test.tsx` - Unit tests for bulk bar
+- `src/components/users/bulk-operation-dialog.tsx` - Bulk operation confirmation dialog
+- `src/components/users/bulk-operation-dialog.test.tsx` - Unit tests for bulk dialog
+- `src/components/users/user-import-dialog.tsx` - CSV import interface
+- `src/components/users/user-import-dialog.test.tsx` - Unit tests for import dialog
+- `src/components/users/user-export-dialog.tsx` - CSV export interface
+- `src/components/users/user-export-dialog.test.tsx` - Unit tests for export dialog
+
+### UI Components - Reviewer Management
+- `src/components/users/reviewer-dashboard.tsx` - Reviewer dashboard with metrics
+- `src/components/users/reviewer-dashboard.test.tsx` - Unit tests for reviewer dashboard
+- `src/components/users/reviewer-workload-chart.tsx` - Workload visualization
+- `src/components/users/reviewer-workload-chart.test.tsx` - Unit tests for workload chart
+- `src/components/users/reviewer-availability-toggle.tsx` - Availability status control
+- `src/components/users/reviewer-availability-toggle.test.tsx` - Unit tests for availability toggle
+- `src/components/users/reviewer-metrics-card.tsx` - Reviewer performance metrics
+- `src/components/users/reviewer-metrics-card.test.tsx` - Unit tests for metrics card
+- `src/components/users/reviewer-delegation-dialog.tsx` - Delegation management UI
+- `src/components/users/reviewer-delegation-dialog.test.tsx` - Unit tests for delegation dialog
+
+### UI Components - Authentication & Security
+- `src/components/auth/login-form.tsx` - Login form component
+- `src/components/auth/login-form.test.tsx` - Unit tests for login form
+- `src/components/auth/forgot-password-form.tsx` - Password reset request form
+- `src/components/auth/forgot-password-form.test.tsx` - Unit tests for forgot password
+- `src/components/auth/reset-password-form.tsx` - Password reset form with token
+- `src/components/auth/reset-password-form.test.tsx` - Unit tests for reset password
+- `src/components/auth/two-factor-setup.tsx` - 2FA setup interface
+- `src/components/auth/two-factor-setup.test.tsx` - Unit tests for 2FA setup
+- `src/components/auth/two-factor-verify.tsx` - 2FA verification interface
+- `src/components/auth/two-factor-verify.test.tsx` - Unit tests for 2FA verify
+- `src/components/auth/session-manager.tsx` - Active sessions management
+- `src/components/auth/session-manager.test.tsx` - Unit tests for session manager
+- `src/components/auth/sso-login-buttons.tsx` - SSO provider login buttons
+- `src/components/auth/sso-login-buttons.test.tsx` - Unit tests for SSO buttons
+
+### UI Components - Invitations & Onboarding
+- `src/components/users/invitation-manager.tsx` - Invitation management interface
+- `src/components/users/invitation-manager.test.tsx` - Unit tests for invitation manager
+- `src/components/users/invitation-form.tsx` - Send invitation form
+- `src/components/users/invitation-form.test.tsx` - Unit tests for invitation form
+- `src/components/users/invitation-list.tsx` - Pending invitations list
+- `src/components/users/invitation-list.test.tsx` - Unit tests for invitation list
+- `src/components/users/registration-request-queue.tsx` - Self-registration approval queue
+- `src/components/users/registration-request-queue.test.tsx` - Unit tests for registration queue
+- `src/components/auth/accept-invitation-page.tsx` - Invitation acceptance page
+- `src/components/auth/accept-invitation-page.test.tsx` - Unit tests for accept invitation
+
+### UI Components - Activity & Audit
+- `src/components/users/user-activity-log.tsx` - User activity timeline
+- `src/components/users/user-activity-log.test.tsx` - Unit tests for activity log
+- `src/components/users/activity-filter.tsx` - Activity log filtering UI
+- `src/components/users/activity-filter.test.tsx` - Unit tests for activity filter
+
+### UI Components - Settings & Configuration
+- `src/components/users/security-settings.tsx` - Security settings interface
+- `src/components/users/security-settings.test.tsx` - Unit tests for security settings
+- `src/components/users/sso-configuration.tsx` - SSO configuration interface
+- `src/components/users/sso-configuration.test.tsx` - Unit tests for SSO config
+- `src/components/users/ldap-configuration.tsx` - LDAP configuration interface
+- `src/components/users/ldap-configuration.test.tsx` - Unit tests for LDAP config
+
+### Pages
+- `src/app/(app)/users/page.tsx` - User management main page
+- `src/app/(app)/users/[id]/page.tsx` - User detail page
+- `src/app/(app)/users/new/page.tsx` - Create new user page
+- `src/app/(app)/users/invitations/page.tsx` - Invitation management page
+- `src/app/(app)/reviewers/page.tsx` - Reviewer dashboard page
+- `src/app/(app)/settings/security/page.tsx` - Security settings page
+- `src/app/(app)/settings/sso/page.tsx` - SSO configuration page
+- `src/app/auth/login/page.tsx` - Login page
+- `src/app/auth/register/page.tsx` - Self-registration page
+- `src/app/auth/forgot-password/page.tsx` - Forgot password page
+- `src/app/auth/reset-password/page.tsx` - Reset password page
+- `src/app/invitations/[token]/page.tsx` - Accept invitation page
+
+### Types & Interfaces
+- `src/types/user.ts` - User-related TypeScript types and interfaces
+- `src/types/auth.ts` - Authentication-related types
+- `src/types/invitation.ts` - Invitation-related types
+- `src/types/reviewer.ts` - Reviewer-specific types (extend existing)
+- `src/types/session.ts` - Session management types
+
+### Hooks
+- `src/hooks/use-users.ts` - React Query hooks for user operations
+- `src/hooks/use-auth.ts` - Authentication state and operations hooks
+- `src/hooks/use-current-user.ts` - Current user context hook
+- `src/hooks/use-reviewers.ts` - React Query hooks for reviewer operations
+- `src/hooks/use-bulk-operations.ts` - Bulk operations state management hook
+
+### Context Providers
+- `src/contexts/auth-context.tsx` - Authentication context provider
+- `src/contexts/current-user-context.tsx` - Current user context provider
+
+### Email Templates
+- `src/lib/email-templates/welcome-email.tsx` - Welcome email template
+- `src/lib/email-templates/invitation-email.tsx` - Invitation email template
+- `src/lib/email-templates/password-reset-email.tsx` - Password reset email template
+- `src/lib/email-templates/account-locked-email.tsx` - Account locked notification
+- `src/lib/email-templates/role-changed-email.tsx` - Role change notification
+
+### Configuration & Environment
+- `.env.example` - Update with user management environment variables
+- `src/config/user-management.ts` - User management configuration
+
+### Documentation
+- `docs/user-management-api.md` - API documentation for user management
+- `docs/user-management-setup.md` - Setup and configuration guide
+
+### Notes
+
+- Unit tests should be placed alongside the code files they are testing in the same directory.
+- Use `npx jest [optional/path/to/test/file]` to run tests. Running without a path executes all tests found by the Jest configuration.
+- Integration tests for API routes should be created in `src/app/api/**/*.test.ts` files.
+- This is a large feature - consider implementing in phases (MVP → Phase 2 → Phase 3).
+- Maintain backward compatibility with existing reviewer-assignment.tsx component.
+- Ensure all new features integrate with existing role-permissions.ts and audit-trail-service.ts.
+
+## Tasks
+
+- [ ] 1.0 Database Schema & Data Layer Setup
+  - [ ] 1.1 Design and create users table schema with all required fields (basic info, reviewer fields, auth fields, security fields, SSO fields, metadata)
+  - [ ] 1.2 Create user_invitations table schema for invitation tracking
+  - [ ] 1.3 Create user_sessions table schema for session management
+  - [ ] 1.4 Create user_activity_log table schema for activity tracking
+  - [ ] 1.5 Extend existing dynamic_permissions table to support user-level permissions
+  - [ ] 1.6 Add user-related columns to existing audit_trail table (target_user_id, user action types)
+  - [ ] 1.7 Create database indexes for optimal query performance (email, role, status, department, reviewer_availability)
+  - [ ] 1.8 Write database migration scripts for all schema changes
+  - [ ] 1.9 Create database seed script for initial admin user and default data
+  - [ ] 1.10 Implement user-service.ts with CRUD operations (create, read, update, soft delete)
+  - [ ] 1.11 Implement user status management functions (activate, deactivate, suspend, unlock)
+  - [ ] 1.12 Write comprehensive unit tests for user-service.ts (80% coverage target)
+  - [ ] 1.13 Create user validation schemas using Zod (email, password, phone, required fields)
+  - [ ] 1.14 Implement user-utils.ts with utility functions (avatar generation from initials, email validation, name formatting)
+  - [ ] 1.15 Write unit tests for user-validation.ts and user-utils.ts
+
+- [ ] 2.0 Authentication & Security Infrastructure
+  - [ ] 2.1 Implement password-service.ts with bcrypt hashing (cost factor 12+)
+  - [ ] 2.2 Implement password validation (complexity requirements, common password checking, reuse prevention)
+  - [ ] 2.3 Implement password history tracking (last 5 passwords)
+  - [ ] 2.4 Write unit tests for password-service.ts
+  - [ ] 2.5 Implement auth-service.ts with login/logout functionality
+  - [ ] 2.6 Implement JWT token generation and validation (access tokens 15min, refresh tokens 7 days)
+  - [ ] 2.7 Implement token refresh mechanism with rotation
+  - [ ] 2.8 Write unit tests for auth-service.ts
+  - [ ] 2.9 Implement session-service.ts for session tracking and management
+  - [ ] 2.10 Implement session expiration logic (8 hours inactivity timeout)
+  - [ ] 2.11 Implement concurrent session limiting (max 3 per user)
+  - [ ] 2.12 Implement "Remember Me" functionality (30-day extension)
+  - [ ] 2.13 Write unit tests for session-service.ts
+  - [ ] 2.14 Implement account lockout mechanism (5 failed attempts in 15 minutes)
+  - [ ] 2.15 Implement auto-unlock after 30 minutes
+  - [ ] 2.16 Implement manual unlock by admin functionality
+  - [ ] 2.17 Implement two-factor-auth-service.ts with TOTP support
+  - [ ] 2.18 Implement QR code generation for 2FA setup
+  - [ ] 2.19 Implement backup codes generation and validation (10 single-use codes)
+  - [ ] 2.20 Implement 2FA verification and enforcement by role
+  - [ ] 2.21 Write unit tests for two-factor-auth-service.ts
+  - [ ] 2.22 Implement user-activity-logger.ts for comprehensive activity tracking
+  - [ ] 2.23 Log all security-relevant events (login, logout, failed attempts, password changes, 2FA changes)
+  - [ ] 2.24 Implement activity log querying and filtering
+  - [ ] 2.25 Write unit tests for user-activity-logger.ts
+  - [ ] 2.26 Integrate authentication with existing role-permissions.ts system
+  - [ ] 2.27 Implement permission caching for performance (5-minute TTL)
+
+- [ ] 3.0 User Management Core Features
+  - [ ] 3.1 Implement invitation-service.ts for user invitations
+  - [ ] 3.2 Generate secure invitation tokens (time-limited, 7 days)
+  - [ ] 3.3 Implement invitation tracking (pending, accepted, expired, cancelled)
+  - [ ] 3.4 Implement invitation resend and cancellation
+  - [ ] 3.5 Write unit tests for invitation-service.ts
+  - [ ] 3.6 Implement self-registration approval workflow
+  - [ ] 3.7 Implement registration request queue with admin approval/rejection
+  - [ ] 3.8 Implement user role management (assign, change with reason/justification)
+  - [ ] 3.9 Implement safeguards (prevent admin from removing own role, require at least 1 admin)
+  - [ ] 3.10 Implement custom permission assignment using existing dynamic-permissions system
+  - [ ] 3.11 Implement time-limited permission grants with auto-expiration
+  - [ ] 3.12 Implement permission revocation with audit logging
+  - [ ] 3.13 Integrate permission changes with existing permission-audit-logger
+  - [ ] 3.14 Implement user profile update functionality (basic and extended fields)
+  - [ ] 3.15 Implement custom field support (admin-defined fields)
+  - [ ] 3.16 Implement avatar upload with validation (max 2MB, JPG/PNG/GIF)
+  - [ ] 3.17 Implement avatar storage (determine: database, filesystem, or S3)
+  - [ ] 3.18 Log all profile changes to audit trail
+  - [ ] 3.19 Implement user soft delete with 90-day retention
+  - [ ] 3.20 Implement user data anonymization on deletion ("Deleted User")
+  - [ ] 3.21 Implement GDPR data export (profile, activity, audit trail as JSON/CSV)
+
+- [ ] 4.0 Reviewer Management Features
+  - [ ] 4.1 Implement reviewer-service.ts for reviewer-specific operations
+  - [ ] 4.2 Implement reviewer workload tracking (current assignments count)
+  - [ ] 4.3 Implement workload capacity management (max assignments, default 10)
+  - [ ] 4.4 Implement workload percentage calculation and capacity checks
+  - [ ] 4.5 Write unit tests for reviewer-service.ts
+  - [ ] 4.6 Implement reviewer availability management (Available, Busy, Away, Vacation)
+  - [ ] 4.7 Implement scheduled availability (away on specific dates)
+  - [ ] 4.8 Implement availability expiration and reminders
+  - [ ] 4.9 Implement reviewer performance metrics tracking (reviews completed, avg time, approval rate)
+  - [ ] 4.10 Implement reviewer rating system (1-5 stars from editors/admins)
+  - [ ] 4.11 Implement quality score calculation
+  - [ ] 4.12 Implement reviewer-auto-assignment.ts with configurable algorithm
+  - [ ] 4.13 Implement auto-assignment based on workload (prefer lower workload)
+  - [ ] 4.14 Implement auto-assignment based on specialty match
+  - [ ] 4.15 Implement auto-assignment based on department/category
+  - [ ] 4.16 Implement auto-assignment based on historical performance
+  - [ ] 4.17 Implement round-robin distribution option
+  - [ ] 4.18 Respect reviewer availability in auto-assignment
+  - [ ] 4.19 Write unit tests for reviewer-auto-assignment.ts
+  - [ ] 4.20 Implement reviewer-delegation-service.ts for delegation management
+  - [ ] 4.21 Implement backup reviewer designation
+  - [ ] 4.22 Implement temporary delegation during vacation
+  - [ ] 4.23 Implement bulk reassignment of reviewer's products
+  - [ ] 4.24 Log all delegation actions to audit trail
+  - [ ] 4.25 Write unit tests for reviewer-delegation-service.ts
+  - [ ] 4.26 Implement department/category expertise assignment
+  - [ ] 4.27 Integrate reviewer features with existing reviewer-assignment.tsx component
+  - [ ] 4.28 Update existing reviewer-assignment.tsx to use new user management system
+
+- [ ] 5.0 Search, Filtering & Bulk Operations
+  - [ ] 5.1 Implement user-search-service.ts with real-time search
+  - [ ] 5.2 Implement search across name, email, department, job title, specialties
+  - [ ] 5.3 Implement case-insensitive partial matching
+  - [ ] 5.4 Implement advanced query syntax parsing (e.g., "role:reviewer department:IT")
+  - [ ] 5.5 Optimize search performance (< 500ms for 1,000 users)
+  - [ ] 5.6 Write unit tests for user-search-service.ts
+  - [ ] 5.7 Implement comprehensive filtering (15+ filter options: role, status, department, location, availability, workload, dates, manager, groups, auth method)
+  - [ ] 5.8 Implement multi-filter combination with AND logic
+  - [ ] 5.9 Implement sorting (11+ options: name, email, role, status, dates, workload, rating)
+  - [ ] 5.10 Implement pagination with configurable page sizes (25, 50, 100)
+  - [ ] 5.11 Implement saved-search-service.ts for saved searches
+  - [ ] 5.12 Allow users to save search/filter combinations (max 20 per user)
+  - [ ] 5.13 Implement saved search CRUD operations
+  - [ ] 5.14 Write unit tests for saved-search-service.ts
+  - [ ] 5.15 Implement bulk-user-operations.ts service
+  - [ ] 5.16 Implement bulk role assignment with confirmation and audit logging
+  - [ ] 5.17 Implement bulk status changes (activate, deactivate, suspend)
+  - [ ] 5.18 Implement safeguards (prevent bulk deactivation of admins)
+  - [ ] 5.19 Write unit tests for bulk-user-operations.ts
+  - [ ] 5.20 Implement user-import-service.ts for CSV import
+  - [ ] 5.21 Implement CSV parsing and validation
+  - [ ] 5.22 Implement dry-run mode for import preview
+  - [ ] 5.23 Implement transactional import (all or nothing, or skip invalid)
+  - [ ] 5.24 Generate import report with success/failure details
+  - [ ] 5.25 Support update mode (update existing users by email)
+  - [ ] 5.26 Send invitation emails to imported users
+  - [ ] 5.27 Write unit tests for user-import-service.ts
+  - [ ] 5.28 Implement user-export-service.ts for CSV export
+  - [ ] 5.29 Respect current filters and search in export
+  - [ ] 5.30 Implement configurable field selection for export
+  - [ ] 5.31 Exclude sensitive data from export (passwords, 2FA secrets)
+  - [ ] 5.32 Log export actions to audit trail
+  - [ ] 5.33 Write unit tests for user-export-service.ts
+  - [ ] 5.34 Implement bulk email notification functionality
+  - [ ] 5.35 Support rich text email editor
+  - [ ] 5.36 Implement email templates for common messages
+  - [ ] 5.37 Track email delivery status
+
+- [ ] 6.0 External Service Integrations
+  - [ ] 6.1 Implement user-email-service.ts for email integration
+  - [ ] 6.2 Integrate with email provider (SendGrid, AWS SES, or Mailgun)
+  - [ ] 6.3 Create email template: welcome-email.tsx
+  - [ ] 6.4 Create email template: invitation-email.tsx
+  - [ ] 6.5 Create email template: password-reset-email.tsx
+  - [ ] 6.6 Create email template: account-locked-email.tsx
+  - [ ] 6.7 Create email template: role-changed-email.tsx
+  - [ ] 6.8 Implement email delivery tracking and retry logic (max 3 attempts)
+  - [ ] 6.9 Write unit tests for user-email-service.ts
+  - [ ] 6.10 Implement sso-service.ts for OAuth/OIDC integration
+  - [ ] 6.11 Implement Google OAuth authentication
+  - [ ] 6.12 Implement Microsoft Azure AD/Office 365 authentication
+  - [ ] 6.13 Implement generic SAML 2.0 support
+  - [ ] 6.14 Implement Just-In-Time (JIT) user provisioning
+  - [ ] 6.15 Implement SSO attribute mapping configuration
+  - [ ] 6.16 Support multiple SSO providers simultaneously
+  - [ ] 6.17 Implement SSO account linking/unlinking
+  - [ ] 6.18 Write unit tests for sso-service.ts
+  - [ ] 6.19 Implement ldap-service.ts for LDAP/AD integration
+  - [ ] 6.20 Implement LDAP authentication
+  - [ ] 6.21 Implement LDAP user sync (import users from AD)
+  - [ ] 6.22 Implement schedulable LDAP sync (hourly, daily, weekly)
+  - [ ] 6.23 Handle LDAP sync conflicts (local vs. LDAP precedence)
+  - [ ] 6.24 Write unit tests for ldap-service.ts
+  - [ ] 6.25 Integrate with existing notification-service.ts for user notifications
+  - [ ] 6.26 Integrate with existing audit-trail-service.ts for user audit logging
+  - [ ] 6.27 Integrate Slack webhook notifications (optional)
+  - [ ] 6.28 Integrate Microsoft Teams webhook notifications (optional)
+
+- [ ] 7.0 API Route Implementation
+  - [ ] 7.1 Implement POST /api/users (create user) with validation and permission checks
+  - [ ] 7.2 Implement GET /api/users (list users) with search, filters, sorting, pagination
+  - [ ] 7.3 Implement GET /api/users/:id (get user details) with permission checks
+  - [ ] 7.4 Implement PUT /api/users/:id (update user) with validation and audit logging
+  - [ ] 7.5 Implement DELETE /api/users/:id (soft delete user) with safeguards
+  - [ ] 7.6 Implement POST /api/users/:id/activate (activate user)
+  - [ ] 7.7 Implement POST /api/users/:id/deactivate (deactivate user)
+  - [ ] 7.8 Implement POST /api/users/:id/suspend (suspend user with reason)
+  - [ ] 7.9 Implement POST /api/users/:id/unlock (unlock locked account)
+  - [ ] 7.10 Implement POST /api/users/:id/reset-password (admin password reset)
+  - [ ] 7.11 Implement POST /api/users/:id/change-role (change user role with reason)
+  - [ ] 7.12 Implement POST /api/users/:id/permissions (grant custom permission)
+  - [ ] 7.13 Implement DELETE /api/users/:id/permissions/:permId (revoke permission)
+  - [ ] 7.14 Implement GET /api/users/:id/activity (get user activity log with filters)
+  - [ ] 7.15 Implement GET /api/users/:id/sessions (list active sessions)
+  - [ ] 7.16 Implement DELETE /api/users/:id/sessions/:sessionId (terminate session)
+  - [ ] 7.17 Implement POST /api/users/invite (send invitation)
+  - [ ] 7.18 Implement POST /api/users/invite/resend (resend invitation)
+  - [ ] 7.19 Implement DELETE /api/users/invite/:id (cancel invitation)
+  - [ ] 7.20 Implement GET /api/invitations (list invitations with filters)
+  - [ ] 7.21 Implement POST /api/invitations/:token/accept (accept invitation and set password)
+  - [ ] 7.22 Implement POST /api/users/bulk/role (bulk role change)
+  - [ ] 7.23 Implement POST /api/users/bulk/activate (bulk activate)
+  - [ ] 7.24 Implement POST /api/users/bulk/deactivate (bulk deactivate)
+  - [ ] 7.25 Implement POST /api/users/import (CSV import with validation)
+  - [ ] 7.26 Implement GET /api/users/export (CSV export respecting filters)
+  - [ ] 7.27 Implement GET /api/reviewers (list reviewers with workload)
+  - [ ] 7.28 Implement GET /api/reviewers/dashboard (reviewer dashboard data)
+  - [ ] 7.29 Implement POST /api/reviewers/:id/availability (update availability)
+  - [ ] 7.30 Implement POST /api/reviewers/:id/delegate (delegate assignments)
+  - [ ] 7.31 Implement POST /api/auth/login (login with credentials)
+  - [ ] 7.32 Implement POST /api/auth/logout (logout and invalidate session)
+  - [ ] 7.33 Implement POST /api/auth/refresh (refresh access token)
+  - [ ] 7.34 Implement POST /api/auth/forgot-password (request password reset)
+  - [ ] 7.35 Implement POST /api/auth/reset-password (reset password with token)
+  - [ ] 7.36 Implement POST /api/auth/verify-2fa (verify 2FA code)
+  - [ ] 7.37 Implement POST /api/auth/enable-2fa (enable 2FA and generate QR)
+  - [ ] 7.38 Implement POST /api/auth/disable-2fa (disable 2FA)
+  - [ ] 7.39 Implement GET /api/auth/sso/providers (list configured SSO providers)
+  - [ ] 7.40 Implement GET /api/auth/sso/:provider (initiate SSO login)
+  - [ ] 7.41 Implement GET /api/auth/sso/:provider/callback (SSO callback handler)
+  - [ ] 7.42 Implement POST /api/auth/sso/:provider/link (link SSO account)
+  - [ ] 7.43 Implement DELETE /api/auth/sso/:provider/unlink (unlink SSO account)
+  - [ ] 7.44 Implement API rate limiting (100 requests/minute per user)
+  - [ ] 7.45 Implement consistent error handling and response format across all endpoints
+  - [ ] 7.46 Write integration tests for all API routes
+
+- [ ] 8.0 User Interface Components - Core User Management
+  - [ ] 8.1 Create user-card.tsx component for displaying individual users
+  - [ ] 8.2 Include avatar, name, email, role badge, status badge, department, last active
+  - [ ] 8.3 Add inline quick actions (edit, activate/deactivate)
+  - [ ] 8.4 Write unit tests for user-card.tsx
+  - [ ] 8.5 Create user-list.tsx component for main user table/list view
+  - [ ] 8.6 Implement responsive table/card layout
+  - [ ] 8.7 Add bulk selection with checkboxes
+  - [ ] 8.8 Display workload indicator for reviewers
+  - [ ] 8.9 Implement pagination (25, 50, 100 per page)
+  - [ ] 8.10 Add quick filters in header (Active, Inactive, Reviewers only, etc.)
+  - [ ] 8.11 Highlight search matches in table rows
+  - [ ] 8.12 Write unit tests for user-list.tsx
+  - [ ] 8.13 Create user-search.tsx component for search and filtering
+  - [ ] 8.14 Implement real-time search with debounce (300ms)
+  - [ ] 8.15 Add all 15+ filter options with multi-select
+  - [ ] 8.16 Display active filters with remove option
+  - [ ] 8.17 Persist filter state in URL for sharing
+  - [ ] 8.18 Write unit tests for user-search.tsx
+  - [ ] 8.19 Create saved-search-manager.tsx for managing saved searches
+  - [ ] 8.20 Write unit tests for saved-search-manager.tsx
+  - [ ] 8.21 Create user-status-badge.tsx with color coding
+  - [ ] 8.22 Write unit tests for user-status-badge.tsx
+  - [ ] 8.23 Create user-avatar.tsx component with upload functionality
+  - [ ] 8.24 Implement avatar preview and crop (optional)
+  - [ ] 8.25 Auto-generate initials avatar if no upload
+  - [ ] 8.26 Write unit tests for user-avatar.tsx
+  - [ ] 8.27 Create user-detail.tsx page with comprehensive user information
+  - [ ] 8.28 Organize info in sections (Basic, Contact, Organization, Reviewer, Security, Custom Fields)
+  - [ ] 8.29 Add action buttons (Edit, Change Role, Reset Password, Deactivate)
+  - [ ] 8.30 Display activity timeline with recent actions
+  - [ ] 8.31 Show permission matrix (role + custom permissions)
+  - [ ] 8.32 Add audit trail tab with user-related changes
+  - [ ] 8.33 Show related data (products created, reviews completed)
+  - [ ] 8.34 Write unit tests for user-detail.tsx
+  - [ ] 8.35 Create user-form.tsx for creating/editing users
+  - [ ] 8.36 Implement tabbed interface (Basic, Contact & Org, Role & Permissions, Reviewer Settings, Notifications)
+  - [ ] 8.37 Use React Hook Form with Zod validation
+  - [ ] 8.38 Implement inline validation with error messages
+  - [ ] 8.39 Mark required fields clearly
+  - [ ] 8.40 Add tooltips for complex fields
+  - [ ] 8.41 Implement auto-save draft (every 30 seconds)
+  - [ ] 8.42 Show unsaved changes warning on navigation
+  - [ ] 8.43 Add "Save" and "Save & Close" buttons
+  - [ ] 8.44 Write unit tests for user-form.tsx
+
+- [ ] 9.0 User Interface Components - Roles, Permissions & Security
+  - [ ] 9.1 Create role-assignment.tsx component
+  - [ ] 9.2 Display current role with badge and description
+  - [ ] 9.3 Show role comparison table (what each role can do)
+  - [ ] 9.4 Provide role selection dropdown with permission preview
+  - [ ] 9.5 Require reason/justification for role changes
+  - [ ] 9.6 Show warning if role change revokes permissions
+  - [ ] 9.7 Write unit tests for role-assignment.tsx
+  - [ ] 9.8 Create permission-manager.tsx for custom permissions
+  - [ ] 9.9 Display custom permissions with add/remove interface
+  - [ ] 9.10 Show permission expiration dates
+  - [ ] 9.11 Support resource-specific and time-limited permissions
+  - [ ] 9.12 Write unit tests for permission-manager.tsx
+  - [ ] 9.13 Create permission-matrix.tsx for visualizing all permissions
+  - [ ] 9.14 Write unit tests for permission-matrix.tsx
+  - [ ] 9.15 Create role-comparison-table.tsx showing capabilities by role
+  - [ ] 9.16 Write unit tests for role-comparison-table.tsx
+  - [ ] 9.17 Create login-form.tsx with email/password inputs
+  - [ ] 9.18 Include "Remember Me" checkbox
+  - [ ] 9.19 Add "Forgot Password" link
+  - [ ] 9.20 Write unit tests for login-form.tsx
+  - [ ] 9.21 Create forgot-password-form.tsx for password reset request
+  - [ ] 9.22 Write unit tests for forgot-password-form.tsx
+  - [ ] 9.23 Create reset-password-form.tsx for password reset with token
+  - [ ] 9.24 Display password strength indicator
+  - [ ] 9.25 Write unit tests for reset-password-form.tsx
+  - [ ] 9.26 Create two-factor-setup.tsx for 2FA enrollment
+  - [ ] 9.27 Display QR code for authenticator app
+  - [ ] 9.28 Show backup codes for recovery
+  - [ ] 9.29 Write unit tests for two-factor-setup.tsx
+  - [ ] 9.30 Create two-factor-verify.tsx for 2FA code entry
+  - [ ] 9.31 Write unit tests for two-factor-verify.tsx
+  - [ ] 9.32 Create session-manager.tsx for viewing active sessions
+  - [ ] 9.33 Show device, browser, location, last active for each session
+  - [ ] 9.34 Allow users to terminate individual sessions
+  - [ ] 9.35 Write unit tests for session-manager.tsx
+  - [ ] 9.36 Create sso-login-buttons.tsx for SSO provider buttons
+  - [ ] 9.37 Write unit tests for sso-login-buttons.tsx
+
+- [ ] 10.0 User Interface Components - Bulk Operations & Advanced Features
+  - [ ] 10.1 Create bulk-selection-bar.tsx floating action bar
+  - [ ] 10.2 Display when users are selected
+  - [ ] 10.3 Show selected user count prominently
+  - [ ] 10.4 Provide bulk action buttons (Change Role, Activate, Deactivate, Suspend, Export, Email)
+  - [ ] 10.5 Write unit tests for bulk-selection-bar.tsx
+  - [ ] 10.6 Create bulk-operation-dialog.tsx for confirmations
+  - [ ] 10.7 Show number of users affected
+  - [ ] 10.8 Display current → new state preview
+  - [ ] 10.9 Include warnings about permission changes
+  - [ ] 10.10 Require reason field
+  - [ ] 10.11 Show progress bar for long operations
+  - [ ] 10.12 Display summary report after completion
+  - [ ] 10.13 Provide "Undo" option (within 5 minutes)
+  - [ ] 10.14 Write unit tests for bulk-operation-dialog.tsx
+  - [ ] 10.15 Create user-import-dialog.tsx for CSV import
+  - [ ] 10.16 Provide CSV template download
+  - [ ] 10.17 Display import preview with validation errors
+  - [ ] 10.18 Support dry-run mode
+  - [ ] 10.19 Show import progress and results
+  - [ ] 10.20 Write unit tests for user-import-dialog.tsx
+  - [ ] 10.21 Create user-export-dialog.tsx for CSV export
+  - [ ] 10.22 Allow field selection for export
+  - [ ] 10.23 Show filter summary (what will be exported)
+  - [ ] 10.24 Write unit tests for user-export-dialog.tsx
+  - [ ] 10.25 Create invitation-manager.tsx interface
+  - [ ] 10.26 Write unit tests for invitation-manager.tsx
+  - [ ] 10.27 Create invitation-form.tsx for sending invitations
+  - [ ] 10.28 Write unit tests for invitation-form.tsx
+  - [ ] 10.29 Create invitation-list.tsx showing pending invitations
+  - [ ] 10.30 Show status (sent, accepted, expired)
+  - [ ] 10.31 Provide resend and cancel options
+  - [ ] 10.32 Display expiration countdown
+  - [ ] 10.33 Write unit tests for invitation-list.tsx
+  - [ ] 10.34 Create registration-request-queue.tsx for self-registration
+  - [ ] 10.35 Show pending registration requests
+  - [ ] 10.36 Provide approve/reject actions
+  - [ ] 10.37 Write unit tests for registration-request-queue.tsx
+  - [ ] 10.38 Create accept-invitation-page.tsx for invitation acceptance
+  - [ ] 10.39 Validate invitation token
+  - [ ] 10.40 Allow password setup
+  - [ ] 10.41 Show welcome message
+  - [ ] 10.42 Write unit tests for accept-invitation-page.tsx
+  - [ ] 10.43 Create user-activity-log.tsx timeline component
+  - [ ] 10.44 Display activities in chronological order with icons
+  - [ ] 10.45 Group by day/week/month
+  - [ ] 10.46 Highlight security events
+  - [ ] 10.47 Write unit tests for user-activity-log.tsx
+  - [ ] 10.48 Create activity-filter.tsx for filtering activity log
+  - [ ] 10.49 Support filtering by type, date range, user
+  - [ ] 10.50 Write unit tests for activity-filter.tsx
+
+- [ ] 11.0 User Interface Components - Reviewer Dashboard & Configuration
+  - [ ] 11.1 Create reviewer-dashboard.tsx page
+  - [ ] 11.2 Display all reviewers with workload visualization
+  - [ ] 11.3 Show availability status with color coding
+  - [ ] 11.4 Display performance metrics in sortable table
+  - [ ] 11.5 Provide workload distribution chart (pie/bar chart)
+  - [ ] 11.6 Show assignment history timeline
+  - [ ] 11.7 Highlight overworked reviewers (>80% capacity)
+  - [ ] 11.8 Enable drag-and-drop assignment rebalancing (optional)
+  - [ ] 11.9 Write unit tests for reviewer-dashboard.tsx
+  - [ ] 11.10 Create reviewer-workload-chart.tsx for visualization
+  - [ ] 11.11 Use recharts or similar library for charts
+  - [ ] 11.12 Write unit tests for reviewer-workload-chart.tsx
+  - [ ] 11.13 Create reviewer-availability-toggle.tsx component
+  - [ ] 11.14 Allow reviewers to set status (Available, Busy, Away, Vacation)
+  - [ ] 11.15 Support date range for scheduled availability
+  - [ ] 11.16 Write unit tests for reviewer-availability-toggle.tsx
+  - [ ] 11.17 Create reviewer-metrics-card.tsx for displaying metrics
+  - [ ] 11.18 Show reviews completed, avg time, approval rate, rating
+  - [ ] 11.19 Write unit tests for reviewer-metrics-card.tsx
+  - [ ] 11.20 Create reviewer-delegation-dialog.tsx for delegation
+  - [ ] 11.21 Allow selection of backup reviewer
+  - [ ] 11.22 Support temporary delegation with dates
+  - [ ] 11.23 Write unit tests for reviewer-delegation-dialog.tsx
+  - [ ] 11.24 Create security-settings.tsx page
+  - [ ] 11.25 Display password policy configuration (admin only)
+  - [ ] 11.26 Show 2FA enforcement settings per role
+  - [ ] 11.27 Display session management settings
+  - [ ] 11.28 Show IP allowlist/blocklist (optional)
+  - [ ] 11.29 Display security event log
+  - [ ] 11.30 Write unit tests for security-settings.tsx
+  - [ ] 11.31 Create sso-configuration.tsx for SSO setup
+  - [ ] 11.32 Provide setup wizard for each provider
+  - [ ] 11.33 Display connection status indicators
+  - [ ] 11.34 Show SSO test/validation interface
+  - [ ] 11.35 Provide attribute mapping configuration
+  - [ ] 11.36 Display SSO usage statistics
+  - [ ] 11.37 Write unit tests for sso-configuration.tsx
+  - [ ] 11.38 Create ldap-configuration.tsx for LDAP setup
+  - [ ] 11.39 Provide LDAP server configuration form
+  - [ ] 11.40 Display sync status and logs
+  - [ ] 11.41 Show LDAP sync schedule settings
+  - [ ] 11.42 Write unit tests for ldap-configuration.tsx
+
+- [ ] 12.0 Pages, Routing & Navigation
+  - [ ] 12.1 Create src/app/(app)/users/page.tsx main user management page
+  - [ ] 12.2 Integrate user-list, user-search, bulk-selection-bar components
+  - [ ] 12.3 Implement loading and error states
+  - [ ] 12.4 Create src/app/(app)/users/[id]/page.tsx user detail page
+  - [ ] 12.5 Integrate user-detail component
+  - [ ] 12.6 Handle user not found errors
+  - [ ] 12.7 Create src/app/(app)/users/new/page.tsx create user page
+  - [ ] 12.8 Integrate user-form component
+  - [ ] 12.9 Create src/app/(app)/users/invitations/page.tsx invitations page
+  - [ ] 12.10 Integrate invitation-manager, invitation-list components
+  - [ ] 12.11 Create src/app/(app)/reviewers/page.tsx reviewer dashboard page
+  - [ ] 12.12 Integrate reviewer-dashboard component
+  - [ ] 12.13 Create src/app/(app)/settings/security/page.tsx security settings page
+  - [ ] 12.14 Integrate security-settings component (admin only)
+  - [ ] 12.15 Create src/app/(app)/settings/sso/page.tsx SSO configuration page
+  - [ ] 12.16 Integrate sso-configuration component (admin only)
+  - [ ] 12.17 Create src/app/auth/login/page.tsx login page
+  - [ ] 12.18 Integrate login-form, sso-login-buttons, two-factor-verify components
+  - [ ] 12.19 Create src/app/auth/register/page.tsx self-registration page
+  - [ ] 12.20 Create src/app/auth/forgot-password/page.tsx
+  - [ ] 12.21 Integrate forgot-password-form component
+  - [ ] 12.22 Create src/app/auth/reset-password/page.tsx
+  - [ ] 12.23 Integrate reset-password-form component
+  - [ ] 12.24 Create src/app/invitations/[token]/page.tsx invitation acceptance page
+  - [ ] 12.25 Integrate accept-invitation-page component
+  - [ ] 12.26 Add user management to main navigation menu
+  - [ ] 12.27 Implement role-based menu visibility (use existing role-based-wrapper)
+  - [ ] 12.28 Add breadcrumb navigation for user pages
+  - [ ] 12.29 Implement deep linking and shareable URLs
+
+- [ ] 13.0 State Management, Hooks & Context
+  - [ ] 13.1 Create src/types/user.ts with comprehensive user types
+  - [ ] 13.2 Create src/types/auth.ts with authentication types
+  - [ ] 13.3 Create src/types/invitation.ts with invitation types
+  - [ ] 13.4 Extend src/types/reviewer.ts with new reviewer fields
+  - [ ] 13.5 Create src/types/session.ts with session types
+  - [ ] 13.6 Create auth-context.tsx authentication context provider
+  - [ ] 13.7 Provide login, logout, refresh, currentUser state
+  - [ ] 13.8 Create current-user-context.tsx for current user state
+  - [ ] 13.9 Create use-auth.ts hook for authentication operations
+  - [ ] 13.10 Create use-current-user.ts hook for accessing current user
+  - [ ] 13.11 Create use-users.ts with React Query hooks
+  - [ ] 13.12 Implement useUsers (list), useUser (detail), useCreateUser, useUpdateUser, useDeleteUser
+  - [ ] 13.13 Implement useUserActivity, useUserSessions hooks
+  - [ ] 13.14 Create use-reviewers.ts with React Query hooks
+  - [ ] 13.15 Implement useReviewers, useReviewerDashboard, useUpdateAvailability hooks
+  - [ ] 13.16 Create use-bulk-operations.ts for bulk operation state
+  - [ ] 13.17 Track selected users, bulk actions in progress
+  - [ ] 13.18 Implement React Query cache invalidation on mutations
+  - [ ] 13.19 Implement optimistic updates for better UX
+  - [ ] 13.20 Configure React Query with appropriate stale times and retry logic
+
+- [ ] 14.0 Testing & Quality Assurance
+  - [ ] 14.1 Ensure all service files have unit tests (80% coverage target)
+  - [ ] 14.2 Ensure all utility files have unit tests
+  - [ ] 14.3 Ensure all components have unit tests
+  - [ ] 14.4 Write integration tests for all API routes
+  - [ ] 14.5 Test authentication flows (login, logout, token refresh)
+  - [ ] 14.6 Test user CRUD operations end-to-end
+  - [ ] 14.7 Test role assignment and permission changes
+  - [ ] 14.8 Test invitation workflow end-to-end
+  - [ ] 14.9 Test password reset workflow
+  - [ ] 14.10 Test 2FA setup and verification
+  - [ ] 14.11 Test bulk operations (role change, status change, import, export)
+  - [ ] 14.12 Test reviewer features (workload, availability, delegation, auto-assignment)
+  - [ ] 14.13 Test search and filtering with various combinations
+  - [ ] 14.14 Test account lockout and unlock
+  - [ ] 14.15 Test session management and expiration
+  - [ ] 14.16 Test SSO authentication flows (if implemented)
+  - [ ] 14.17 Perform security testing (SQL injection, XSS, CSRF)
+  - [ ] 14.18 Test authentication bypass attempts
+  - [ ] 14.19 Test authorization bypass attempts
+  - [ ] 14.20 Test rate limiting
+  - [ ] 14.21 Test with screen readers for accessibility
+  - [ ] 14.22 Test keyboard navigation
+  - [ ] 14.23 Verify WCAG 2.1 AA compliance
+  - [ ] 14.24 Test on mobile devices (responsive design)
+  - [ ] 14.25 Test performance with 1,000+ users
+  - [ ] 14.26 Load test API endpoints
+  - [ ] 14.27 Test concurrent operations (multiple admins)
+  - [ ] 14.28 Test error scenarios and edge cases
+  - [ ] 14.29 Run full test suite and achieve 80% code coverage
+  - [ ] 14.30 Fix any bugs or issues discovered during testing
+
+- [ ] 15.0 Documentation, Configuration & Deployment
+  - [ ] 15.1 Update .env.example with all required environment variables
+  - [ ] 15.2 Add JWT_SECRET, JWT_REFRESH_SECRET
+  - [ ] 15.3 Add EMAIL_SERVICE_API_KEY, EMAIL_FROM_ADDRESS
+  - [ ] 15.4 Add SSO provider credentials (optional)
+  - [ ] 15.5 Add LDAP configuration (optional)
+  - [ ] 15.6 Create src/config/user-management.ts configuration file
+  - [ ] 15.7 Configure password policies
+  - [ ] 15.8 Configure session timeouts
+  - [ ] 15.9 Configure rate limits
+  - [ ] 15.10 Configure file upload limits
+  - [ ] 15.11 Write docs/user-management-api.md API documentation
+  - [ ] 15.12 Document all endpoints with request/response examples
+  - [ ] 15.13 Document authentication and authorization
+  - [ ] 15.14 Write docs/user-management-setup.md setup guide
+  - [ ] 15.15 Document database setup and migrations
+  - [ ] 15.16 Document initial admin user creation
+  - [ ] 15.17 Document email service configuration
+  - [ ] 15.18 Document SSO setup (if implemented)
+  - [ ] 15.19 Document LDAP setup (if implemented)
+  - [ ] 15.20 Create user guide for admins (how to manage users)
+  - [ ] 15.21 Create user guide for regular users (how to use the system)
+  - [ ] 15.22 Update main README.md with user management features
+  - [ ] 15.23 Set up monitoring and observability
+  - [ ] 15.24 Configure metrics collection (login rate, API response times, error rates)
+  - [ ] 15.25 Set up alerting (failed login spikes, high error rates, slow responses)
+  - [ ] 15.26 Configure error logging to centralized service
+  - [ ] 15.27 Run database migrations in production-like environment
+  - [ ] 15.28 Create initial admin user in production
+  - [ ] 15.29 Test production deployment
+  - [ ] 15.30 Perform security audit before launch
+  - [ ] 15.31 Train administrators on user management features
+  - [ ] 15.32 Prepare rollback plan in case of issues
+  - [ ] 15.33 Schedule deployment and communicate to users
+

@@ -7,20 +7,31 @@ import { useProductStore } from '@/lib/product-store';
 import type { Product, ProductStatus } from '@/types/product';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { PlusCircle, Search, Package, Filter, X } from 'lucide-react';
+import { PlusCircle, Search, Package, Filter, X, ListChecks } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
   calculateQualityMetrics, 
   checkMissingImages, 
   validateProduct 
 } from '@/lib/product-quality';
+import { WorkflowFilters } from '@/components/workflow/workflow-filters';
+import { BulkOperationsPanel } from '@/components/workflow/bulk-operations-panel';
+import { WorkflowState, UserRole } from '@/types/workflow';
+import type { ProductWorkflow } from '@/types/workflow';
 
 export default function ProductsPage() {
   const { products: allProducts } = useProductStore();
   const searchParams = useSearchParams();
   const [searchTerm, setSearchTerm] = useState('');
   const [mounted, setMounted] = useState(false);
+  const [showBulkOps, setShowBulkOps] = useState(false);
+  const [showWorkflowFilters, setShowWorkflowFilters] = useState(false);
+  
+  // Mock current user role - in a real app, this would come from auth context
+  const currentUserRole = UserRole.ADMIN;
+  const currentUserId = 'user-1';
 
   useEffect(() => {
     setMounted(true);
@@ -98,7 +109,7 @@ export default function ProductsPage() {
     <div className="container mx-auto py-8">
       <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
         <h1 className="text-3xl font-bold text-primary">Product Catalog</h1>
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex gap-2 w-full sm:w-auto flex-wrap">
           <div className="relative flex-grow sm:flex-grow-0 sm:w-64">
             <Input 
               type="search"
@@ -109,6 +120,20 @@ export default function ProductsPage() {
             />
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
           </div>
+          <Button 
+            variant="outline" 
+            onClick={() => setShowWorkflowFilters(!showWorkflowFilters)}
+          >
+            <Filter className="mr-2 h-5 w-5" /> 
+            Workflow Filters
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => setShowBulkOps(!showBulkOps)}
+          >
+            <ListChecks className="mr-2 h-5 w-5" /> 
+            Bulk Operations
+          </Button>
           <Link href="/products/new" passHref>
             <Button>
               <PlusCircle className="mr-2 h-5 w-5" /> Add New
@@ -116,6 +141,45 @@ export default function ProductsPage() {
           </Link>
         </div>
       </div>
+
+      {/* Workflow Filters Panel */}
+      {showWorkflowFilters && (
+        <div className="mb-6">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Workflow Filters</CardTitle>
+              <Button variant="ghost" size="sm" onClick={() => setShowWorkflowFilters(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <WorkflowFilters
+                userRole={currentUserRole}
+                onFiltersChange={(filters) => {
+                  console.log('Filters changed:', filters);
+                  // In a real app, this would filter the products list
+                }}
+              />
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Bulk Operations Panel */}
+      {showBulkOps && (
+        <div className="mb-6">
+          <BulkOperationsPanel
+            products={allProducts as ProductWorkflow[]}
+            userRole={currentUserRole}
+            userId={currentUserId}
+            onClose={() => setShowBulkOps(false)}
+            onOperationComplete={(result) => {
+              console.log('Bulk operation complete:', result);
+              // In a real app, this would refresh the product list
+            }}
+          />
+        </div>
+      )}
 
       {/* Active Filters Display */}
       {(qualityFilter || selectedStatuses.length > 0) && (
