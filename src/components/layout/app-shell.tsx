@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation'; // Added useRouter
-import { LayoutDashboard, PackagePlus, Package, UploadCloud, Settings, Menu, LogOut, TrendingUp, PanelLeft } from 'lucide-react'; // Added LogOut
+import { LayoutDashboard, PackagePlus, Package, UploadCloud, Settings, Menu, LogOut, TrendingUp, PanelLeft, Users, Mail, ListChecks } from 'lucide-react'; // Added LogOut
 import {
   SidebarProvider,
   Sidebar,
@@ -41,13 +41,27 @@ export function AppShell({ children }: AppShellProps) {
     router.push('/');
   };
 
-  const navItems: NavItem[] = [
+  // Simple role-based visibility using localStorage (replace with real auth context)
+  const role = (typeof window !== 'undefined' && (localStorage.getItem('currentUserRole') || 'VIEWER')) as 'ADMIN' | 'EDITOR' | 'REVIEWER' | 'VIEWER';
+
+  const base: NavItem[] = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/products', label: 'Products', icon: Package },
     { href: '/products/new', label: 'Add Product', icon: PackagePlus },
     { href: '/quality', label: 'Quality Dashboard', icon: TrendingUp },
     { href: '/import-export', label: 'Import/Export', icon: UploadCloud },
   ];
+
+  // User management links
+  if (role === 'ADMIN' || role === 'EDITOR') {
+    base.push({ href: '/users', label: 'Users', icon: Users });
+  }
+  if (role === 'ADMIN') {
+    base.push({ href: '/users/invitations', label: 'Invitations', icon: Mail });
+    base.push({ href: '/users/registration-requests', label: 'Registration Requests', icon: ListChecks });
+  }
+
+  const navItems: NavItem[] = base;
 
   const sidebarContent = (
     <>
