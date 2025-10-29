@@ -679,6 +679,34 @@ export class UserService {
   }
 
   /**
+   * Admin reset password (sets new password hash, updates history and last_password_change)
+   */
+  async adminResetPassword(userId: string, newPlainPassword: string, resetBy?: string): Promise<UserServiceResult> {
+    try {
+      const user = this.users.get(userId);
+      if (!user) {
+        return { success: false, error: 'User not found', code: 'USER_NOT_FOUND' };
+      }
+      // Hash new password
+      const newHash = await this.hashPassword(newPlainPassword);
+      const now = new Date();
+      const updated: UsersTable = {
+        ...user,
+        password_hash: newHash,
+        last_password_change: now,
+        // Prepend previous hash to history
+        password_history: user.password_hash ? [user.password_hash, ...(user.password_history || [])].slice(0, 5) : (user.password_history || []),
+        updated_at: now,
+        updated_by: resetBy || null,
+      };
+      this.users.set(userId, updated);
+      return { success: true, data: updated };
+    } catch (error) {
+      return { success: false, error: 'Failed to reset password', code: 'INTERNAL_ERROR' };
+    }
+  }
+
+  /**
    * Purge users that have been soft-deleted beyond the retention period
    * Returns number of purged users
    */

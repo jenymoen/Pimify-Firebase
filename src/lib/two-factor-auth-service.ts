@@ -287,6 +287,22 @@ export class TwoFactorAuthService {
   }
 
   /**
+   * Disable 2FA for a user (clears backup codes); caller may also update user record
+   */
+  async disable2FA(userId: string): Promise<Disable2FAResult> {
+    try {
+      this.backupCodes.delete(userId);
+      // Optionally log the event
+      try {
+        userActivityLogger.logTwoFactorDisabled(userId, { reason: 'api' });
+      } catch {}
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: 'Failed to disable 2FA', code: 'INTERNAL_ERROR' };
+    }
+  }
+
+  /**
    * Generate TOTP code (for testing)
    */
   generateTOTPCode(secret: string): string {

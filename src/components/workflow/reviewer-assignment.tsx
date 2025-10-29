@@ -63,6 +63,7 @@ export interface UserInfo {
   };
   timezone?: string;
   languages?: string[];
+  availability?: 'AVAILABLE' | 'BUSY' | 'AWAY' | 'VACATION';
 }
 
 /**
@@ -142,6 +143,8 @@ export interface ReviewerAssignmentProps {
   showWorkload?: boolean;
   /** Maximum assignments per reviewer */
   maxAssignmentsPerReviewer?: number;
+  /** Respect availability: only show AVAILABLE reviewers when true */
+  respectAvailability?: boolean;
 }
 
 /**
@@ -189,6 +192,7 @@ export const ReviewerAssignment: React.FC<ReviewerAssignmentProps> = ({
   showReviewerDetails = true,
   showWorkload = true,
   maxAssignmentsPerReviewer = 5,
+  respectAvailability = true,
 }) => {
   const [selectedReviewer, setSelectedReviewer] = useState<string>('');
   const [assignmentNotes, setAssignmentNotes] = useState<string>('');
@@ -212,10 +216,11 @@ export const ReviewerAssignment: React.FC<ReviewerAssignmentProps> = ({
       const matchesRole = filterRole === 'all' || reviewer.role === filterRole;
       const isActive = reviewer.isActive;
       const hasCapacity = !showWorkload || !reviewer.workload || reviewer.workload.current < reviewer.workload.max;
+      const isAvailable = !respectAvailability || !reviewer.availability || reviewer.availability === 'AVAILABLE';
       
-      return matchesSearch && matchesRole && isActive && hasCapacity;
+      return matchesSearch && matchesRole && isActive && hasCapacity && isAvailable;
     });
-  }, [reviewers, searchQuery, filterRole, showWorkload]);
+  }, [reviewers, searchQuery, filterRole, showWorkload, respectAvailability]);
 
   /**
    * Filter assignments based on status

@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation'; // Added useRouter
-import { LayoutDashboard, PackagePlus, Package, UploadCloud, Settings, Menu, LogOut, TrendingUp, PanelLeft, Users, Mail, ListChecks } from 'lucide-react'; // Added LogOut
+import { LayoutDashboard, PackagePlus, Package, UploadCloud, Settings, Menu, LogOut, TrendingUp, PanelLeft, Users, Mail, ListChecks, UserCheck } from 'lucide-react'; // Added LogOut
 import {
   SidebarProvider,
   Sidebar,
@@ -55,6 +55,7 @@ export function AppShell({ children }: AppShellProps) {
   // User management links
   if (role === 'ADMIN' || role === 'EDITOR') {
     base.push({ href: '/users', label: 'Users', icon: Users });
+    base.push({ href: '/reviewers', label: 'Reviewers', icon: UserCheck });
   }
   if (role === 'ADMIN') {
     base.push({ href: '/users/invitations', label: 'Invitations', icon: Mail });

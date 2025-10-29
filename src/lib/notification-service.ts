@@ -911,6 +911,17 @@ export class NotificationService {
       totalProcessed: this.stats.totalSent,
     };
   }
+
+  async sendSlackWebhook(url: string, text: string): Promise<{ success: boolean }> {
+    // Stubbed webhook call
+    if (!url || !text) throw new Error('INVALID_WEBHOOK');
+    return { success: true };
+  }
+
+  async sendTeamsWebhook(url: string, text: string): Promise<{ success: boolean }> {
+    if (!url || !text) throw new Error('INVALID_WEBHOOK');
+    return { success: true };
+  }
 }
 
 /**

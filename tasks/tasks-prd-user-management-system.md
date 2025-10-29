@@ -303,162 +303,162 @@
   - [x] 3.21 Implement GDPR data export (profile, activity, audit trail as JSON/CSV)
 
 - [ ] 4.0 Reviewer Management Features
-  - [ ] 4.1 Implement reviewer-service.ts for reviewer-specific operations
-  - [ ] 4.2 Implement reviewer workload tracking (current assignments count)
-  - [ ] 4.3 Implement workload capacity management (max assignments, default 10)
-  - [ ] 4.4 Implement workload percentage calculation and capacity checks
-  - [ ] 4.5 Write unit tests for reviewer-service.ts
-  - [ ] 4.6 Implement reviewer availability management (Available, Busy, Away, Vacation)
-  - [ ] 4.7 Implement scheduled availability (away on specific dates)
-  - [ ] 4.8 Implement availability expiration and reminders
-  - [ ] 4.9 Implement reviewer performance metrics tracking (reviews completed, avg time, approval rate)
-  - [ ] 4.10 Implement reviewer rating system (1-5 stars from editors/admins)
-  - [ ] 4.11 Implement quality score calculation
-  - [ ] 4.12 Implement reviewer-auto-assignment.ts with configurable algorithm
-  - [ ] 4.13 Implement auto-assignment based on workload (prefer lower workload)
-  - [ ] 4.14 Implement auto-assignment based on specialty match
-  - [ ] 4.15 Implement auto-assignment based on department/category
-  - [ ] 4.16 Implement auto-assignment based on historical performance
-  - [ ] 4.17 Implement round-robin distribution option
-  - [ ] 4.18 Respect reviewer availability in auto-assignment
-  - [ ] 4.19 Write unit tests for reviewer-auto-assignment.ts
-  - [ ] 4.20 Implement reviewer-delegation-service.ts for delegation management
-  - [ ] 4.21 Implement backup reviewer designation
-  - [ ] 4.22 Implement temporary delegation during vacation
-  - [ ] 4.23 Implement bulk reassignment of reviewer's products
-  - [ ] 4.24 Log all delegation actions to audit trail
-  - [ ] 4.25 Write unit tests for reviewer-delegation-service.ts
-  - [ ] 4.26 Implement department/category expertise assignment
-  - [ ] 4.27 Integrate reviewer features with existing reviewer-assignment.tsx component
-  - [ ] 4.28 Update existing reviewer-assignment.tsx to use new user management system
+  - [x] 4.1 Implement reviewer-service.ts for reviewer-specific operations
+  - [x] 4.2 Implement reviewer workload tracking (current assignments count)
+  - [x] 4.3 Implement workload capacity management (max assignments, default 10)
+  - [x] 4.4 Implement workload percentage calculation and capacity checks
+  - [x] 4.5 Write unit tests for reviewer-service.ts
+  - [x] 4.6 Implement reviewer availability management (Available, Busy, Away, Vacation)
+  - [x] 4.7 Implement scheduled availability (away on specific dates)
+  - [x] 4.8 Implement availability expiration and reminders
+  - [x] 4.9 Implement reviewer performance metrics tracking (reviews completed, avg time, approval rate)
+  - [x] 4.10 Implement reviewer rating system (1-5 stars from editors/admins)
+  - [x] 4.11 Implement quality score calculation
+  - [x] 4.12 Implement reviewer-auto-assignment.ts with configurable algorithm
+  - [x] 4.13 Implement auto-assignment based on workload (prefer lower workload)
+  - [x] 4.14 Implement auto-assignment based on specialty match
+  - [x] 4.15 Implement auto-assignment based on department/category
+  - [x] 4.16 Implement auto-assignment based on historical performance
+  - [x] 4.17 Implement round-robin distribution option
+  - [x] 4.18 Respect reviewer availability in auto-assignment
+  - [x] 4.19 Write unit tests for reviewer-auto-assignment.ts
+  - [x] 4.20 Implement reviewer-delegation-service.ts for delegation management
+  - [x] 4.21 Implement backup reviewer designation
+  - [x] 4.22 Implement temporary delegation during vacation
+  - [x] 4.23 Implement bulk reassignment of reviewer's products
+  - [x] 4.24 Log all delegation actions to audit trail
+  - [x] 4.25 Write unit tests for reviewer-delegation-service.ts
+  - [x] 4.26 Implement department/category expertise assignment
+  - [x] 4.27 Integrate reviewer features with existing reviewer-assignment.tsx component
+  - [x] 4.28 Update existing reviewer-assignment.tsx to use new user management system
 
 - [ ] 5.0 Search, Filtering & Bulk Operations
-  - [ ] 5.1 Implement user-search-service.ts with real-time search
-  - [ ] 5.2 Implement search across name, email, department, job title, specialties
-  - [ ] 5.3 Implement case-insensitive partial matching
-  - [ ] 5.4 Implement advanced query syntax parsing (e.g., "role:reviewer department:IT")
-  - [ ] 5.5 Optimize search performance (< 500ms for 1,000 users)
-  - [ ] 5.6 Write unit tests for user-search-service.ts
-  - [ ] 5.7 Implement comprehensive filtering (15+ filter options: role, status, department, location, availability, workload, dates, manager, groups, auth method)
-  - [ ] 5.8 Implement multi-filter combination with AND logic
-  - [ ] 5.9 Implement sorting (11+ options: name, email, role, status, dates, workload, rating)
-  - [ ] 5.10 Implement pagination with configurable page sizes (25, 50, 100)
-  - [ ] 5.11 Implement saved-search-service.ts for saved searches
-  - [ ] 5.12 Allow users to save search/filter combinations (max 20 per user)
-  - [ ] 5.13 Implement saved search CRUD operations
-  - [ ] 5.14 Write unit tests for saved-search-service.ts
-  - [ ] 5.15 Implement bulk-user-operations.ts service
-  - [ ] 5.16 Implement bulk role assignment with confirmation and audit logging
-  - [ ] 5.17 Implement bulk status changes (activate, deactivate, suspend)
-  - [ ] 5.18 Implement safeguards (prevent bulk deactivation of admins)
-  - [ ] 5.19 Write unit tests for bulk-user-operations.ts
-  - [ ] 5.20 Implement user-import-service.ts for CSV import
-  - [ ] 5.21 Implement CSV parsing and validation
-  - [ ] 5.22 Implement dry-run mode for import preview
-  - [ ] 5.23 Implement transactional import (all or nothing, or skip invalid)
-  - [ ] 5.24 Generate import report with success/failure details
+  - [x] 5.1 Implement user-search-service.ts with real-time search
+  - [x] 5.2 Implement search across name, email, department, job title, specialties
+  - [x] 5.3 Implement case-insensitive partial matching
+  - [x] 5.4 Implement advanced query syntax parsing (e.g., "role:reviewer department:IT")
+  - [x] 5.5 Optimize search performance (< 500ms for 1,000 users)
+  - [x] 5.6 Write unit tests for user-search-service.ts
+  - [x] 5.7 Implement comprehensive filtering (15+ filter options: role, status, department, location, availability, workload, dates, manager, groups, auth method)
+  - [x] 5.8 Implement multi-filter combination with AND logic
+  - [x] 5.9 Implement sorting (11+ options: name, email, role, status, dates, workload, rating)
+  - [x] 5.10 Implement pagination with configurable page sizes (25, 50, 100)
+  - [x] 5.11 Implement saved-search-service.ts for saved searches
+  - [x] 5.12 Allow users to save search/filter combinations (max 20 per user)
+  - [x] 5.13 Implement saved search CRUD operations
+  - [x] 5.14 Write unit tests for saved-search-service.ts
+  - [x] 5.15 Implement bulk-user-operations.ts service
+  - [x] 5.16 Implement bulk role assignment with confirmation and audit logging
+  - [x] 5.17 Implement bulk status changes (activate, deactivate, suspend)
+  - [x] 5.18 Implement safeguards (prevent bulk deactivation of admins)
+  - [x] 5.19 Write unit tests for bulk-user-operations.ts
+  - [x] 5.20 Implement user-import-service.ts for CSV import
+  - [x] 5.21 Implement CSV parsing and validation
+  - [x] 5.22 Implement dry-run mode for import preview
+  - [x] 5.23 Implement transactional import (all or nothing, or skip invalid)
+  - [x] 5.24 Generate import report with success/failure details
   - [ ] 5.25 Support update mode (update existing users by email)
   - [ ] 5.26 Send invitation emails to imported users
-  - [ ] 5.27 Write unit tests for user-import-service.ts
-  - [ ] 5.28 Implement user-export-service.ts for CSV export
-  - [ ] 5.29 Respect current filters and search in export
-  - [ ] 5.30 Implement configurable field selection for export
-  - [ ] 5.31 Exclude sensitive data from export (passwords, 2FA secrets)
+  - [x] 5.27 Write unit tests for user-import-service.ts
+  - [x] 5.28 Implement user-export-service.ts for CSV export
+  - [x] 5.29 Respect current filters and search in export
+  - [x] 5.30 Implement configurable field selection for export
+  - [x] 5.31 Exclude sensitive data from export (passwords, 2FA secrets)
   - [ ] 5.32 Log export actions to audit trail
-  - [ ] 5.33 Write unit tests for user-export-service.ts
-  - [ ] 5.34 Implement bulk email notification functionality
-  - [ ] 5.35 Support rich text email editor
-  - [ ] 5.36 Implement email templates for common messages
-  - [ ] 5.37 Track email delivery status
+  - [x] 5.33 Write unit tests for user-export-service.ts
+  - [x] 5.34 Implement bulk email notification functionality
+  - [x] 5.35 Support rich text email editor
+  - [x] 5.36 Implement email templates for common messages
+  - [x] 5.37 Track email delivery status
 
 - [ ] 6.0 External Service Integrations
-  - [ ] 6.1 Implement user-email-service.ts for email integration
-  - [ ] 6.2 Integrate with email provider (SendGrid, AWS SES, or Mailgun)
-  - [ ] 6.3 Create email template: welcome-email.tsx
-  - [ ] 6.4 Create email template: invitation-email.tsx
-  - [ ] 6.5 Create email template: password-reset-email.tsx
-  - [ ] 6.6 Create email template: account-locked-email.tsx
-  - [ ] 6.7 Create email template: role-changed-email.tsx
-  - [ ] 6.8 Implement email delivery tracking and retry logic (max 3 attempts)
-  - [ ] 6.9 Write unit tests for user-email-service.ts
-  - [ ] 6.10 Implement sso-service.ts for OAuth/OIDC integration
-  - [ ] 6.11 Implement Google OAuth authentication
-  - [ ] 6.12 Implement Microsoft Azure AD/Office 365 authentication
-  - [ ] 6.13 Implement generic SAML 2.0 support
+  - [x] 6.1 Implement user-email-service.ts for email integration
+  - [x] 6.2 Integrate with email provider (SendGrid, AWS SES, or Mailgun)
+  - [x] 6.3 Create email template: welcome-email.tsx
+  - [x] 6.4 Create email template: invitation-email.tsx
+  - [x] 6.5 Create email template: password-reset-email.tsx
+  - [x] 6.6 Create email template: account-locked-email.tsx
+  - [x] 6.7 Create email template: role-changed-email.tsx
+  - [x] 6.8 Implement email delivery tracking and retry logic (max 3 attempts)
+  - [x] 6.9 Write unit tests for user-email-service.ts
+  - [x] 6.10 Implement sso-service.ts for OAuth/OIDC integration
+  - [x] 6.11 Implement Google OAuth authentication
+  - [x] 6.12 Implement Microsoft Azure AD/Office 365 authentication
+  - [x] 6.13 Implement generic SAML 2.0 support
   - [ ] 6.14 Implement Just-In-Time (JIT) user provisioning
   - [ ] 6.15 Implement SSO attribute mapping configuration
-  - [ ] 6.16 Support multiple SSO providers simultaneously
+  - [x] 6.16 Support multiple SSO providers simultaneously
   - [ ] 6.17 Implement SSO account linking/unlinking
-  - [ ] 6.18 Write unit tests for sso-service.ts
-  - [ ] 6.19 Implement ldap-service.ts for LDAP/AD integration
-  - [ ] 6.20 Implement LDAP authentication
-  - [ ] 6.21 Implement LDAP user sync (import users from AD)
-  - [ ] 6.22 Implement schedulable LDAP sync (hourly, daily, weekly)
+  - [x] 6.18 Write unit tests for sso-service.ts
+  - [x] 6.19 Implement ldap-service.ts for LDAP/AD integration
+  - [x] 6.20 Implement LDAP authentication
+  - [x] 6.21 Implement LDAP user sync (import users from AD)
+  - [x] 6.22 Implement schedulable LDAP sync (hourly, daily, weekly)
   - [ ] 6.23 Handle LDAP sync conflicts (local vs. LDAP precedence)
-  - [ ] 6.24 Write unit tests for ldap-service.ts
-  - [ ] 6.25 Integrate with existing notification-service.ts for user notifications
-  - [ ] 6.26 Integrate with existing audit-trail-service.ts for user audit logging
-  - [ ] 6.27 Integrate Slack webhook notifications (optional)
-  - [ ] 6.28 Integrate Microsoft Teams webhook notifications (optional)
+  - [x] 6.24 Write unit tests for ldap-service.ts
+  - [x] 6.25 Integrate with existing notification-service.ts for user notifications
+  - [x] 6.26 Integrate with existing audit-trail-service.ts for user audit logging
+  - [x] 6.27 Integrate Slack webhook notifications (optional)
+  - [x] 6.28 Integrate Microsoft Teams webhook notifications (optional)
 
 - [ ] 7.0 API Route Implementation
-  - [ ] 7.1 Implement POST /api/users (create user) with validation and permission checks
-  - [ ] 7.2 Implement GET /api/users (list users) with search, filters, sorting, pagination
-  - [ ] 7.3 Implement GET /api/users/:id (get user details) with permission checks
-  - [ ] 7.4 Implement PUT /api/users/:id (update user) with validation and audit logging
-  - [ ] 7.5 Implement DELETE /api/users/:id (soft delete user) with safeguards
-  - [ ] 7.6 Implement POST /api/users/:id/activate (activate user)
-  - [ ] 7.7 Implement POST /api/users/:id/deactivate (deactivate user)
-  - [ ] 7.8 Implement POST /api/users/:id/suspend (suspend user with reason)
-  - [ ] 7.9 Implement POST /api/users/:id/unlock (unlock locked account)
-  - [ ] 7.10 Implement POST /api/users/:id/reset-password (admin password reset)
-  - [ ] 7.11 Implement POST /api/users/:id/change-role (change user role with reason)
-  - [ ] 7.12 Implement POST /api/users/:id/permissions (grant custom permission)
-  - [ ] 7.13 Implement DELETE /api/users/:id/permissions/:permId (revoke permission)
-  - [ ] 7.14 Implement GET /api/users/:id/activity (get user activity log with filters)
-  - [ ] 7.15 Implement GET /api/users/:id/sessions (list active sessions)
-  - [ ] 7.16 Implement DELETE /api/users/:id/sessions/:sessionId (terminate session)
-  - [ ] 7.17 Implement POST /api/users/invite (send invitation)
-  - [ ] 7.18 Implement POST /api/users/invite/resend (resend invitation)
-  - [ ] 7.19 Implement DELETE /api/users/invite/:id (cancel invitation)
-  - [ ] 7.20 Implement GET /api/invitations (list invitations with filters)
-  - [ ] 7.21 Implement POST /api/invitations/:token/accept (accept invitation and set password)
-  - [ ] 7.22 Implement POST /api/users/bulk/role (bulk role change)
-  - [ ] 7.23 Implement POST /api/users/bulk/activate (bulk activate)
-  - [ ] 7.24 Implement POST /api/users/bulk/deactivate (bulk deactivate)
-  - [ ] 7.25 Implement POST /api/users/import (CSV import with validation)
-  - [ ] 7.26 Implement GET /api/users/export (CSV export respecting filters)
-  - [ ] 7.27 Implement GET /api/reviewers (list reviewers with workload)
-  - [ ] 7.28 Implement GET /api/reviewers/dashboard (reviewer dashboard data)
-  - [ ] 7.29 Implement POST /api/reviewers/:id/availability (update availability)
-  - [ ] 7.30 Implement POST /api/reviewers/:id/delegate (delegate assignments)
-  - [ ] 7.31 Implement POST /api/auth/login (login with credentials)
-  - [ ] 7.32 Implement POST /api/auth/logout (logout and invalidate session)
-  - [ ] 7.33 Implement POST /api/auth/refresh (refresh access token)
-  - [ ] 7.34 Implement POST /api/auth/forgot-password (request password reset)
-  - [ ] 7.35 Implement POST /api/auth/reset-password (reset password with token)
-  - [ ] 7.36 Implement POST /api/auth/verify-2fa (verify 2FA code)
-  - [ ] 7.37 Implement POST /api/auth/enable-2fa (enable 2FA and generate QR)
-  - [ ] 7.38 Implement POST /api/auth/disable-2fa (disable 2FA)
-  - [ ] 7.39 Implement GET /api/auth/sso/providers (list configured SSO providers)
-  - [ ] 7.40 Implement GET /api/auth/sso/:provider (initiate SSO login)
-  - [ ] 7.41 Implement GET /api/auth/sso/:provider/callback (SSO callback handler)
-  - [ ] 7.42 Implement POST /api/auth/sso/:provider/link (link SSO account)
-  - [ ] 7.43 Implement DELETE /api/auth/sso/:provider/unlink (unlink SSO account)
-  - [ ] 7.44 Implement API rate limiting (100 requests/minute per user)
-  - [ ] 7.45 Implement consistent error handling and response format across all endpoints
-  - [ ] 7.46 Write integration tests for all API routes
+  - [x] 7.1 Implement POST /api/users (create user) with validation and permission checks
+  - [x] 7.2 Implement GET /api/users (list users) with search, filters, sorting, pagination
+  - [x] 7.3 Implement GET /api/users/:id (get user details) with permission checks
+  - [x] 7.4 Implement PUT /api/users/:id (update user) with validation and audit logging
+  - [x] 7.5 Implement DELETE /api/users/:id (soft delete user) with safeguards
+  - [x] 7.6 Implement POST /api/users/:id/activate (activate user)
+  - [x] 7.7 Implement POST /api/users/:id/deactivate (deactivate user)
+  - [x] 7.8 Implement POST /api/users/:id/suspend (suspend user with reason)
+  - [x] 7.9 Implement POST /api/users/:id/unlock (unlock locked account)
+  - [x] 7.10 Implement POST /api/users/:id/reset-password (admin password reset)
+  - [x] 7.11 Implement POST /api/users/:id/change-role (change user role with reason)
+  - [x] 7.12 Implement POST /api/users/:id/permissions (grant custom permission)
+  - [x] 7.13 Implement DELETE /api/users/:id/permissions/:permId (revoke permission)
+  - [x] 7.14 Implement GET /api/users/:id/activity (get user activity log with filters)
+  - [x] 7.15 Implement GET /api/users/:id/sessions (list active sessions)
+  - [x] 7.16 Implement DELETE /api/users/:id/sessions/:sessionId (terminate session)
+  - [x] 7.17 Implement POST /api/users/invite (send invitation)
+  - [x] 7.18 Implement POST /api/users/invite/resend (resend invitation)
+  - [x] 7.19 Implement DELETE /api/users/invite/:id (cancel invitation)
+  - [x] 7.20 Implement GET /api/invitations (list invitations with filters)
+  - [x] 7.21 Implement POST /api/invitations/:token/accept (accept invitation and set password)
+  - [x] 7.22 Implement POST /api/users/bulk/role (bulk role change)
+  - [x] 7.23 Implement POST /api/users/bulk/activate (bulk activate)
+  - [x] 7.24 Implement POST /api/users/bulk/deactivate (bulk deactivate)
+  - [x] 7.25 Implement POST /api/users/import (CSV import with validation)
+  - [x] 7.26 Implement GET /api/users/export (CSV export respecting filters)
+  - [x] 7.27 Implement GET /api/reviewers (list reviewers with workload)
+  - [x] 7.28 Implement GET /api/reviewers/dashboard (reviewer dashboard data)
+  - [x] 7.29 Implement POST /api/reviewers/:id/availability (update availability)
+  - [x] 7.30 Implement POST /api/reviewers/:id/delegate (delegate assignments)
+  - [x] 7.31 Implement POST /api/auth/login (login with credentials)
+  - [x] 7.32 Implement POST /api/auth/logout (logout and invalidate session)
+  - [x] 7.33 Implement POST /api/auth/refresh (refresh access token)
+  - [x] 7.34 Implement POST /api/auth/forgot-password (request password reset)
+  - [x] 7.35 Implement POST /api/auth/reset-password (reset password with token)
+  - [x] 7.36 Implement POST /api/auth/verify-2fa (verify 2FA code)
+  - [x] 7.37 Implement POST /api/auth/enable-2fa (enable 2FA and generate QR)
+  - [x] 7.38 Implement POST /api/auth/disable-2fa (disable 2FA)
+  - [x] 7.39 Implement GET /api/auth/sso/providers (list configured SSO providers)
+  - [x] 7.40 Implement GET /api/auth/sso/:provider (initiate SSO login)
+  - [x] 7.41 Implement GET /api/auth/sso/:provider/callback (SSO callback handler)
+  - [x] 7.42 Implement POST /api/auth/sso/:provider/link (link SSO account)
+  - [x] 7.43 Implement DELETE /api/auth/sso/:provider/unlink (unlink SSO account)
+  - [x] 7.44 Implement API rate limiting (100 requests/minute per user)
+  - [x] 7.45 Implement consistent error handling and response format across all endpoints
+  - [x] 7.46 Write integration tests for all API routes
 
 - [ ] 8.0 User Interface Components - Core User Management
-  - [ ] 8.1 Create user-card.tsx component for displaying individual users
-  - [ ] 8.2 Include avatar, name, email, role badge, status badge, department, last active
-  - [ ] 8.3 Add inline quick actions (edit, activate/deactivate)
-  - [ ] 8.4 Write unit tests for user-card.tsx
-  - [ ] 8.5 Create user-list.tsx component for main user table/list view
-  - [ ] 8.6 Implement responsive table/card layout
+  - [x] 8.1 Create user-card.tsx component for displaying individual users
+  - [x] 8.2 Include avatar, name, email, role badge, status badge, department, last active
+  - [x] 8.3 Add inline quick actions (edit, activate/deactivate)
+  - [x] 8.4 Write unit tests for user-card.tsx
+  - [x] 8.5 Create user-list.tsx component for main user table/list view
+  - [x] 8.6 Implement responsive table/card layout
   - [ ] 8.7 Add bulk selection with checkboxes
   - [ ] 8.8 Display workload indicator for reviewers
-  - [ ] 8.9 Implement pagination (25, 50, 100 per page)
+  - [x] 8.9 Implement pagination (25, 50, 100 per page)
   - [ ] 8.10 Add quick filters in header (Active, Inactive, Reviewers only, etc.)
   - [ ] 8.11 Highlight search matches in table rows
   - [ ] 8.12 Write unit tests for user-list.tsx
