@@ -3,9 +3,9 @@ import React from 'react'
 import ForgotPasswordForm, { type ForgotPasswordFormValues } from '@/components/auth/forgot-password-form'
 
 export default function ForgotPasswordPage() {
-	function handleSubmit(values: ForgotPasswordFormValues) {
-		// TODO: call /api/auth/forgot-password
-		console.log('forgot', values)
+	async function handleSubmit(values: ForgotPasswordFormValues) {
+		await fetch('/api/auth/forgot-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(values) })
+		// Optionally show a toast
 	}
 	return (
 		<div className="p-6 max-w-sm mx-auto space-y-4">

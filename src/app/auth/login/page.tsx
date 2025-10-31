@@ -4,13 +4,17 @@ import LoginForm, { type LoginFormValues } from '@/components/auth/login-form'
 import { SsoLoginButtons, type SsoProvider } from '@/components/auth/sso-login-buttons'
 
 export default function LoginPage() {
-	function handleLogin(values: LoginFormValues) {
-		// TODO: call /api/auth/login
-		console.log('login', values)
+	async function handleLogin(values: LoginFormValues) {
+		const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(values) })
+		if (!res.ok) {
+			console.error('Login failed')
+			return
+		}
+		// TODO: redirect or refresh
+		location.href = '/'
 	}
 	function handleSso(provider: SsoProvider) {
-		// TODO: redirect to /api/auth/sso/:provider
-		console.log('sso', provider)
+		location.href = `/api/auth/sso/${provider}`
 	}
 	return (
 		<div className="p-6 max-w-sm mx-auto space-y-4">

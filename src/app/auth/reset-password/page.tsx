@@ -6,9 +6,9 @@ import { useSearchParams } from 'next/navigation'
 export default function ResetPasswordPage() {
 	const params = useSearchParams()
 	const token = params.get('token') || ''
-	function handleSubmit({ password }: { password: string }) {
-		// TODO: call /api/auth/reset-password with token
-		console.log('reset', { token, password })
+	async function handleSubmit({ password }: { password: string }) {
+		await fetch('/api/auth/reset-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, password }) })
+		location.href = '/auth/login'
 	}
 	return (
 		<div className="p-6 max-w-sm mx-auto space-y-4">

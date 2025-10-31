@@ -12,12 +12,11 @@ export default function SecuritySettingsPage() {
 		{ id: 's2', device: 'iPhone', browser: 'Safari', location: 'Oslo', lastActiveAt: new Date().toISOString() },
 	])
 
-	function handleVerify(code: string) {
-		// TODO: call /api/auth/2fa verify
-		console.log('verify 2fa', code)
+	async function handleVerify(code: string) {
+		await fetch('/api/auth/verify-2fa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) })
 	}
-	function handleTerminate(sessionId: string) {
-		// TODO: call /api/users/:id/sessions/:sessionId DELETE
+	async function handleTerminate(sessionId: string) {
+		await fetch(`/api/users/me/sessions/${sessionId}`, { method: 'DELETE' })
 		setSessions(s => s.filter(x => x.id !== sessionId))
 	}
 

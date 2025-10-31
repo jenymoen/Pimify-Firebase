@@ -4,12 +4,14 @@ import AcceptInvitationPage from '@/components/auth/accept-invitation-page'
 
 export default function AcceptInvitationRoute({ params }: { params: { token: string } }) {
 	async function onValidateToken(token: string) {
-		// TODO: call /api/invitations/[token]
-		return { valid: true, email: 'invited@example.com' }
+		const res = await fetch(`/api/invitations/${token}`)
+		if (!res.ok) return { valid: false, error: 'Invalid or expired invitation.' }
+		const data = await res.json()
+		return { valid: true, email: data?.email }
 	}
 	async function onAccept({ token, password }: { token: string; password: string }) {
-		// TODO: call /api/invitations/[token]/accept
-		console.log('accept', { token, password })
+		const res = await fetch(`/api/invitations/${token}/accept`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) })
+		if (!res.ok) return { success: false, message: 'Could not accept invitation.' }
 		return { success: true }
 	}
 	return (

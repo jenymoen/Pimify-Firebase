@@ -19,6 +19,7 @@ export default function UsersPageClient({ initial }: { initial: ListUser[] }) {
 	// Dialog state
 	const [bulkOpen, setBulkOpen] = React.useState(false)
 	const [bulkTitle, setBulkTitle] = React.useState('')
+	const [bulkAction, setBulkAction] = React.useState<'activate'|'deactivate'|'suspend'|'email'|'role'|'none'>('none')
 	const [bulkWarning, setBulkWarning] = React.useState<string | undefined>(undefined)
 	const [bulkPreview, setBulkPreview] = React.useState<React.ReactNode | undefined>(undefined)
 	const [importOpen, setImportOpen] = React.useState(false)
@@ -47,9 +48,9 @@ export default function UsersPageClient({ initial }: { initial: ListUser[] }) {
 	const start = (page - 1) * pageSize
 	const paged = filtered.slice(start, start + pageSize)
 
-	// Bulk actions handlers (demo wiring)
-	function openBulk(title: string, warning?: string) {
+	function openBulk(title: string, action: typeof bulkAction, warning?: string) {
 		setBulkTitle(title)
+		setBulkAction(action)
 		setBulkWarning(warning)
 		setBulkPreview(
 			<div>
@@ -58,6 +59,21 @@ export default function UsersPageClient({ initial }: { initial: ListUser[] }) {
 			</div>
 		)
 		setBulkOpen(true)
+	}
+
+	async function executeBulk(reason: string) {
+		const ids = selected
+		let url = ''
+		switch (bulkAction) {
+			case 'activate': url = '/api/users/bulk/activate'; break
+			case 'deactivate': url = '/api/users/bulk/deactivate'; break
+			case 'suspend': url = '/api/users/bulk/suspend'; break
+			case 'email': url = '/api/users/bulk/email'; break
+			default: break
+		}
+		if (!url) { setBulkOpen(false); return }
+		await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userIds: ids, reason }) })
+		setBulkOpen(false)
 	}
 
 	return (
@@ -93,12 +109,12 @@ export default function UsersPageClient({ initial }: { initial: ListUser[] }) {
 
 			<BulkSelectionBar
 				selectedCount={selected.length}
-				onChangeRole={() => openBulk('Change Role', 'Warning: Changing roles may revoke permissions.')}
-				onActivate={() => openBulk('Activate Users')}
-				onDeactivate={() => openBulk('Deactivate Users')}
-				onSuspend={() => openBulk('Suspend Users')}
+				onChangeRole={() => openBulk('Change Role', 'role', 'Warning: Changing roles may revoke permissions.')}
+				onActivate={() => openBulk('Activate Users', 'activate')}
+				onDeactivate={() => openBulk('Deactivate Users', 'deactivate')}
+				onSuspend={() => openBulk('Suspend Users', 'suspend')}
 				onExport={() => setExportOpen(true)}
-				onEmail={() => openBulk('Send Email')}
+				onEmail={() => openBulk('Send Email', 'email')}
 			/>
 
 			<BulkOperationDialog
@@ -113,21 +129,19 @@ export default function UsersPageClient({ initial }: { initial: ListUser[] }) {
 				summary={undefined}
 				showUndo={false}
 				onUndo={undefined}
-				onConfirm={() => setBulkOpen(false)}
+				onConfirm={({ reason }) => executeBulk(reason)}
 			/>
 
 			<UserImportDialog
 				open={importOpen}
 				onOpenChange={setImportOpen}
-				onDownloadTemplate={() => { /* hook to API */ }}
-				onImport={({ file, dryRun }) => {
-					// demo: fake progress and result
-					setImportPreviewErrors(dryRun ? [{ row: 2, message: 'Invalid email' }] : undefined)
-					setImportProgress({ value: 50, label: 'Uploading' })
-					setTimeout(() => {
-						setImportProgress(undefined)
-						setImportResult({ successCount: 10, failureCount: dryRun ? 1 : 0 })
-					}, 500)
+				onDownloadTemplate={() => { window.location.href = '/api/users/import?template=1' }}
+				onImport={async ({ file, dryRun }) => {
+					const fd = new FormData()
+					fd.append('file', file)
+					fd.append('dryRun', String(dryRun))
+					await fetch('/api/users/import', { method: 'POST', body: fd })
+					// A real implementation would stream progress and set preview/result from response
 				}}
 				previewErrors={importPreviewErrors}
 				progress={importProgress}
@@ -140,7 +154,12 @@ export default function UsersPageClient({ initial }: { initial: ListUser[] }) {
 				availableFields={[ 'id','name','email','role','status','department' ]}
 				initialSelected={[ 'name','email','role' ]}
 				filterSummary={[quickFilter, query].filter(Boolean).join(' / ')}
-				onExport={() => setExportOpen(false)}
+				onExport={async (fields) => {
+					const params = new URLSearchParams({ fields: fields.join(',') })
+					const url = `/api/users/export?${params.toString()}`
+					window.location.href = url
+					setExportOpen(false)
+				}}
 			/>
 		</div>
 	)
