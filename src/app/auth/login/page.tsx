@@ -2,15 +2,17 @@
 import React from 'react'
 import LoginForm, { type LoginFormValues } from '@/components/auth/login-form'
 import { SsoLoginButtons, type SsoProvider } from '@/components/auth/sso-login-buttons'
+import { useToast } from '@/hooks/use-toast'
 
 export default function LoginPage() {
+	const { toast } = useToast()
 	async function handleLogin(values: LoginFormValues) {
 		const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(values) })
 		if (!res.ok) {
-			console.error('Login failed')
+			toast({ title: 'Login failed', description: 'Check your credentials.', variant: 'destructive' })
 			return
 		}
-		// TODO: redirect or refresh
+		toast({ title: 'Welcome back!' })
 		location.href = '/'
 	}
 	function handleSso(provider: SsoProvider) {

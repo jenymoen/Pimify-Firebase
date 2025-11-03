@@ -2,6 +2,8 @@ import { userService } from '@/lib/user-service';
 import { reviewerService } from '@/lib/reviewer-service';
 import { reviewerAutoAssignmentService, AssignmentAlgorithm } from '@/lib/reviewer-auto-assignment';
 import { SubmitButton } from '@/components/ui/submit-button';
+import ReviewerWorkloadChart from '@/components/users/reviewer-workload-chart';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { notFound, redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
@@ -96,8 +98,16 @@ export default async function ReviewersPage({ searchParams }: { searchParams?: {
   }));
 
   return (
-    <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-semibold">Reviewer Management</h1>
+    <div className="space-y-6">
+      <div className="space-y-1">
+        <Breadcrumb items={[{ label: 'Reviewers' }]} />
+        <h1 className="text-2xl font-semibold">Reviewer Management</h1>
+      </div>
+
+      {/* Workload Chart */}
+      <ReviewerWorkloadChart
+        data={reviewersWithData.map(r => ({ name: r.user.name, capacityPercentage: r.summary?.capacityPercentage || 0 }))}
+      />
 
       {/* Assignment Tester */}
       <div className="border rounded p-4 space-y-4">

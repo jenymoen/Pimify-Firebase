@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation'; // Added useRouter
-import { LayoutDashboard, PackagePlus, Package, UploadCloud, Settings, Menu, LogOut, TrendingUp, PanelLeft, Users, Mail, ListChecks, UserCheck } from 'lucide-react'; // Added LogOut
+import { LayoutDashboard, PackagePlus, Package, UploadCloud, Settings, Menu, LogOut, TrendingUp, PanelLeft, Users, Mail, ListChecks, UserCheck, Shield, Key, Network } from 'lucide-react'; // Added LogOut
 import {
   SidebarProvider,
   Sidebar,
@@ -60,6 +60,9 @@ export function AppShell({ children }: AppShellProps) {
   if (role === 'ADMIN') {
     base.push({ href: '/users/invitations', label: 'Invitations', icon: Mail });
     base.push({ href: '/users/registration-requests', label: 'Registration Requests', icon: ListChecks });
+    base.push({ href: '/settings/security', label: 'Security Settings', icon: Shield });
+    base.push({ href: '/settings/sso', label: 'SSO Configuration', icon: Key });
+    base.push({ href: '/settings/ldap', label: 'LDAP Configuration', icon: Network });
   }
 
   const navItems: NavItem[] = base;

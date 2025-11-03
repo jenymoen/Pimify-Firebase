@@ -3,8 +3,12 @@ import React from 'react'
 import TwoFactorSetup from '@/components/auth/two-factor-setup'
 import TwoFactorVerify from '@/components/auth/two-factor-verify'
 import SessionManager, { type SessionInfo } from '@/components/auth/session-manager'
+import { useToast } from '@/hooks/use-toast'
+import { Breadcrumb } from '@/components/ui/breadcrumb'
+import SecuritySettings from '@/components/users/security-settings'
 
 export default function SecuritySettingsPage() {
+	const { toast } = useToast()
 	const [qrUrl] = React.useState<string>('/api/auth/2fa/qr')
 	const [backupCodes, setBackupCodes] = React.useState<string[] | undefined>(['ABC123','DEF456','GHI789'])
 	const [sessions, setSessions] = React.useState<SessionInfo[]>([
@@ -13,16 +17,23 @@ export default function SecuritySettingsPage() {
 	])
 
 	async function handleVerify(code: string) {
-		await fetch('/api/auth/verify-2fa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) })
+		const res = await fetch('/api/auth/verify-2fa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) })
+		if (res.ok) toast({ title: '2FA verified' }); else toast({ title: '2FA verification failed', variant: 'destructive' })
 	}
 	async function handleTerminate(sessionId: string) {
-		await fetch(`/api/users/me/sessions/${sessionId}`, { method: 'DELETE' })
-		setSessions(s => s.filter(x => x.id !== sessionId))
+		const res = await fetch(`/api/users/me/sessions/${sessionId}`, { method: 'DELETE' })
+		if (res.ok) { setSessions(s => s.filter(x => x.id !== sessionId)); toast({ title: 'Session terminated' }) } else { toast({ title: 'Failed to terminate session', variant: 'destructive' }) }
 	}
 
 	return (
-		<div className="p-6 space-y-6">
-			<h1 className="text-2xl font-semibold">Security Settings</h1>
+		<div className="space-y-6">
+			<div className="space-y-1">
+				<Breadcrumb items={[
+					{ label: 'Settings', href: '/settings' },
+					{ label: 'Security' }
+				]} />
+				<h1 className="text-2xl font-semibold">Security Settings</h1>
+			</div>
 			<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 				<div className="space-y-4">
 					<h2 className="text-lg font-medium">Two-Factor Authentication</h2>

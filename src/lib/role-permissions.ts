@@ -353,70 +353,6 @@ export class RolePermissions {
     return hierarchyPermissions.includes(permission) || this.hasWildcardPermission(hierarchyPermissions, permission);
   }
 
-  /**
-   * Assign dynamic permission to user
-   */
-  async assignDynamicPermission(
-    userId: string,
-    permission: DynamicPermission,
-    assignedBy: string,
-    expiresAt?: Date
-  ): Promise<boolean> {
-    try {
-      // In a real implementation, this would be stored in a database
-      // For now, we'll simulate it with a simple in-memory store
-      const dynamicPermissions = this.getDynamicPermissionsStore();
-      
-      if (!dynamicPermissions[userId]) {
-        dynamicPermissions[userId] = [];
-      }
-
-      dynamicPermissions[userId].push({
-        ...permission,
-        assignedBy,
-        assignedAt: new Date().toISOString(),
-        expiresAt: permission.expiresAt || expiresAt?.toISOString(),
-      });
-
-      // Clear cache for this user
-      this.clearUserCache(userId);
-
-      return true;
-    } catch (error) {
-      console.error('Failed to assign dynamic permission:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Revoke dynamic permission from user
-   */
-  async revokeDynamicPermission(
-    userId: string,
-    permissionId: string,
-    revokedBy: string
-  ): Promise<boolean> {
-    try {
-      const dynamicPermissions = this.getDynamicPermissionsStore();
-      
-      if (dynamicPermissions[userId]) {
-        const index = dynamicPermissions[userId].findIndex(p => p.id === permissionId);
-        if (index >= 0) {
-          dynamicPermissions[userId].splice(index, 1);
-          
-          // Clear cache for this user
-          this.clearUserCache(userId);
-          
-          return true;
-        }
-      }
-
-      return false;
-    } catch (error) {
-      console.error('Failed to revoke dynamic permission:', error);
-      return false;
-    }
-  }
 
   /**
    * Get permission audit log
@@ -1919,24 +1855,7 @@ export async function getEffectivePermissions(
   context: PermissionCheckContext,
   includeDynamic: boolean = true
 ): Promise<string[]> {
-  return rolePermissions.getEffectivePermissions(context, includeDynamic);
-}
-
-export async function assignDynamicPermission(
-  userId: string,
-  permission: DynamicPermission,
-  assignedBy: string,
-  expiresAt?: Date
-): Promise<boolean> {
-  return rolePermissions.assignDynamicPermission(userId, permission, assignedBy, expiresAt);
-}
-
-export async function revokeDynamicPermission(
-  userId: string,
-  permissionId: string,
-  revokedBy: string
-): Promise<boolean> {
-  return rolePermissions.revokeDynamicPermission(userId, permissionId, revokedBy);
+return rolePermissions.getEffectivePermissions(context, includeDynamic);
 }
 
 export function getPermissionAuditLog(filters?: {

@@ -7,8 +7,10 @@ import BulkOperationDialog from './bulk-operation-dialog'
 import UserImportDialog, { type ImportErrorItem, type ImportResult } from './user-import-dialog'
 import UserExportDialog from './user-export-dialog'
 import { Button } from '@/components/ui/button'
+import { useToast } from '@/hooks/use-toast'
 
 export default function UsersPageClient({ initial }: { initial: ListUser[] }) {
+	const { toast } = useToast()
 	const [query, setQuery] = React.useState('')
 	const [filters, setFilters] = React.useState<UserSearchFilters>({})
 	const [quickFilter, setQuickFilter] = React.useState<'ALL' | 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'REVIEWERS'>('ALL')
@@ -72,8 +74,16 @@ export default function UsersPageClient({ initial }: { initial: ListUser[] }) {
 			default: break
 		}
 		if (!url) { setBulkOpen(false); return }
-		await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userIds: ids, reason }) })
-		setBulkOpen(false)
+		try {
+			setBulkOpen(false)
+			// optimistic: clear selection immediately
+			setSelected([])
+			const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userIds: ids, reason }) })
+			if (!res.ok) throw new Error('Bulk action failed')
+			toast({ title: 'Bulk action completed', description: `${ids.length} users processed.` })
+		} catch (e: any) {
+			toast({ title: 'Bulk action failed', description: e?.message || 'Please try again.', variant: 'destructive' })
+		}
 	}
 
 	return (
@@ -137,11 +147,17 @@ export default function UsersPageClient({ initial }: { initial: ListUser[] }) {
 				onOpenChange={setImportOpen}
 				onDownloadTemplate={() => { window.location.href = '/api/users/import?template=1' }}
 				onImport={async ({ file, dryRun }) => {
-					const fd = new FormData()
-					fd.append('file', file)
-					fd.append('dryRun', String(dryRun))
-					await fetch('/api/users/import', { method: 'POST', body: fd })
-					// A real implementation would stream progress and set preview/result from response
+					try {
+						const fd = new FormData()
+						fd.append('file', file)
+						fd.append('dryRun', String(dryRun))
+						const res = await fetch('/api/users/import', { method: 'POST', body: fd })
+						if (!res.ok) throw new Error('Import failed')
+						toast({ title: dryRun ? 'Dry-run complete' : 'Import complete' })
+						setImportOpen(false)
+					} catch (e: any) {
+						toast({ title: 'Import failed', description: e?.message || 'Please try again.', variant: 'destructive' })
+					}
 				}}
 				previewErrors={importPreviewErrors}
 				progress={importProgress}
@@ -159,6 +175,7 @@ export default function UsersPageClient({ initial }: { initial: ListUser[] }) {
 					const url = `/api/users/export?${params.toString()}`
 					window.location.href = url
 					setExportOpen(false)
+					toast({ title: 'Export started', description: 'Your CSV download should begin shortly.' })
 				}}
 			/>
 		</div>
