@@ -8,7 +8,7 @@ export default function NewUserPage() {
 	const router = useRouter()
 	const { toast } = useToast()
 
-	async function handleSubmit(values: UserFormValues) {
+	async function handleSubmit(values: UserFormValues, intent: 'stay' | 'close') {
 		try {
 			const res = await fetch('/api/users', {
 				method: 'POST',
@@ -31,7 +31,14 @@ export default function NewUserPage() {
 				title: 'User created',
 				description: 'The user has been created successfully',
 			})
-			router.push(`/users/${data.id || data.data?.id}`)
+			const userId = data.id || data.data?.id
+			if (intent === 'close') {
+				router.push('/users')
+			} else if (userId) {
+				router.push(`/users/${userId}`)
+			} else {
+				router.push('/users')
+			}
 		} catch (err: any) {
 			toast({
 				title: 'Error',

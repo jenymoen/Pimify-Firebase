@@ -9,7 +9,7 @@ export default function RegisterPage() {
 	const router = useRouter()
 	const { toast } = useToast()
 
-	async function handleSubmit(values: any) {
+	async function handleSubmit(values: any, _intent: 'stay' | 'close' = 'stay') {
 		try {
 			const res = await fetch('/api/users/register', {
 				method: 'POST',

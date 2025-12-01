@@ -6,8 +6,9 @@ import { Suspense } from 'react';
 
 export const dynamic = 'force-dynamic';
 
-export default async function UserDetailPage({ params }: { params: { id: string } }) {
-  const res = await userService.getById(params.id, true);
+export default async function UserDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const res = await userService.getById(id, true);
   if (!res.success || !res.data) return notFound();
   const u = res.data;
 

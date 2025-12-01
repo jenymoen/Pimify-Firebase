@@ -19,13 +19,29 @@ export type UserFormValues = z.infer<typeof schema>
 
 export interface UserFormProps {
 	defaultValues: Partial<UserFormValues>
-	onSubmit: (values: UserFormValues) => void
+	onSubmit: (values: UserFormValues, intent: 'stay' | 'close') => void | Promise<void>
 	disabled?: boolean
 	className?: string
-	autosaveMs?: number
+	autosaveMs?: number | null
+	onCancel?: () => void
+	cancelLabel?: string
+	availableRoles?: UserRole[]
+	availableDepartments?: string[]
+	mode?: 'create' | 'edit'
 }
 
-export const UserForm: React.FC<UserFormProps> = ({ defaultValues, onSubmit, disabled, className, autosaveMs = 3000 }) => {
+export const UserForm: React.FC<UserFormProps> = ({
+	defaultValues,
+	onSubmit,
+	disabled,
+	className,
+	autosaveMs = null,
+	onCancel,
+	cancelLabel = 'Cancel',
+	availableRoles,
+	availableDepartments: _availableDepartments,
+	mode: _mode = 'create',
+}) => {
     const { register, handleSubmit, setValue, watch, formState: { errors, isSubmitting, isDirty } } = useForm<UserFormValues>({
 		resolver: zodResolver(schema),
 		defaultValues: {
@@ -39,10 +55,12 @@ export const UserForm: React.FC<UserFormProps> = ({ defaultValues, onSubmit, dis
     const lastTimeout = React.useRef<number | null>(null)
 
     React.useEffect(() => {
+        // Only enable autosave if explicitly configured with a positive number
+        if (autosaveMs === null || autosaveMs === undefined || autosaveMs <= 0) return
         if (!isDirty) return
         if (lastTimeout.current) window.clearTimeout(lastTimeout.current)
         lastTimeout.current = window.setTimeout(() => {
-            try { void onSubmit(schema.parse(values)) } catch {}
+            try { void onSubmit(schema.parse(values), 'stay') } catch {}
         }, Math.max(1000, autosaveMs))
         return () => { if (lastTimeout.current) window.clearTimeout(lastTimeout.current) }
     }, [values, isDirty, autosaveMs, onSubmit])
@@ -55,8 +73,14 @@ export const UserForm: React.FC<UserFormProps> = ({ defaultValues, onSubmit, dis
         return () => window.removeEventListener('beforeunload', handler)
     }, [isDirty])
 
+	const [submitIntent, setSubmitIntent] = React.useState<'stay' | 'close'>('stay')
+
+	const handleFormSubmit = handleSubmit((values) => onSubmit(values, submitIntent))
+
+	const roles = availableRoles && availableRoles.length > 0 ? availableRoles : Object.values(UserRole)
+
 	return (
-		<form onSubmit={handleSubmit(onSubmit)} className={`space-y-4 ${className || ''}`.trim()}>
+		<form onSubmit={handleFormSubmit} className={`space-y-4 ${className || ''}`.trim()}>
         <Tabs defaultValue="basic">
             <TabsList>
                 <TabsTrigger value="basic">Basic</TabsTrigger>
@@ -100,7 +124,7 @@ export const UserForm: React.FC<UserFormProps> = ({ defaultValues, onSubmit, dis
                                 <SelectValue placeholder="Select a role" />
                             </SelectTrigger>
                             <SelectContent>
-                                {Object.values(UserRole).map(r => (
+                                {roles.map(r => (
                                     <SelectItem key={r} value={r}>
                                         <span className="capitalize">{r}</span>
                                     </SelectItem>
@@ -113,8 +137,26 @@ export const UserForm: React.FC<UserFormProps> = ({ defaultValues, onSubmit, dis
         </Tabs>
 
 			<div className="flex items-center gap-2">
-				<Button type="submit" disabled={disabled || isSubmitting}>Save</Button>
-				<Button type="button" variant="outline" disabled={disabled}>Save & Close</Button>
+				<Button
+					type="submit"
+					disabled={disabled || isSubmitting}
+					onClick={() => setSubmitIntent('stay')}
+				>
+					Save
+				</Button>
+				<Button
+					type="submit"
+					variant="outline"
+					disabled={disabled || isSubmitting}
+					onClick={() => setSubmitIntent('close')}
+				>
+					Save & Close
+				</Button>
+				{onCancel && (
+					<Button type="button" variant="ghost" onClick={onCancel} disabled={isSubmitting}>
+						{cancelLabel}
+					</Button>
+				)}
 			</div>
 		</form>
 	)

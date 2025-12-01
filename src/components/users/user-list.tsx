@@ -73,9 +73,9 @@ export const UserList: React.FC<UserListProps> = ({ users, page, pageSize, total
   const someOnPageSelected = selectedCountOnPage > 0 && selectedCountOnPage < users.length;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 w-full">
       {/* Quick Filters */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 w-full">
         <Button size="sm" variant={quickFilter === 'ALL' ? 'default' : 'outline'} onClick={() => onQuickFilterChange?.('ALL')}>All</Button>
         <Button size="sm" variant={quickFilter === 'ACTIVE' ? 'default' : 'outline'} onClick={() => onQuickFilterChange?.('ACTIVE')}>Active</Button>
         <Button size="sm" variant={quickFilter === 'INACTIVE' ? 'default' : 'outline'} onClick={() => onQuickFilterChange?.('INACTIVE')}>Inactive</Button>
@@ -83,7 +83,7 @@ export const UserList: React.FC<UserListProps> = ({ users, page, pageSize, total
         <Button size="sm" variant={quickFilter === 'REVIEWERS' ? 'default' : 'outline'} onClick={() => onQuickFilterChange?.('REVIEWERS')}>Reviewers only</Button>
       </div>
       {/* Card layout for small screens */}
-      <div className="block md:hidden space-y-3">
+      <div className="block md:hidden space-y-3 w-full">
         {users.map(u => (
           <div key={u.id} className="flex items-start gap-3">
             <Checkbox
@@ -122,8 +122,8 @@ export const UserList: React.FC<UserListProps> = ({ users, page, pageSize, total
       </div>
 
       {/* Table layout for medium+ screens */}
-      <div className="hidden md:block overflow-x-auto">
-        <table className="min-w-full border">
+      <div className="hidden md:block overflow-x-auto w-full">
+        <table className="min-w-full w-full border">
           <thead>
             <tr className="bg-gray-50 text-left text-sm text-gray-600">
               <th className="p-2 border-b w-10">
@@ -192,7 +192,7 @@ export const UserList: React.FC<UserListProps> = ({ users, page, pageSize, total
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between w-full">
         <div className="text-sm text-gray-600">Page {page} of {totalPages}</div>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => onPageChange?.(page - 1)}>Prev</Button>
