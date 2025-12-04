@@ -15,6 +15,8 @@ import { useShopifyConfigStore } from '@/lib/shopify-config-store';
 import { productsToCSV, parseCSV, csvRowToProduct, validateCSVData } from '@/lib/csv-utils';
 import { downloadCSVTemplate } from '@/lib/csv-template';
 
+import { useBusinessCentralConfigStore } from '@/lib/business-central-config-store';
+
 export default function ImportExportPage() {
   const { products, importProducts: storeImportProducts } = useProductStore();
   const { toast } = useToast();
@@ -27,21 +29,45 @@ export default function ImportExportPage() {
   const [importError, setImportError] = useState<string | null>(null);
   const [csvImportError, setCsvImportError] = useState<string | null>(null);
 
-  const { 
-    storeUrl, 
+  const {
+    storeUrl,
     apiKey,
     setStoreUrl: setShopifyStoreUrl,
     setApiKey: setShopifyApiKey,
-    isConfigured 
+    isConfigured
   } = useShopifyConfigStore();
 
   const [localStoreUrl, setLocalStoreUrl] = useState('');
   const [localApiKey, setLocalApiKey] = useState('');
-  const [clientShopifyReady, setClientShopifyReady] = useState(false); 
+  const [clientShopifyReady, setClientShopifyReady] = useState(false);
 
   const [isImportingFromShopify, setIsImportingFromShopify] = useState(false);
   const [isExportingToShopify, setIsExportingToShopify] = useState(false);
   const [nextPageCursor, setNextPageCursor] = useState<string | null>(null);
+
+  // Business Central State
+  const {
+    tenantId,
+    environment,
+    clientId,
+    clientSecret,
+    companyId,
+    setTenantId,
+    setEnvironment,
+    setClientId,
+    setClientSecret,
+    setCompanyId,
+    isConfigured: isBcConfigured
+  } = useBusinessCentralConfigStore();
+
+  const [localTenantId, setLocalTenantId] = useState('');
+  const [localEnvironment, setLocalEnvironment] = useState('');
+  const [localClientId, setLocalClientId] = useState('');
+  const [localClientSecret, setLocalClientSecret] = useState('');
+  const [localCompanyId, setLocalCompanyId] = useState('');
+  const [clientBcReady, setClientBcReady] = useState(false);
+  const [isImportingFromBc, setIsImportingFromBc] = useState(false);
+  const [isExportingToBc, setIsExportingToBc] = useState(false);
 
   useEffect(() => {
     setLocalStoreUrl(storeUrl);
@@ -51,6 +77,18 @@ export default function ImportExportPage() {
   useEffect(() => {
     setClientShopifyReady(isConfigured());
   }, [isConfigured, storeUrl, apiKey]);
+
+  useEffect(() => {
+    setLocalTenantId(tenantId);
+    setLocalEnvironment(environment);
+    setLocalClientId(clientId);
+    setLocalClientSecret(clientSecret);
+    setLocalCompanyId(companyId);
+  }, [tenantId, environment, clientId, clientSecret, companyId]);
+
+  useEffect(() => {
+    setClientBcReady(isBcConfigured());
+  }, [isBcConfigured, tenantId, environment, clientId, clientSecret, companyId]);
 
 
   const handleExportJson = () => {
@@ -97,11 +135,11 @@ export default function ImportExportPage() {
     try {
       const fileContent = await file.text();
       const importedData = JSON.parse(fileContent);
-      
+
       if (!Array.isArray(importedData) || !importedData.every(item => typeof item === 'object' && (item.id || (item.basicInfo && item.basicInfo.sku)))) {
         throw new Error("Invalid JSON format. Expected an array of products.");
       }
-      
+
       storeImportProducts(importedData as Product[]);
       toast({ title: 'JSON Import Successful', description: `${importedData.length} products imported.` });
 
@@ -129,7 +167,7 @@ export default function ImportExportPage() {
     try {
       const fileContent = await file.text();
       const csvRows = parseCSV(fileContent);
-      
+
       if (csvRows.length === 0) {
         throw new Error("No valid data found in CSV file.");
       }
@@ -142,7 +180,7 @@ export default function ImportExportPage() {
 
       // Convert CSV rows to products
       const products = csvRows.map(row => csvRowToProduct(row)).filter(Boolean) as Product[];
-      
+
       if (products.length === 0) {
         throw new Error("No valid products could be created from the CSV data.");
       }
@@ -186,16 +224,21 @@ export default function ImportExportPage() {
       if (!response.ok) {
         let errorBody = `API request failed: ${response.status} ${response.statusText}`;
         try {
-          const errorData = await response.json();
-          errorBody = errorData.error || JSON.stringify(errorData);
+          const text = await response.text();
+          try {
+            const errorData = JSON.parse(text);
+            errorBody = errorData.error || JSON.stringify(errorData);
+          } catch {
+            errorBody = text || errorBody;
+          }
         } catch (e) {
-          errorBody = await response.text(); // Fallback to text if JSON parsing fails
+          // Fallback if text() fails
         }
         throw new Error(errorBody);
       }
-      
+
       const data = await response.json(); // Safe to parse as JSON if response.ok
-      
+
       storeImportProducts(data.products as Product[]);
       setNextPageCursor(data.nextPageCursor || null);
       toast({ title: 'Shopify Import Successful', description: data.message });
@@ -229,16 +272,21 @@ export default function ImportExportPage() {
       if (!response.ok) {
         let errorBody = `API request failed: ${response.status} ${response.statusText}`;
         try {
-          const errorData = await response.json();
-          errorBody = errorData.error || JSON.stringify(errorData);
+          const text = await response.text();
+          try {
+            const errorData = JSON.parse(text);
+            errorBody = errorData.error || JSON.stringify(errorData);
+          } catch {
+            errorBody = text || errorBody;
+          }
         } catch (e) {
-           errorBody = await response.text(); // Fallback to text if JSON parsing fails
+          // Fallback if text() fails
         }
         throw new Error(errorBody);
       }
-      
+
       const data = await response.json(); // Safe to parse as JSON if response.ok
-      
+
       toast({ title: 'Shopify Export Successful', description: data.message });
     } catch (error: any) {
       console.error('Shopify Export Error:', error);
@@ -248,11 +296,106 @@ export default function ImportExportPage() {
     }
   };
 
+  const handleSaveBcConfig = () => {
+    setTenantId(localTenantId);
+    setEnvironment(localEnvironment);
+    setClientId(localClientId);
+    setClientSecret(localClientSecret);
+    setCompanyId(localCompanyId);
+    toast({ title: 'Business Central Configuration Saved', description: 'Your Business Central credentials have been saved locally.' });
+  };
+
+  const handleImportFromBc = async () => {
+    if (!clientBcReady) {
+      toast({ title: 'Configuration Incomplete', description: 'Please configure Business Central credentials.', variant: 'destructive' });
+      return;
+    }
+    setIsImportingFromBc(true);
+    try {
+      const response = await fetch('/api/business-central/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId, environment, clientId, clientSecret, companyId }),
+      });
+
+      if (!response.ok) {
+        let errorBody = `API request failed: ${response.status} ${response.statusText}`;
+        try {
+          const text = await response.text();
+          try {
+            const errorData = JSON.parse(text);
+            errorBody = errorData.error || JSON.stringify(errorData);
+          } catch {
+            errorBody = text || errorBody;
+          }
+        } catch (e) {
+          // Fallback if text() fails
+        }
+        throw new Error(errorBody);
+      }
+
+      const data = await response.json();
+
+      storeImportProducts(data.products as Product[]);
+      toast({ title: 'Business Central Import Successful', description: data.message });
+    } catch (error: any) {
+      console.error('Business Central Import Error:', error);
+      toast({ title: 'Business Central Import Failed', description: error.message || 'An error occurred.', variant: 'destructive' });
+    } finally {
+      setIsImportingFromBc(false);
+    }
+  };
+
+  const handleExportToBc = async () => {
+    if (!clientBcReady) {
+      toast({ title: 'Configuration Incomplete', description: 'Please configure Business Central credentials.', variant: 'destructive' });
+      return;
+    }
+    if (products.length === 0) {
+      toast({ title: 'No Products to Export', description: 'Add some products before exporting.' });
+      return;
+    }
+
+    setIsExportingToBc(true);
+    try {
+      const response = await fetch('/api/business-central/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId, environment, clientId, clientSecret, companyId, productsToExport: products }),
+      });
+
+      if (!response.ok) {
+        let errorBody = `API request failed: ${response.status} ${response.statusText}`;
+        try {
+          const text = await response.text();
+          try {
+            const errorData = JSON.parse(text);
+            errorBody = errorData.error || JSON.stringify(errorData);
+          } catch {
+            errorBody = text || errorBody;
+          }
+        } catch (e) {
+          // Fallback if text() fails
+        }
+        throw new Error(errorBody);
+      }
+
+      const data = await response.json();
+
+      toast({ title: 'Business Central Export Successful', description: data.message });
+    } catch (error: any) {
+      console.error('Business Central Export Error:', error);
+      toast({ title: 'Business Central Export Failed', description: error.message || 'An error occurred.', variant: 'destructive' });
+    } finally {
+      setIsExportingToBc(false);
+    }
+  };
+
 
   return (
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-bold text-primary mb-8">Import / Export Products</h1>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
         <Card className="shadow-lg">
           <CardHeader>
@@ -397,29 +540,29 @@ export default function ImportExportPage() {
             <div className="space-y-3">
               <div>
                 <Label htmlFor="shopify-store-url" className="text-sm font-medium">Shopify Store URL</Label>
-                <Input 
-                  id="shopify-store-url" 
-                  type="text" 
-                  placeholder="e.g., your-store-name.myshopify.com" 
+                <Input
+                  id="shopify-store-url"
+                  type="text"
+                  placeholder="e.g., your-store-name.myshopify.com"
                   value={localStoreUrl}
                   onChange={(e) => setLocalStoreUrl(e.target.value)}
                   className="mt-1"
                 />
-                 <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   Enter the full URL of your Shopify store.
                 </p>
               </div>
               <div>
                 <Label htmlFor="shopify-api-key" className="text-sm font-medium">Shopify Admin API Access Token</Label>
-                <Input 
-                  id="shopify-api-key" 
-                  type="password" 
-                  placeholder="Enter your Shopify Admin API Access Token (e.g., shpat_...)" 
+                <Input
+                  id="shopify-api-key"
+                  type="password"
+                  placeholder="Enter your Shopify Admin API Access Token (e.g., shpat_...)"
                   value={localApiKey}
                   onChange={(e) => setLocalApiKey(e.target.value)}
                   className="mt-1"
                 />
-                 <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   Your Admin API Access Token is used to authenticate with Shopify.
                 </p>
               </div>
@@ -430,19 +573,19 @@ export default function ImportExportPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t mt-6">
-            <Button 
-              variant="outline" 
-              onClick={handleImportFromShopify} 
+            <Button
+              variant="outline"
+              onClick={handleImportFromShopify}
               disabled={!clientShopifyReady || isImportingFromShopify || isExportingToShopify}
             >
               {isImportingFromShopify ? <RefreshCw className="mr-2 h-5 w-5 animate-spin" /> : <DownloadCloud className="mr-2 h-5 w-5" />}
-              {isImportingFromShopify 
-                ? 'Importing...' 
+              {isImportingFromShopify
+                ? 'Importing...'
                 : (nextPageCursor ? 'Import Next 50 Products' : 'Import from Shopify')}
             </Button>
-            <Button 
-              variant="outline" 
-              onClick={handleExportToShopify} 
+            <Button
+              variant="outline"
+              onClick={handleExportToShopify}
               disabled={!clientShopifyReady || isImportingFromShopify || isExportingToShopify || products.length === 0}
             >
               {isExportingToShopify ? <RefreshCw className="mr-2 h-5 w-5 animate-spin" /> : <UploadCloud className="mr-2 h-5 w-5" />}
@@ -450,17 +593,126 @@ export default function ImportExportPage() {
             </Button>
           </div>
           {!clientShopifyReady && (
-             <Alert variant="default" className="bg-accent/10 border-accent/30 text-accent-foreground">
-                <Settings className="h-4 w-4 text-accent" />
-                <AlertTitle>Configuration Required</AlertTitle>
-                <AlertDescription>
-                 Please enter and save your Shopify Store URL and Admin API Access Token to enable Shopify integration.
-                </AlertDescription>
-              </Alert>
+            <Alert variant="default" className="bg-accent/10 border-accent/30 text-accent-foreground">
+              <Settings className="h-4 w-4 text-accent" />
+              <AlertTitle>Configuration Required</AlertTitle>
+              <AlertDescription>
+                Please enter and save your Shopify Store URL and Admin API Access Token to enable Shopify integration.
+              </AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
+
+      <h2 className="text-2xl font-semibold text-primary mb-6 pt-4 border-t mt-8">Business Central Integration</h2>
+      <Card className="shadow-lg col-span-1 md:col-span-2">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <RefreshCw className="h-6 w-6 text-primary" /> Business Central Sync
+          </CardTitle>
+          <CardDescription>
+            Connect to Microsoft Dynamics 365 Business Central.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-4 p-4 border rounded-md bg-muted/20">
+            <h3 className="font-medium text-foreground flex items-center gap-2">
+              <Settings className="h-5 w-5" /> Connection Configuration
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="bc-tenant-id" className="text-sm font-medium">Tenant ID</Label>
+                <Input
+                  id="bc-tenant-id"
+                  type="text"
+                  placeholder="e.g., 00000000-0000-0000-0000-000000000000"
+                  value={localTenantId}
+                  onChange={(e) => setLocalTenantId(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="bc-environment" className="text-sm font-medium">Environment</Label>
+                <Input
+                  id="bc-environment"
+                  type="text"
+                  placeholder="e.g., Production"
+                  value={localEnvironment}
+                  onChange={(e) => setLocalEnvironment(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="bc-client-id" className="text-sm font-medium">Client ID</Label>
+                <Input
+                  id="bc-client-id"
+                  type="text"
+                  placeholder="Azure AD App Client ID"
+                  value={localClientId}
+                  onChange={(e) => setLocalClientId(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="bc-client-secret" className="text-sm font-medium">Client Secret</Label>
+                <Input
+                  id="bc-client-secret"
+                  type="password"
+                  placeholder="Azure AD App Client Secret"
+                  value={localClientSecret}
+                  onChange={(e) => setLocalClientSecret(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <Label htmlFor="bc-company-id" className="text-sm font-medium">Company ID</Label>
+                <Input
+                  id="bc-company-id"
+                  type="text"
+                  placeholder="e.g., My Company Ltd."
+                  value={localCompanyId}
+                  onChange={(e) => setLocalCompanyId(e.target.value)}
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  The ID or Name of the company in Business Central to sync with.
+                </p>
+              </div>
+            </div>
+            <Button onClick={handleSaveBcConfig}>
+              <Save className="mr-2 h-4 w-4" /> Save Configuration
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t mt-6">
+            <Button
+              variant="outline"
+              onClick={handleImportFromBc}
+              disabled={!clientBcReady || isImportingFromBc || isExportingToBc}
+            >
+              {isImportingFromBc ? <RefreshCw className="mr-2 h-5 w-5 animate-spin" /> : <DownloadCloud className="mr-2 h-5 w-5" />}
+              {isImportingFromBc ? 'Importing...' : 'Import from Business Central'}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleExportToBc}
+              disabled={!clientBcReady || isImportingFromBc || isExportingToBc || products.length === 0}
+            >
+              {isExportingToBc ? <RefreshCw className="mr-2 h-5 w-5 animate-spin" /> : <UploadCloud className="mr-2 h-5 w-5" />}
+              {isExportingToBc ? 'Exporting...' : 'Export to Business Central'}
+            </Button>
+          </div>
+          {!clientBcReady && (
+            <Alert variant="default" className="bg-accent/10 border-accent/30 text-accent-foreground">
+              <Settings className="h-4 w-4 text-accent" />
+              <AlertTitle>Configuration Required</AlertTitle>
+              <AlertDescription>
+                Please enter and save your Business Central credentials to enable integration.
+              </AlertDescription>
+            </Alert>
           )}
         </CardContent>
       </Card>
     </div>
   );
 }
-

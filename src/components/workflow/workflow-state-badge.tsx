@@ -14,7 +14,7 @@ export interface WorkflowStateBadgeProps {
   /** Optional size variant */
   size?: 'sm' | 'md' | 'lg';
   /** Optional variant style */
-  variant?: 'default' | 'outline' | 'secondary' | 'destructive' | 'ghost';
+  variant?: 'default' | 'outline' | 'secondary' | 'destructive';
   /** Optional custom className */
   className?: string;
   /** Whether to show an icon */
@@ -155,10 +155,10 @@ export const WorkflowStateBadge: React.FC<WorkflowStateBadgeProps> = ({
   animated = false,
   colorScheme = 'default',
 }) => {
-  const config = WORKFLOW_STATE_CONFIG[state];
+  const config = WORKFLOW_STATE_CONFIG[state] || WORKFLOW_STATE_CONFIG[WorkflowState.DRAFT];
   const sizeConfig = SIZE_CONFIG[size];
   const colors = COLOR_SCHEMES[colorScheme];
-  
+
   const badgeClasses = cn(
     // Base badge styles
     'inline-flex items-center font-medium rounded-full border transition-all duration-200',

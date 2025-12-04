@@ -61,7 +61,7 @@ export type ProductVariant = {
 
 export interface Product {
   id: string; // Unique product ID, can be auto-generated or SKU
-  
+
   basicInfo: {
     name: MultilingualString;
     sku: string; // Stock Keeping Unit - for products without variants or as a base SKU
@@ -77,7 +77,7 @@ export interface Product {
 
   attributesAndSpecs: {
     categories: string[];
-    properties: KeyValueEntry[]; 
+    properties: KeyValueEntry[];
     technicalSpecs: KeyValueEntry[];
     maintenanceInstructions?: MultilingualString;
     warrantyInfo?: MultilingualString;
@@ -179,7 +179,7 @@ export const initialProductData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>
   options: [],
   variants: [],
   aiSummary: { ...defaultMultilingualString },
-  workflowState: 'DRAFT' as WorkflowState,
+  workflowState: 'draft' as WorkflowState,
   workflowHistory: [],
 };
 

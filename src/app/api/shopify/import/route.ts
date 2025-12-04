@@ -28,8 +28,8 @@ interface ShopifyVariantShopify {
   id: number;
   product_id: number;
   title: string; // e.g., "Red / S"
-  price: string; 
-  compare_at_price: string | null; 
+  price: string;
+  compare_at_price: string | null;
   sku: string | null;
   barcode: string | null; // GTIN
   inventory_quantity: number;
@@ -40,15 +40,15 @@ interface ShopifyVariantShopify {
 
 interface ShopifyProductShopify {
   id: number;
-  title: string; 
-  body_html: string | null; 
-  vendor: string; 
-  product_type: string; 
+  title: string;
+  body_html: string | null;
+  vendor: string;
+  product_type: string;
   created_at: string;
   updated_at: string;
-  published_at: string | null; 
-  status: 'active' | 'archived' | 'draft'; 
-  tags: string; 
+  published_at: string | null;
+  status: 'active' | 'archived' | 'draft';
+  tags: string;
   options: ShopifyOptionShopify[];
   variants: ShopifyVariantShopify[];
   images: ShopifyImageShopify[];
@@ -59,7 +59,7 @@ function mapShopifyStatusToPim(shopifyStatus: ShopifyProductShopify['status']): 
     case 'active':
       return 'active';
     case 'archived':
-      return 'inactive'; 
+      return 'inactive';
     case 'draft':
       return 'development';
     default:
@@ -70,13 +70,13 @@ function mapShopifyStatusToPim(shopifyStatus: ShopifyProductShopify['status']): 
 function mapShopifyStatusToWorkflowState(shopifyStatus: ShopifyProductShopify['status']): WorkflowState {
   switch (shopifyStatus) {
     case 'active':
-      return 'PUBLISHED';
+      return WorkflowState.PUBLISHED;
     case 'archived':
-      return 'REJECTED';
+      return WorkflowState.REJECTED;
     case 'draft':
-      return 'DRAFT';
+      return WorkflowState.DRAFT;
     default:
-      return 'DRAFT';
+      return WorkflowState.DRAFT;
   }
 }
 
@@ -106,7 +106,7 @@ function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify): Product 
       baseStandardPrice.push({
         id: uuidv4(),
         amount: originalPrice,
-        currency: shopifyStoreCurrency, 
+        currency: shopifyStoreCurrency,
       });
       baseSalePrice.push({
         id: uuidv4(),
@@ -140,7 +140,7 @@ function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify): Product 
 
       const variantStandardPrice: PriceEntry[] = [];
       const variantSalePrice: PriceEntry[] = [];
-      
+
       const varCurrentPrice = parseFloat(sv.price);
       const varOriginalPrice = sv.compare_at_price ? parseFloat(sv.compare_at_price) : null;
 
@@ -165,7 +165,7 @@ function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify): Product 
 
 
   return {
-    ...initialProductData, 
+    ...initialProductData,
     id: pimId,
     basicInfo: {
       name: { ...defaultMultilingualString, en: shopifyProduct.title },
@@ -176,7 +176,7 @@ function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify): Product 
       brand: shopifyProduct.vendor || 'Unknown Brand',
       status: mapShopifyStatusToPim(shopifyProduct.status),
       launchDate: shopifyProduct.published_at || undefined,
-      internalId: String(shopifyProduct.id), 
+      internalId: String(shopifyProduct.id),
     },
     attributesAndSpecs: {
       ...initialProductData.attributesAndSpecs,
@@ -188,19 +188,19 @@ function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify): Product 
         url: img.src,
         altText: { ...defaultMultilingualString, en: img.alt || shopifyProduct.title },
         type: 'image',
-        dataAiHint: 'product image' 
+        dataAiHint: 'product image'
       })),
     },
     marketingSEO: {
       ...initialProductData.marketingSEO,
-      seoTitle: { ...defaultMultilingualString, en: shopifyProduct.title }, 
-      seoDescription: { ...defaultMultilingualString, en: shortDescriptionEn }, 
+      seoTitle: { ...defaultMultilingualString, en: shopifyProduct.title },
+      seoDescription: { ...defaultMultilingualString, en: shortDescriptionEn },
       keywords: shopifyProduct.tags ? shopifyProduct.tags.split(',').map(tag => tag.trim()).filter(tag => tag) : [],
     },
     pricingAndStock: { // This is for the base product if no variants, or as a fallback
-        standardPrice: baseStandardPrice,
-        salePrice: baseSalePrice.length > 0 ? baseSalePrice : [],
-        costPrice: [], 
+      standardPrice: baseStandardPrice,
+      salePrice: baseSalePrice.length > 0 ? baseSalePrice : [],
+      costPrice: [],
     },
     options: pimOptions,
     variants: pimVariants,
@@ -252,7 +252,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Shopify Admin API Access Token is required.' }, { status: 400 });
     }
 
-    let shopifyApiUrl = `https://${storeUrl.replace(/^https?:\/\//, '')}/admin/api/2024-04/products.json?limit=50`; 
+    let shopifyApiUrl = `https://${storeUrl.replace(/^https?:\/\//, '')}/admin/api/2024-04/products.json?limit=50`;
     if (pageInfo) {
       shopifyApiUrl += `&page_info=${pageInfo}`;
     }
@@ -274,7 +274,7 @@ export async function POST(request: NextRequest) {
           const errorData = await shopifyResponse.json();
           errorDetail = errorData.errors || errorData.error || JSON.stringify(errorData);
         } else {
-          errorDetail = await shopifyResponse.text(); 
+          errorDetail = await shopifyResponse.text();
         }
       } catch (e) {
         errorDetail = await shopifyResponse.text().catch(() => `Failed to get error details, status: ${shopifyResponse.status}`);
@@ -282,27 +282,27 @@ export async function POST(request: NextRequest) {
       console.error('Shopify API Error (Import):', errorDetail.substring(0, 500));
       return NextResponse.json({ error: errorDetail }, { status: shopifyResponse.status });
     }
-    
+
     const contentType = shopifyResponse.headers.get("content-type");
     if (!contentType || !contentType.includes("application/json")) {
-        const textResponse = await shopifyResponse.text();
-        console.error('Shopify API Error (Import): Expected JSON for successful response, got different content type.', textResponse.substring(0, 500));
-        return NextResponse.json({ error: 'Invalid success response format from Shopify. Expected JSON.', details: textResponse.substring(0,500) }, { status: 502 });
+      const textResponse = await shopifyResponse.text();
+      console.error('Shopify API Error (Import): Expected JSON for successful response, got different content type.', textResponse.substring(0, 500));
+      return NextResponse.json({ error: 'Invalid success response format from Shopify. Expected JSON.', details: textResponse.substring(0, 500) }, { status: 502 });
     }
-    
+
     const shopifyData = await shopifyResponse.json();
-    
+
     if (!shopifyData.products || !Array.isArray(shopifyData.products)) {
-        return NextResponse.json({ error: 'Invalid product data received from Shopify.' }, { status: 500 });
+      return NextResponse.json({ error: 'Invalid product data received from Shopify.' }, { status: 500 });
     }
 
     const productsToImport = shopifyData.products.map((product: ShopifyProductShopify) => mapShopifyToPimProduct(product));
     const nextPageCursor = parseLinkHeader(shopifyResponse.headers.get('Link'));
 
-    return NextResponse.json({ 
-      products: productsToImport, 
+    return NextResponse.json({
+      products: productsToImport,
       message: `${productsToImport.length} products imported from ${storeUrl}. ${nextPageCursor ? 'More products available.' : 'All products imported.'}`,
-      nextPageCursor 
+      nextPageCursor
     });
 
   } catch (error: any) {
