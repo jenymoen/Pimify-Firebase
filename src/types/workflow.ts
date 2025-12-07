@@ -11,7 +11,7 @@ import type { Product } from './product';
 // Workflow State Enum
 export enum WorkflowState {
   DRAFT = 'draft',
-  REVIEW = 'review', 
+  REVIEW = 'review',
   APPROVED = 'approved',
   PUBLISHED = 'published',
   REJECTED = 'rejected'
@@ -45,6 +45,13 @@ export enum WorkflowAction {
   MANAGE_NOTIFICATIONS = 'manage_notifications',
   PERFORM_BULK_OPERATIONS = 'perform_bulk_operations',
   EXPORT_PRODUCTS = 'export_products',
+  SUBMIT_FOR_REVIEW = 'submit_for_review',
+  REVERT_TO_DRAFT = 'revert_to_draft',
+  ADD_COMMENT = 'add_comment',
+  VIEW_BULK_OPERATIONS = 'view_bulk_operations',
+  CANCEL_BULK_OPERATIONS = 'cancel_bulk_operations',
+  BULK_OPERATIONS = 'bulk_operations',
+  DELETE = 'delete',
 }
 
 // Field Change Tracking
@@ -108,7 +115,7 @@ export interface NotificationPreferences {
 }
 
 // Product with Workflow Extension
-export interface ProductWorkflow extends Product {
+export interface ProductWorkflow extends Omit<Product, 'assignedReviewer' | 'workflowHistory'> {
   workflowState: WorkflowState;
   assignedReviewer?: string;
   submittedBy?: string;
@@ -336,7 +343,7 @@ export interface DynamicPermission {
   assignedAt: string;
 }
 
-export interface Permission {
+export interface PermissionDefinition {
   name: string;
   description: string;
   resource?: string;

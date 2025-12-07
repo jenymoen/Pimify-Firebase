@@ -36,12 +36,17 @@ export interface WorkflowStateBadgeProps {
 /**
  * Configuration for workflow state styling
  */
+import { FileText, Eye, CheckCircle, Rocket, XCircle } from 'lucide-react';
+
+/**
+ * Configuration for workflow state styling
+ */
 const WORKFLOW_STATE_CONFIG = {
   [WorkflowState.DRAFT]: {
     label: 'Draft',
     description: 'Product is being created or edited',
     color: 'bg-gray-100 text-gray-800 border-gray-200',
-    icon: '📝',
+    icon: FileText,
     iconColor: 'text-gray-600',
     pulseColor: 'bg-gray-400',
     priority: 1,
@@ -50,7 +55,7 @@ const WORKFLOW_STATE_CONFIG = {
     label: 'Review',
     description: 'Product is under review',
     color: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-    icon: '👀',
+    icon: Eye,
     iconColor: 'text-yellow-600',
     pulseColor: 'bg-yellow-400',
     priority: 2,
@@ -59,7 +64,7 @@ const WORKFLOW_STATE_CONFIG = {
     label: 'Approved',
     description: 'Product has been approved',
     color: 'bg-green-100 text-green-800 border-green-200',
-    icon: '✅',
+    icon: CheckCircle,
     iconColor: 'text-green-600',
     pulseColor: 'bg-green-400',
     priority: 3,
@@ -68,7 +73,7 @@ const WORKFLOW_STATE_CONFIG = {
     label: 'Published',
     description: 'Product is live and published',
     color: 'bg-blue-100 text-blue-800 border-blue-200',
-    icon: '🚀',
+    icon: Rocket,
     iconColor: 'text-blue-600',
     pulseColor: 'bg-blue-400',
     priority: 4,
@@ -77,7 +82,7 @@ const WORKFLOW_STATE_CONFIG = {
     label: 'Rejected',
     description: 'Product has been rejected',
     color: 'bg-red-100 text-red-800 border-red-200',
-    icon: '❌',
+    icon: XCircle,
     iconColor: 'text-red-600',
     pulseColor: 'bg-red-400',
     priority: 0,
@@ -199,9 +204,7 @@ export const WorkflowStateBadge: React.FC<WorkflowStateBadgeProps> = ({
       )}
       <div className="relative flex items-center">
         {showIcon && (
-          <span className={iconClasses} role="img" aria-label={config.label}>
-            {config.icon}
-          </span>
+          <config.icon className={iconClasses} aria-label={config.label} />
         )}
         <span className="font-medium">{config.label}</span>
       </div>

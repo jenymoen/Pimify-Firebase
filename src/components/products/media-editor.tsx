@@ -30,11 +30,11 @@ const typeIcons: Record<MediaEntry['type'], React.ElementType> = {
 // Helper to check if a string looks like a valid URL for next/image
 const isValidImageUrl = (url: string): boolean => {
   if (!url) return false;
-  return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/');
+  return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/') || url.startsWith('data:');
 };
 
 export function MediaEditor({ label, entries, onChange, allowedTypes }: MediaEditorProps) {
-  
+
   const addEntry = () => {
     const defaultType: MediaEntry['type'] = allowedTypes && allowedTypes.length > 0 ? allowedTypes[0] : 'image';
     onChange([...entries, { id: uuidv4(), url: '', type: defaultType, altText: { en: '', no: '' } }]);
@@ -72,12 +72,12 @@ export function MediaEditor({ label, entries, onChange, allowedTypes }: MediaEdi
             {entry.type === 'image' && entry.url ? (
               isValidImageUrl(entry.url) ? (
                 <div className="ml-2">
-                  <Image 
-                    src={entry.url} 
-                    alt={entry.altText?.en || 'Preview'} 
-                    width={40} 
-                    height={40} 
-                    className="rounded object-cover" 
+                  <Image
+                    src={entry.url}
+                    alt={entry.altText?.en || 'Preview'}
+                    width={40}
+                    height={40}
+                    className="rounded object-cover"
                     data-ai-hint="product image"
                   />
                 </div>
@@ -87,13 +87,13 @@ export function MediaEditor({ label, entries, onChange, allowedTypes }: MediaEdi
                 </div>
               )
             ) : null}
-             <Button type="button" variant="ghost" size="icon" onClick={() => removeEntry(index)} aria-label="Remove media" className="text-destructive hover:text-destructive self-end">
+            <Button type="button" variant="ghost" size="icon" onClick={() => removeEntry(index)} aria-label="Remove media" className="text-destructive hover:text-destructive self-end">
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            { (entry.type === 'image' || entry.type === 'video' || entry.type === '3d_model') && (
+            {(entry.type === 'image' || entry.type === 'video' || entry.type === '3d_model') && (
               <MultilingualInput
                 id={`media-alt-${entry.id}`}
                 label="Alt Text / Title"
@@ -101,7 +101,7 @@ export function MediaEditor({ label, entries, onChange, allowedTypes }: MediaEdi
                 onChange={(val) => updateEntry(index, 'altText', val)}
               />
             )}
-            { (entry.type === 'manual' || entry.type === 'certificate') && (
+            {(entry.type === 'manual' || entry.type === 'certificate') && (
               <div className="space-y-1">
                 <Label htmlFor={`media-title-${entry.id}`} className="text-xs text-muted-foreground">Title</Label>
                 <Input
@@ -134,7 +134,7 @@ export function MediaEditor({ label, entries, onChange, allowedTypes }: MediaEdi
               </Select>
             </div>
             {entry.type === 'manual' && (
-               <div className="space-y-1">
+              <div className="space-y-1">
                 <Label htmlFor={`media-lang-${entry.id}`} className="text-xs text-muted-foreground">Language</Label>
                 <Input
                   id={`media-lang-${entry.id}`}

@@ -8,8 +8,10 @@ import UserImportDialog, { type ImportErrorItem, type ImportResult } from './use
 import UserExportDialog from './user-export-dialog'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
+import { useRouter } from 'next/navigation'
 
 export default function UsersPageClient({ initial }: { initial: ListUser[] }) {
+	const router = useRouter()
 	const { toast } = useToast()
 	const [query, setQuery] = React.useState('')
 	const [filters, setFilters] = React.useState<UserSearchFilters>({})
@@ -21,7 +23,7 @@ export default function UsersPageClient({ initial }: { initial: ListUser[] }) {
 	// Dialog state
 	const [bulkOpen, setBulkOpen] = React.useState(false)
 	const [bulkTitle, setBulkTitle] = React.useState('')
-	const [bulkAction, setBulkAction] = React.useState<'activate'|'deactivate'|'suspend'|'email'|'role'|'none'>('none')
+	const [bulkAction, setBulkAction] = React.useState<'activate' | 'deactivate' | 'suspend' | 'email' | 'role' | 'none'>('none')
 	const [bulkWarning, setBulkWarning] = React.useState<string | undefined>(undefined)
 	const [bulkPreview, setBulkPreview] = React.useState<React.ReactNode | undefined>(undefined)
 	const [importOpen, setImportOpen] = React.useState(false)
@@ -115,6 +117,7 @@ export default function UsersPageClient({ initial }: { initial: ListUser[] }) {
 				selectedUserIds={selected}
 				onSelectUser={(id, checked) => setSelected(prev => checked ? [...prev, id] : prev.filter(x => x !== id))}
 				onSelectAllCurrentPage={(checked, ids) => setSelected(prev => checked ? Array.from(new Set([...prev, ...ids])) : prev.filter(x => !ids.includes(x)))}
+				onEditUser={(id) => router.push(`/users/${id}/edit`)}
 			/>
 
 			<BulkSelectionBar
@@ -167,8 +170,8 @@ export default function UsersPageClient({ initial }: { initial: ListUser[] }) {
 			<UserExportDialog
 				open={exportOpen}
 				onOpenChange={setExportOpen}
-				availableFields={[ 'id','name','email','role','status','department' ]}
-				initialSelected={[ 'name','email','role' ]}
+				availableFields={['id', 'name', 'email', 'role', 'status', 'department']}
+				initialSelected={['name', 'email', 'role']}
 				filterSummary={[quickFilter, query].filter(Boolean).join(' / ')}
 				onExport={async (fields) => {
 					const params = new URLSearchParams({ fields: fields.join(',') })

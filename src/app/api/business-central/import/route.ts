@@ -30,8 +30,10 @@ export async function POST(req: NextRequest) {
             // Fetch image if available
             let media: { images: MediaEntry[] } = { images: [] };
             try {
+                console.log(`[Import] Attempting to fetch image for item ${item.number} (${item.id})`);
                 const pictureData = await fetchItemPicture(accessToken, environment, companyId, item.id);
                 if (pictureData) {
+                    console.log(`[Import] Image found for item ${item.number}`);
                     media.images.push({
                         id: uuidv4(),
                         url: `data:${pictureData.mimeType};base64,${pictureData.content}`,
@@ -39,9 +41,11 @@ export async function POST(req: NextRequest) {
                         type: 'image',
                         dataAiHint: 'product image'
                     });
+                } else {
+                    console.log(`[Import] No image found for item ${item.number}`);
                 }
             } catch (err) {
-                console.warn(`Failed to fetch image for item ${item.number}`, err);
+                console.warn(`[Import] Failed to fetch image for item ${item.number}`, err);
             }
 
             products.push({

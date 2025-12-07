@@ -96,12 +96,32 @@ export default function ProductDetailsPage() {
   const params = useParams();
   const productId = params.id as string;
 
-  const { findProductById } = useProductStore();
+  const { findProductById, updateProduct: storeUpdateProduct } = useProductStore();
   const [product, setProduct] = useState<Product | undefined | null>(undefined);
-  
+
   // Mock current user - in a real app, this would come from auth context
   const currentUserRole = UserRole.ADMIN;
   const currentUserId = 'user-1';
+
+  const [reviewers, setReviewers] = useState<Array<{ id: string; name: string; role: UserRole }>>([]);
+
+  useEffect(() => {
+    // Fetch reviewers
+    const fetchReviewers = async () => {
+      try {
+        const res = await fetch('/api/users?role=reviewer');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && Array.isArray(data.data)) {
+            setReviewers(data.data.map((u: any) => ({ id: u.id, name: u.name, role: u.role })));
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch reviewers', error);
+      }
+    };
+    fetchReviewers();
+  }, []);
 
   useEffect(() => {
     if (productId) {
@@ -110,14 +130,75 @@ export default function ProductDetailsPage() {
     }
   }, [productId, findProductById]);
 
-  const handleWorkflowAction = (action: string, reason?: string) => {
-    console.log(`Workflow action: ${action}`, reason);
-    // In a real app, this would call an API endpoint
+  const handleWorkflowAction = async (action: string, newState: WorkflowState, reason?: string) => {
+    if (!product) return;
+
+    try {
+      const res = await fetch(`/api/products/${product.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': currentUserId,
+          'x-user-role': currentUserRole,
+          'x-user-name': 'Admin User' // Mock name
+        },
+        body: JSON.stringify({
+          workflowState: newState,
+          // If rejecting, we might want to store the reason somewhere, but the current API might not support it directly in the body unless we add a field.
+          // For now, we just update the state.
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setProduct(data.data);
+          // Refresh product store if needed, or just rely on local state update
+        }
+      } else {
+        console.error('Failed to update product state');
+      }
+    } catch (error) {
+      console.error('Error updating product state', error);
+    }
   };
 
-  const handleReviewerAssign = (assignment: any) => {
-    console.log('Reviewer assigned:', assignment);
-    // In a real app, this would call an API endpoint
+  const handleReviewerAssign = async (reviewerId: string) => {
+    if (!product) return;
+
+    const selectedReviewer = reviewers.find(r => r.id === reviewerId);
+    if (!selectedReviewer) return;
+
+    // Update product in store directly
+    const updateData = {
+      workflowState: WorkflowState.REVIEW,
+      assignedReviewer: {
+        userId: selectedReviewer.id,
+        userName: selectedReviewer.name,
+        userRole: selectedReviewer.role
+      },
+      workflowHistory: [
+        ...(product.workflowHistory || []),
+        {
+          id: `history_${Date.now()}`,
+          action: 'ASSIGN_REVIEWER',
+          fromState: product.workflowState || WorkflowState.DRAFT,
+          toState: WorkflowState.REVIEW,
+          userId: currentUserId,
+          userName: 'Admin User',
+          timestamp: new Date().toISOString(),
+          reason: `Reviewer assigned: ${selectedReviewer.name}`,
+        }
+      ]
+    };
+
+    storeUpdateProduct(product.id, updateData);
+
+    // Update local state to reflect changes
+    const updatedProduct = findProductById(product.id);
+    if (updatedProduct) {
+      setProduct(updatedProduct);
+    }
   };
 
   if (product === undefined) {
@@ -153,7 +234,7 @@ export default function ProductDetailsPage() {
   }
 
   const { basicInfo, attributesAndSpecs, media, marketingSEO, pricingAndStock, options, variants } = product;
-  
+
   // Cast to ProductWorkflow to access workflow fields
   const productWorkflow = product as ProductWorkflow;
   const workflowState = productWorkflow.workflowState || WorkflowState.DRAFT;
@@ -199,8 +280,9 @@ export default function ProductDetailsPage() {
               currentState={workflowState}
               userRole={currentUserRole}
               productId={product.id}
-              onAction={handleWorkflowAction}
-              layout="horizontal"
+              onStateTransition={handleWorkflowAction}
+              onAssignReviewer={handleReviewerAssign}
+              availableReviewers={reviewers}
               size="default"
             />
           </div>
@@ -293,7 +375,7 @@ export default function ProductDetailsPage() {
         <MultilingualTextDisplay label="SEO Title" data={marketingSEO.seoTitle} />
         <MultilingualTextDisplay label="SEO Description" data={marketingSEO.seoDescription} />
         {marketingSEO.keywords && marketingSEO.keywords.length > 0 && (
-            <p className="text-sm"><span className="font-medium text-foreground/90">Keywords:</span> <span className="text-muted-foreground">{marketingSEO.keywords.join(', ')}</span></p>
+          <p className="text-sm"><span className="font-medium text-foreground/90">Keywords:</span> <span className="text-muted-foreground">{marketingSEO.keywords.join(', ')}</span></p>
         )}
       </DetailSection>
 

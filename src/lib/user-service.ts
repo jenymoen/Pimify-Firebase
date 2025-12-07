@@ -29,7 +29,7 @@ export interface CreateUserInput {
   name: string;
   role: UserRole;
   status?: UserStatus; // Defaults to PENDING
-  
+
   // Optional profile fields
   job_title?: string;
   department?: string;
@@ -42,15 +42,15 @@ export interface CreateUserInput {
   languages?: string[];
   working_hours?: Record<string, any>;
   custom_fields?: Record<string, any>;
-  
+
   // Reviewer-specific fields (only for reviewers)
   reviewer_max_workload?: number;
   reviewer_availability?: ReviewerAvailability;
-  
+
   // SSO fields
   sso_provider?: string;
   sso_id?: string;
-  
+
   // Metadata
   created_by?: string; // User ID of creator
 }
@@ -63,7 +63,7 @@ export interface UpdateUserInput {
   email?: string;
   name?: string;
   avatar_url?: string;
-  
+
   // Profile fields
   job_title?: string;
   department?: string;
@@ -76,12 +76,12 @@ export interface UpdateUserInput {
   languages?: string[];
   working_hours?: Record<string, any>;
   custom_fields?: Record<string, any>;
-  
+
   // Reviewer fields (only for reviewers)
   reviewer_max_workload?: number;
   reviewer_availability?: ReviewerAvailability;
   reviewer_availability_until?: Date;
-  
+
   // Metadata
   updated_by?: string; // User ID of updater
 }
@@ -382,7 +382,7 @@ export class UserService {
       if (options?.sort_by) {
         const sortBy = options.sort_by;
         const sortOrder = options.sort_order || 'asc';
-        
+
         users.sort((a, b) => {
           let aVal: any = a[sortBy];
           let bVal: any = b[sortBy];
@@ -495,7 +495,7 @@ export class UserService {
       try {
         const changedFields: string[] = [];
         const compareKeys: Array<keyof UsersTable> = [
-          'email','name','avatar_url','job_title','department','location','timezone','phone','manager_id','bio','specialties','languages','working_hours','custom_fields','reviewer_max_workload','reviewer_availability','reviewer_availability_until'
+          'email', 'name', 'avatar_url', 'job_title', 'department', 'location', 'timezone', 'phone', 'manager_id', 'bio', 'specialties', 'languages', 'working_hours', 'custom_fields', 'reviewer_max_workload', 'reviewer_availability', 'reviewer_availability_until'
         ];
         for (const key of compareKeys) {
           const beforeVal = (user as any)[key];
@@ -512,7 +512,7 @@ export class UserService {
             metadata: { changedFields },
           });
         }
-      } catch {}
+      } catch { }
 
       return {
         success: true,
@@ -742,7 +742,7 @@ export class UserService {
     const userId = this.emailIndex.get(email.toLowerCase());
     if (!userId) return false;
     if (excludeUserId && userId === excludeUserId) return false;
-    
+
     const user = this.users.get(userId);
     return user ? !isUserDeleted(user) : false;
   }
@@ -1086,7 +1086,7 @@ export class UserService {
         ...user,
         failed_login_attempts: newAttempts,
         status: shouldLock ? UserStatus.LOCKED : user.status,
-        locked_until: shouldLock 
+        locked_until: shouldLock
           ? new Date(Date.now() + USER_SCHEMA_CONSTRAINTS.AUTO_UNLOCK_MINUTES * 60 * 1000)
           : user.locked_until,
         updated_at: new Date(),
@@ -1285,5 +1285,12 @@ export class UserService {
 }
 
 // Export singleton instance
-export const userService = new UserService();
+// Export singleton instance with global persistence for development
+const globalForService = global as unknown as { userService: UserService };
+
+export const userService = globalForService.userService || new UserService();
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForService.userService = userService;
+}
 

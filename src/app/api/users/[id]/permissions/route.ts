@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { customPermissionService } from '@/lib/custom-permission-service';
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const actor = req.headers.get('x-user-id') || '';
     const body = await req.json();
     const res = customPermissionService.grant({
-      userId: params.id,
+      userId: id,
       permission: body.permission,
       grantedBy: actor,
       reason: body.reason || 'Granted via API',
@@ -20,5 +21,4 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ success: false, error: e?.message || 'Failed to grant permission' }, { status: 500 });
   }
 }
-
 

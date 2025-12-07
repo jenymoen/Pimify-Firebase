@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { userService } from '@/lib/user-service';
 import { withRateLimit } from '@/lib/api-middleware';
 
@@ -30,6 +31,10 @@ export const POST = withRateLimit(async (req: NextRequest) => {
     const body = await req.json();
     const res = await userService.create(body);
     if (!res.success) return NextResponse.json(res, { status: 400 });
+
+    // Revalidate the users list page to show the new user immediately
+    revalidatePath('/users');
+
     return NextResponse.json(res, { status: 201 });
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e?.message || 'Failed to create user' }, { status: 500 });

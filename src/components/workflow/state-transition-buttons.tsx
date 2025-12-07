@@ -6,13 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { 
-  ArrowRight, 
-  Check, 
-  X, 
-  Eye, 
-  Edit, 
-  Send, 
+import {
+  ArrowRight,
+  Check,
+  X,
+  Eye,
+  Edit,
+  Send,
   RotateCcw,
   AlertTriangle,
   Clock,
@@ -73,7 +73,26 @@ export interface StateTransitionButtonsProps {
 /**
  * Configuration for state transition actions
  */
-const TRANSITION_CONFIG = {
+interface TransitionConfigItem {
+  label: string;
+  description: string;
+  icon: React.ElementType;
+  color: string;
+  textColor: string;
+  nextState: WorkflowState | null;
+  requiredRole: UserRole;
+  requiresOwnership?: boolean;
+  requiresValidation?: boolean;
+  requiresAssignment?: boolean;
+  confirmationMessage?: string;
+  requiresReason?: boolean;
+  isAssignmentAction?: boolean;
+  isCommentAction?: boolean;
+  isEditAction?: boolean;
+  isViewAction?: boolean;
+}
+
+const TRANSITION_CONFIG: Partial<Record<WorkflowAction, TransitionConfigItem>> = {
   [WorkflowAction.SUBMIT_FOR_REVIEW]: {
     label: 'Submit for Review',
     description: 'Submit product for review by assigned reviewer',
@@ -214,7 +233,7 @@ export const StateTransitionButtons: React.FC<StateTransitionButtonsProps> = ({
     // Check role requirement
     const userRoleLevel = ROLE_HIERARCHY[userRole];
     const requiredRoleLevel = ROLE_HIERARCHY[config.requiredRole];
-    
+
     if (userRoleLevel < requiredRoleLevel) {
       return false;
     }
@@ -320,7 +339,8 @@ export const StateTransitionButtons: React.FC<StateTransitionButtonsProps> = ({
 
     // Handle special actions
     if (config.isAssignmentAction) {
-      // Show reviewer selection
+      setPendingAction(action);
+      setShowReasonDialog(true); // Reusing reason dialog state for simplicity, but we'll render a different dialog content
       return;
     }
 
@@ -403,18 +423,20 @@ export const StateTransitionButtons: React.FC<StateTransitionButtonsProps> = ({
 
   return (
     <TooltipProvider>
-      <div className={cn('flex items-center gap-2 flex-wrap', className)}>
+      <div key="action-buttons" className={cn('flex items-center gap-2 flex-wrap', className)}>
         {availableActions
           .filter((action) => TRANSITION_CONFIG[action]) // Filter out invalid actions first
           .map((action) => {
             const config = TRANSITION_CONFIG[action];
+            if (!config) return null;
+
             const Icon = config.icon;
             const isDisabled = disabled || loading || !hasPermission(action);
 
             const button = (
               <Button
                 variant={getButtonVariant(action)}
-                size={size}
+                size={size === 'md' ? 'default' : size}
                 disabled={isDisabled}
                 onClick={() => handleActionClick(action)}
                 className={cn(
@@ -451,7 +473,7 @@ export const StateTransitionButtons: React.FC<StateTransitionButtonsProps> = ({
                 </Tooltip>
               );
             }
-            
+
             return <React.Fragment key={action}>{button}</React.Fragment>;
           })}
 
@@ -488,21 +510,43 @@ export const StateTransitionButtons: React.FC<StateTransitionButtonsProps> = ({
 
       {/* Reason Dialog */}
       {showReasonDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div key="reason-dialog" className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
             <h3 className="text-lg font-semibold mb-4">
               {pendingAction && TRANSITION_CONFIG[pendingAction]?.label}
             </h3>
-            <p className="text-gray-600 mb-4">
-              Please provide a reason for this action:
-            </p>
-            <textarea
-              value={reasonText}
-              onChange={(e) => setReasonText(e.target.value)}
-              placeholder="Enter reason..."
-              className="w-full p-3 border border-gray-300 rounded-md resize-none h-24"
-              autoFocus
-            />
+
+            {pendingAction === WorkflowAction.ASSIGN_REVIEWER ? (
+              <div className="mb-4">
+                <p className="text-gray-600 mb-2">Select a reviewer:</p>
+                <select
+                  className="w-full p-2 border border-gray-300 rounded-md"
+                  value={selectedReviewer}
+                  onChange={(e) => setSelectedReviewer(e.target.value)}
+                >
+                  <option value="">-- Select Reviewer --</option>
+                  {availableReviewers.map(reviewer => (
+                    <option key={reviewer.id} value={reviewer.id}>
+                      {reviewer.name} ({reviewer.role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <>
+                <p className="text-gray-600 mb-4">
+                  Please provide a reason for this action:
+                </p>
+                <textarea
+                  value={reasonText}
+                  onChange={(e) => setReasonText(e.target.value)}
+                  placeholder="Enter reason..."
+                  className="w-full p-3 border border-gray-300 rounded-md resize-none h-24"
+                  autoFocus
+                />
+              </>
+            )}
+
             <div className="flex justify-end gap-2 mt-4">
               <Button
                 variant="outline"
@@ -510,13 +554,25 @@ export const StateTransitionButtons: React.FC<StateTransitionButtonsProps> = ({
                   setShowReasonDialog(false);
                   setPendingAction(null);
                   setReasonText('');
+                  setSelectedReviewer('');
                 }}
               >
                 Cancel
               </Button>
               <Button
-                onClick={handleReasonSubmit}
-                disabled={!reasonText.trim()}
+                onClick={() => {
+                  if (pendingAction === WorkflowAction.ASSIGN_REVIEWER) {
+                    if (selectedReviewer && onAssignReviewer) {
+                      onAssignReviewer(selectedReviewer);
+                      setShowReasonDialog(false);
+                      setPendingAction(null);
+                      setSelectedReviewer('');
+                    }
+                  } else {
+                    handleReasonSubmit();
+                  }
+                }}
+                disabled={pendingAction === WorkflowAction.ASSIGN_REVIEWER ? !selectedReviewer : !reasonText.trim()}
               >
                 Confirm
               </Button>

@@ -127,59 +127,83 @@ export async function createProduct(accessToken: string, environment: string, co
 
 export async function fetchItemPicture(accessToken: string, environment: string, companyId: string, itemId: string): Promise<{ content: string; mimeType: string } | null> {
     const pictureUrl = `${BASE_URL}/${environment}/api/v2.0/companies(${companyId})/items(${itemId})/picture`;
+    console.log(`[BC] Fetching picture entity for item ${itemId} from ${pictureUrl}`);
 
     try {
-        // 1. Get the picture entity
-        const response = await fetch(pictureUrl, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json',
-            },
-        });
+        // Strategy 1: Try to get the picture entity first (standard v2.0)
+        let pictureEntity = null;
+        try {
+            const response = await fetch(pictureUrl, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json',
+                },
+            });
 
-        if (!response.ok) {
-            // If 404, just return null (no picture)
-            if (response.status === 404) return null;
-            const errorText = await response.text();
-            console.warn(`Failed to fetch picture entity for item ${itemId}: ${response.status} ${errorText}`);
-            return null;
+            if (response.ok) {
+                const data = await response.json();
+                pictureEntity = data.value?.[0] || data; // Handle both array and single object responses
+            } else {
+                console.warn(`[BC] Failed to fetch picture entity: ${response.status} ${response.statusText}`);
+            }
+        } catch (e) {
+            console.warn(`[BC] Error fetching picture entity:`, e);
         }
 
-        const data = await response.json();
-        const pictureEntity = data.value?.[0];
-
-        if (!pictureEntity) return null;
-
-        // 2. Get the content
-        // The content might be directly available or we need to fetch it from a media link.
-        // Standard v2.0 API often exposes content via /picture({id})/content
-        const contentUrl = `${pictureUrl}(${pictureEntity.id})/content`;
-
-        const contentResponse = await fetch(contentUrl, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${accessToken}`,
-            },
-        });
-
-        if (!contentResponse.ok) {
-            console.warn(`Failed to fetch picture content for item ${itemId}: ${contentResponse.status}`);
-            return null;
+        // Strategy 2: If entity found, try to get content from it
+        if (pictureEntity && pictureEntity.id) {
+            console.log(`[BC] Found picture entity: ${pictureEntity.id}, ContentType: ${pictureEntity.contentType}`);
+            const contentUrl = `${pictureUrl}(${pictureEntity.id})/content`;
+            const content = await fetchPictureContent(contentUrl, accessToken);
+            if (content) {
+                return {
+                    content: content,
+                    mimeType: pictureEntity.contentType || 'image/jpeg'
+                };
+            }
         }
 
-        const arrayBuffer = await contentResponse.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        const base64 = buffer.toString('base64');
-        const mimeType = pictureEntity.contentType || 'image/jpeg'; // Default to jpeg if not provided
+        // Strategy 3: Fallback - Try to fetch content directly from the main picture URL (some versions support this)
+        // or try /picture/content
+        console.log(`[BC] Fallback: Attempting to fetch content directly from ${pictureUrl}/content`);
+        const directContentUrl = `${pictureUrl}/content`;
+        const directContent = await fetchPictureContent(directContentUrl, accessToken);
 
-        return {
-            content: base64,
-            mimeType: mimeType
-        };
+        if (directContent) {
+            return {
+                content: directContent,
+                mimeType: 'image/jpeg' // Assumption for fallback
+            };
+        }
+
+        console.log(`[BC] No picture found for item ${itemId} after all attempts.`);
+        return null;
 
     } catch (error) {
-        console.error(`Error fetching picture for item ${itemId}:`, error);
+        console.error(`[BC] Error fetching picture for item ${itemId}:`, error);
+        return null;
+    }
+}
+
+async function fetchPictureContent(url: string, accessToken: string): Promise<string | null> {
+    try {
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+            },
+        });
+
+        if (!response.ok) return null;
+
+        const arrayBuffer = await response.arrayBuffer();
+        if (arrayBuffer.byteLength === 0) return null;
+
+        const buffer = Buffer.from(arrayBuffer);
+        return buffer.toString('base64');
+    } catch (e) {
+        console.warn(`[BC] Failed to fetch content from ${url}`, e);
         return null;
     }
 }

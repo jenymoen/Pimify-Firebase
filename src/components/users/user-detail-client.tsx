@@ -3,8 +3,10 @@ import React from 'react'
 import UserDetail, { type UserDetailData } from './user-detail'
 import { UserActivityLog, type ActivityItem } from './user-activity-log'
 import { ActivityFilter, type ActivityFilters } from './activity-filter'
+import { useRouter } from 'next/navigation'
 
 export default function UserDetailClient({ initial }: { initial: UserDetailData }) {
+	const router = useRouter()
 	const [user, setUser] = React.useState(initial)
 	const [filters, setFilters] = React.useState<ActivityFilters>({})
 	const [activity, setActivity] = React.useState<ActivityItem[]>([])
@@ -16,7 +18,10 @@ export default function UserDetailClient({ initial }: { initial: UserDetailData 
 		if (filters.dateFrom) params.set('from', filters.dateFrom)
 		if (filters.dateTo) params.set('to', filters.dateTo)
 		const res = await fetch(`/api/users/${user.id}/activity?${params.toString()}`)
-		if (res.ok) setActivity(await res.json())
+		if (res.ok) {
+			const data = await res.json()
+			setActivity(Array.isArray(data.items) ? data.items : [])
+		}
 	}
 	React.useEffect(() => { loadActivity() }, [user.id, filters])
 
@@ -32,10 +37,16 @@ export default function UserDetailClient({ initial }: { initial: UserDetailData 
 
 	return (
 		<div className="space-y-6">
-			<UserDetail user={user} onChangeRole={handleChangeRole} onResetPassword={handleResetPassword} onDeactivate={handleDeactivate} />
+			<UserDetail
+				user={user}
+				onChangeRole={handleChangeRole}
+				onResetPassword={handleResetPassword}
+				onDeactivate={handleDeactivate}
+				onEdit={(id) => router.push(`/users/${id}/edit`)}
+			/>
 			<div className="space-y-3">
 				<h2 className="text-lg font-medium">Activity</h2>
-				<ActivityFilter value={filters} onChange={setFilters} availableTypes={[ 'Login','Logout','Update','2FA','Password' ]} />
+				<ActivityFilter value={filters} onChange={setFilters} availableTypes={['Login', 'Logout', 'Update', '2FA', 'Password']} />
 				<UserActivityLog items={activity} />
 			</div>
 		</div>

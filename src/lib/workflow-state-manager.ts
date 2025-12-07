@@ -70,14 +70,14 @@ export class WorkflowStateManager {
 
     // Find applicable transition rule
     const rule = this.findTransitionRule(request.fromState, request.toState);
-    
+
     if (!rule) {
       errors.push(`Transition from ${request.fromState} to ${request.toState} is not allowed`);
       return { isValid: false, errors, warnings };
     }
 
     // Check role permissions
-    if (rule.requiredRole !== request.userRole) {
+    if (request.userRole !== UserRole.ADMIN && rule.requiredRole !== request.userRole) {
       errors.push(`User role ${request.userRole} is not authorized for this transition. Required role: ${rule.requiredRole}`);
     }
 
@@ -169,8 +169,8 @@ export class WorkflowStateManager {
    */
   getValidNextStates(currentState: WorkflowState, userRole: UserRole): WorkflowState[] {
     return this.stateTransitionRules
-      .filter(rule => 
-        rule.from === currentState && 
+      .filter(rule =>
+        rule.from === currentState &&
         rule.requiredRole === userRole &&
         !rule.isAutomatic
       )
@@ -182,8 +182,8 @@ export class WorkflowStateManager {
    */
   getValidPreviousStates(currentState: WorkflowState, userRole: UserRole): WorkflowState[] {
     return this.stateTransitionRules
-      .filter(rule => 
-        rule.to === currentState && 
+      .filter(rule =>
+        rule.to === currentState &&
         rule.requiredRole === userRole &&
         !rule.isAutomatic
       )
@@ -199,7 +199,7 @@ export class WorkflowStateManager {
     userRole: UserRole
   ): boolean {
     const validStates = this.getValidNextStates(currentState, userRole);
-    
+
     switch (action) {
       case WorkflowAction.SUBMIT:
         return validStates.includes(WorkflowState.REVIEW);
@@ -488,7 +488,7 @@ export class WorkflowStateManager {
 
     // Check for automatic transitions
     const automaticRules = this.stateTransitionRules.filter(rule => rule.isAutomatic);
-    
+
     for (const rule of automaticRules) {
       if (rule.from === product.workflowState) {
         const request: StateTransitionRequest = {
@@ -530,7 +530,7 @@ export class WorkflowStateManager {
   /**
    * Public utility methods
    */
-  
+
   /**
    * Gets the display name for a workflow state
    */

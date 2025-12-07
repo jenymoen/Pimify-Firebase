@@ -12,7 +12,7 @@ interface ProductState {
   addProduct: (productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'aiSummary'>, aiSummary?: Product['aiSummary']) => Product;
   updateProduct: (productId: string, productData: Partial<Omit<Product, 'id' | 'createdAt' | 'updatedAt'>>) => void;
   deleteProduct: (productId: string) => void;
-  findProductById: (productId:string) => Product | undefined;
+  findProductById: (productId: string) => Product | undefined;
   importProducts: (newProducts: Product[]) => void;
   setProducts: (products: Product[]) => void;
   recalculateAllQuality: () => void;
@@ -32,7 +32,7 @@ export const useProductStore = create<ProductState>()(
         const newProduct: Product = {
           ...initialProductData, // Start with defaults
           ...productDataWithoutMeta, // Spread the incoming data, this includes basicInfo, attributesAndSpecs etc.
-                                    // and should also include options and variants if provided in productDataWithoutMeta
+          // and should also include options and variants if provided in productDataWithoutMeta
           id: productDataWithoutMeta.basicInfo.sku || uuidv4(), // Ensure ID is set
           // Explicitly ensure options and variants from payload take precedence or default to empty arrays
           options: productDataWithoutMeta.options ? [...productDataWithoutMeta.options] : [],
@@ -79,7 +79,7 @@ export const useProductStore = create<ProductState>()(
 
               // Recalculate quality metrics after update
               updatedProduct.qualityMetrics = calculateQualityMetrics(updatedProduct);
-              
+
               return updatedProduct;
             }
             return p;
@@ -101,29 +101,48 @@ export const useProductStore = create<ProductState>()(
         }
         const existingProducts = get().products;
         const productMap = new Map(existingProducts.map(p => [p.id, p]));
+        const skuMap = new Map(existingProducts.filter(p => p.basicInfo.sku).map(p => [p.basicInfo.sku, p]));
 
         newProducts.forEach(np => {
-          const id = np.id || np.basicInfo?.sku || uuidv4();
-          const existingP = productMap.get(id);
+          // Try to find existing product by ID or SKU
+          let existingP = productMap.get(np.id);
+          if (!existingP && np.basicInfo?.sku) {
+            existingP = skuMap.get(np.basicInfo.sku);
+          }
+
+          // If we found an existing product, use its ID
+          const id = existingP ? existingP.id : (np.id || uuidv4());
+
           const importedProduct = {
             ...initialProductData,
-            ...existingP,
-            ...np,
-            id,
+            ...existingP, // Start with existing data if available
+            ...np,        // Override with new data
+            id,           // Ensure we use the correct ID (existing or new)
+            basicInfo: {
+              ...initialProductData.basicInfo,
+              ...(existingP?.basicInfo || {}),
+              ...(np.basicInfo || {}),
+            },
+            attributesAndSpecs: {
+              ...initialProductData.attributesAndSpecs,
+              ...(existingP?.attributesAndSpecs || {}),
+              ...(np.attributesAndSpecs || {}),
+            },
+            media: np.media ? { ...np.media } : (existingP?.media || { images: [] }),
             pricingAndStock: np.pricingAndStock ? {
-                standardPrice: np.pricingAndStock.standardPrice || existingP?.pricingAndStock?.standardPrice || [],
-                salePrice: np.pricingAndStock.salePrice || existingP?.pricingAndStock?.salePrice || [],
-                costPrice: np.pricingAndStock.costPrice || existingP?.pricingAndStock?.costPrice || [],
+              standardPrice: np.pricingAndStock.standardPrice || existingP?.pricingAndStock?.standardPrice || [],
+              salePrice: np.pricingAndStock.salePrice || existingP?.pricingAndStock?.salePrice || [],
+              costPrice: np.pricingAndStock.costPrice || existingP?.pricingAndStock?.costPrice || [],
             } : (existingP?.pricingAndStock || { ...(initialProductData.pricingAndStock || { standardPrice: [], salePrice: [], costPrice: [] }) }),
-             options: np.options || existingP?.options || [],
-             variants: np.variants || existingP?.variants || [],
+            options: np.options || existingP?.options || [],
+            variants: np.variants || existingP?.variants || [],
             updatedAt: new Date().toISOString(),
             createdAt: existingP?.createdAt || new Date().toISOString()
           };
 
           // Calculate quality metrics for imported product
           importedProduct.qualityMetrics = calculateQualityMetrics(importedProduct);
-          
+
           productMap.set(id, importedProduct);
         });
 
@@ -149,8 +168,8 @@ export const useProductStore = create<ProductState>()(
         if (typeof window === 'undefined') {
           return {
             getItem: () => null,
-            setItem: () => {},
-            removeItem: () => {},
+            setItem: () => { },
+            removeItem: () => { },
           };
         }
         return localStorage;
@@ -170,63 +189,63 @@ if (typeof window !== 'undefined') {
       const currentStoreState = useProductStore.getState();
 
       if (!isAlreadyInitialized && (tenantId === 'default_host' || tenantId.startsWith('default_') || tenantId.startsWith('localhost'))) {
-        localStorage.setItem(productsInitializedKey, 'true'); 
-        
+        localStorage.setItem(productsInitializedKey, 'true');
+
         if (currentStoreState.products.length === 0) { // Only seed if store is still empty
           const exampleProduct: Product = {
-              id: 'EXAMPLE-SKU-001',
-              basicInfo: {
-                  name: { en: 'Example Laptop (Default)', no: 'Eksempel Bærbar PC (Standard)' },
-                  sku: 'EXAMPLE-SKU-001',
-                  gtin: '1234567890123',
-                  descriptionShort: { en: 'A powerful and versatile laptop.', no: 'En kraftig og allsidig bærbar PC.' },
-                  descriptionLong: { en: 'This laptop features the latest generation processor, a stunning display, and long battery life, perfect for work and play.', no: 'Denne bærbare PC-en har siste generasjons prosessor, en fantastisk skjerm og lang batterilevetid, perfekt for arbeid og fritid.' },
-                  brand: 'TechBrand',
-                  status: 'active',
-                  launchDate: '2023-01-15T00:00:00.000Z',
-              },
-              attributesAndSpecs: {
-                  categories: ['Electronics', 'Computers', 'Laptops'],
-                  properties: [
-                  { id: uuidv4(), key: 'Color', value: 'Silver' },
-                  { id: uuidv4(), key: 'RAM', value: '16GB' },
-                  { id: uuidv4(), key: 'Storage', value: '512GB SSD' },
-                  ],
-                  technicalSpecs: [
-                  { id: uuidv4(), key: 'Processor', value: 'Intel Core i7 12th Gen' },
-                  { id: uuidv4(), key: 'Screen Size', value: '14 inch' },
-                  { id: uuidv4(), key: 'Weight', value: '1.3 kg' },
-                  ],
-                  countryOfOrigin: 'China',
-              },
-              media: {
-                  images: [{ id: uuidv4(), url: 'https://placehold.co/600x400.png', altText: { en: 'Laptop front view', no: 'Bærbar PC forfra' }, type: 'image', dataAiHint: 'laptop' }],
-              },
-              marketingSEO: {
-                  seoTitle: { en: 'Buy Example Laptop | TechBrand', no: 'Kjøp Eksempel Bærbar PC | TechBrand' },
-                  seoDescription: { en: 'Get the best deals on the Example Laptop. High performance, great value.', no: 'Få de beste tilbudene på Eksempel Bærbar PC. Høy ytelse, god verdi.' },
-                  keywords: ['laptop', 'computer', 'TechBrand', 'notebook', 'bærbar pc'],
-              },
-              pricingAndStock: {
-                  standardPrice: [{id: uuidv4(), amount: 9999, currency: 'NOK'}],
-                  salePrice: [{id: uuidv4(), amount: 8999, currency: 'NOK'}],
-                  costPrice: [{id: uuidv4(), amount: 6000, currency: 'NOK'}],
-              },
-              options: [
-                { id: uuidv4(), name: "Color", values: ["Silver", "Space Gray"]},
-                { id: uuidv4(), name: "Storage", values: ["256GB", "512GB"]}
+            id: 'EXAMPLE-SKU-001',
+            basicInfo: {
+              name: { en: 'Example Laptop (Default)', no: 'Eksempel Bærbar PC (Standard)' },
+              sku: 'EXAMPLE-SKU-001',
+              gtin: '1234567890123',
+              descriptionShort: { en: 'A powerful and versatile laptop.', no: 'En kraftig og allsidig bærbar PC.' },
+              descriptionLong: { en: 'This laptop features the latest generation processor, a stunning display, and long battery life, perfect for work and play.', no: 'Denne bærbare PC-en har siste generasjons prosessor, en fantastisk skjerm og lang batterilevetid, perfekt for arbeid og fritid.' },
+              brand: 'TechBrand',
+              status: 'active',
+              launchDate: '2023-01-15T00:00:00.000Z',
+            },
+            attributesAndSpecs: {
+              categories: ['Electronics', 'Computers', 'Laptops'],
+              properties: [
+                { id: uuidv4(), key: 'Color', value: 'Silver' },
+                { id: uuidv4(), key: 'RAM', value: '16GB' },
+                { id: uuidv4(), key: 'Storage', value: '512GB SSD' },
               ],
-              variants: [
-                { id: uuidv4(), sku: "EX-LT-SIL-256", optionValues: {"Color": "Silver", "Storage": "256GB"}, standardPrice: [{id: uuidv4(), amount: 9999, currency: 'NOK'}], salePrice: []},
-                { id: uuidv4(), sku: "EX-LT-SIL-512", optionValues: {"Color": "Silver", "Storage": "512GB"}, standardPrice: [{id: uuidv4(), amount: 10999, currency: 'NOK'}], salePrice: []},
-                { id: uuidv4(), sku: "EX-LT-GRY-256", optionValues: {"Color": "Space Gray", "Storage": "256GB"}, standardPrice: [{id: uuidv4(), amount: 9999, currency: 'NOK'}], salePrice: []},
-                { id: uuidv4(), sku: "EX-LT-GRY-512", optionValues: {"Color": "Space Gray", "Storage": "512GB"}, standardPrice: [{id: uuidv4(), amount: 10999, currency: 'NOK'}], salePrice: []}
+              technicalSpecs: [
+                { id: uuidv4(), key: 'Processor', value: 'Intel Core i7 12th Gen' },
+                { id: uuidv4(), key: 'Screen Size', value: '14 inch' },
+                { id: uuidv4(), key: 'Weight', value: '1.3 kg' },
               ],
-              aiSummary: { en: 'A high-performance Silver laptop with 16GB RAM and 512GB SSD.', no: 'En høytytende sølvfarget bærbar PC med 16 GB RAM og 512 GB SSD.' },
-              workflowState: WorkflowState.DRAFT,
-              workflowHistory: [],
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
+              countryOfOrigin: 'China',
+            },
+            media: {
+              images: [{ id: uuidv4(), url: 'https://placehold.co/600x400.png', altText: { en: 'Laptop front view', no: 'Bærbar PC forfra' }, type: 'image', dataAiHint: 'laptop' }],
+            },
+            marketingSEO: {
+              seoTitle: { en: 'Buy Example Laptop | TechBrand', no: 'Kjøp Eksempel Bærbar PC | TechBrand' },
+              seoDescription: { en: 'Get the best deals on the Example Laptop. High performance, great value.', no: 'Få de beste tilbudene på Eksempel Bærbar PC. Høy ytelse, god verdi.' },
+              keywords: ['laptop', 'computer', 'TechBrand', 'notebook', 'bærbar pc'],
+            },
+            pricingAndStock: {
+              standardPrice: [{ id: uuidv4(), amount: 9999, currency: 'NOK' }],
+              salePrice: [{ id: uuidv4(), amount: 8999, currency: 'NOK' }],
+              costPrice: [{ id: uuidv4(), amount: 6000, currency: 'NOK' }],
+            },
+            options: [
+              { id: uuidv4(), name: "Color", values: ["Silver", "Space Gray"] },
+              { id: uuidv4(), name: "Storage", values: ["256GB", "512GB"] }
+            ],
+            variants: [
+              { id: uuidv4(), sku: "EX-LT-SIL-256", optionValues: { "Color": "Silver", "Storage": "256GB" }, standardPrice: [{ id: uuidv4(), amount: 9999, currency: 'NOK' }], salePrice: [] },
+              { id: uuidv4(), sku: "EX-LT-SIL-512", optionValues: { "Color": "Silver", "Storage": "512GB" }, standardPrice: [{ id: uuidv4(), amount: 10999, currency: 'NOK' }], salePrice: [] },
+              { id: uuidv4(), sku: "EX-LT-GRY-256", optionValues: { "Color": "Space Gray", "Storage": "256GB" }, standardPrice: [{ id: uuidv4(), amount: 9999, currency: 'NOK' }], salePrice: [] },
+              { id: uuidv4(), sku: "EX-LT-GRY-512", optionValues: { "Color": "Space Gray", "Storage": "512GB" }, standardPrice: [{ id: uuidv4(), amount: 10999, currency: 'NOK' }], salePrice: [] }
+            ],
+            aiSummary: { en: 'A high-performance Silver laptop with 16GB RAM and 512GB SSD.', no: 'En høytytende sølvfarget bærbar PC med 16 GB RAM og 512 GB SSD.' },
+            workflowState: WorkflowState.DRAFT,
+            workflowHistory: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
           };
 
           // Calculate quality metrics for example product
