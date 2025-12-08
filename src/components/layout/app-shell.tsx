@@ -79,7 +79,7 @@ export function AppShell({ children }: AppShellProps) {
         <SidebarMenu>
           {navItems.map((item) => (
             <SidebarMenuItem key={item.label}>
-              <Link href={item.href} passHref legacyBehavior>
+              <Link href={item.href}>
                 <SidebarMenuButton
                   isActive={pathname === item.href || (item.href !== '/products' && item.href !== '/dashboard' && item.href !== '/quality' && pathname.startsWith(item.href)) || (item.href === '/dashboard' && pathname === '/dashboard') || (item.href === '/quality' && pathname === '/quality')}
                   asChild={false}
