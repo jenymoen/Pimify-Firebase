@@ -14,7 +14,8 @@ export enum WorkflowState {
   REVIEW = 'review',
   APPROVED = 'approved',
   PUBLISHED = 'published',
-  REJECTED = 'rejected'
+  REJECTED = 'rejected',
+  SYNCED = 'synced'  // Product has been synced to external platform (e.g., Shopify)
 }
 
 // User Role Enum
@@ -315,6 +316,21 @@ export const defaultWorkflowConfig: WorkflowConfig = {
       requiredRole: UserRole.EDITOR,
       requiredPermissions: ['products:write'],
       isAutomatic: true,
+    },
+    // Shopify sync transitions
+    {
+      from: WorkflowState.APPROVED,
+      to: WorkflowState.SYNCED,
+      requiredRole: UserRole.EDITOR,
+      requiredPermissions: ['shopify:sync'],
+      isAutomatic: false,
+    },
+    {
+      from: WorkflowState.PUBLISHED,
+      to: WorkflowState.SYNCED,
+      requiredRole: UserRole.EDITOR,
+      requiredPermissions: ['shopify:sync'],
+      isAutomatic: false,
     },
   ],
   defaultNotificationPreferences: defaultNotificationPreferences,

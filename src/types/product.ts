@@ -141,6 +141,15 @@ export interface Product {
     reason?: string;
   }>;
 
+  // Shopify sync tracking (multi-store support)
+  shopifySync?: Array<{
+    storeId: string;           // Internal store ID from shopify-store-service
+    shopifyProductId: string;  // Shopify's product ID
+    lastSyncedAt: string;      // ISO timestamp of last sync
+    shopifyPrice?: number;     // Price from Shopify (read-only, for visibility)
+    shopifyVariantIds?: Record<string, string>; // Pimify variant ID -> Shopify variant ID
+  }>;
+
   createdAt: string;
   updatedAt: string;
 }

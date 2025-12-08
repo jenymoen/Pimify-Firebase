@@ -541,6 +541,7 @@ export class WorkflowStateManager {
       [WorkflowState.APPROVED]: 'Approved',
       [WorkflowState.PUBLISHED]: 'Published',
       [WorkflowState.REJECTED]: 'Rejected',
+      [WorkflowState.SYNCED]: 'Synced',
     };
     return displayNames[state];
   }
@@ -555,6 +556,7 @@ export class WorkflowStateManager {
       [WorkflowState.APPROVED]: 'green',
       [WorkflowState.PUBLISHED]: 'blue',
       [WorkflowState.REJECTED]: 'red',
+      [WorkflowState.SYNCED]: 'emerald',  // #10B981 in Tailwind
     };
     return colors[state];
   }
@@ -569,6 +571,7 @@ export class WorkflowStateManager {
       [WorkflowState.APPROVED]: 'check',
       [WorkflowState.PUBLISHED]: 'globe',
       [WorkflowState.REJECTED]: 'x',
+      [WorkflowState.SYNCED]: 'cloud-arrow-up',
     };
     return icons[state];
   }

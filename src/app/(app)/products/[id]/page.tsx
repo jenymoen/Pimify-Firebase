@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
-import { ArrowLeft, Edit, Tag, Info, ImageIcon, BarChart3, Brain, Package, DollarSign, Cog, History, UserPlus, GitBranch } from 'lucide-react';
+import { ArrowLeft, Edit, Tag, Info, ImageIcon, BarChart3, Brain, Package, DollarSign, Cog, History, UserPlus, GitBranch, CloudUpload } from 'lucide-react';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format, parseISO } from 'date-fns';
@@ -22,6 +22,8 @@ import { AuditTrailViewer } from '@/components/workflow/audit-trail-viewer';
 import { ReviewerAssignment } from '@/components/workflow/reviewer-assignment';
 import { WorkflowState, UserRole } from '@/types/workflow';
 import type { ProductWorkflow } from '@/types/workflow';
+import { SyncStatusBadge } from '@/components/products/SyncStatusBadge';
+import { PushToShopifyDialog } from '@/components/products/PushToShopifyDialog';
 
 const DetailSection: React.FC<{ title: string; icon: React.ElementType; children: React.ReactNode }> = ({ title, icon: Icon, children }) => (
   <div className="mb-8">
@@ -104,6 +106,7 @@ export default function ProductDetailsPage() {
   const currentUserId = 'user-1';
 
   const [reviewers, setReviewers] = useState<Array<{ id: string; name: string; role: UserRole }>>([]);
+  const [showPushDialog, setShowPushDialog] = useState(false);
 
   useEffect(() => {
     // Fetch reviewers
@@ -397,10 +400,14 @@ export default function ProductDetailsPage() {
       <Card className="shadow-lg">
         <CardContent className="p-6">
           <Tabs defaultValue="workflow" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="workflow">
                 <GitBranch className="mr-2 h-4 w-4" />
                 Workflow
+              </TabsTrigger>
+              <TabsTrigger value="shopify">
+                <CloudUpload className="mr-2 h-4 w-4" />
+                Shopify
               </TabsTrigger>
               <TabsTrigger value="audit">
                 <History className="mr-2 h-4 w-4" />
@@ -426,6 +433,60 @@ export default function ProductDetailsPage() {
               </div>
             </TabsContent>
 
+            <TabsContent value="shopify" className="mt-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Shopify Sync</h3>
+                  <SyncStatusBadge product={product} showDetails />
+                </div>
+
+                {/* Sync eligibility check */}
+                {[WorkflowState.APPROVED, WorkflowState.PUBLISHED, WorkflowState.SYNCED].includes(workflowState) ? (
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      This product is ready to be pushed to Shopify.
+                    </p>
+                    <Button onClick={() => setShowPushDialog(true)}>
+                      <CloudUpload className="mr-2 h-4 w-4" />
+                      Push to Shopify
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200">
+                    <p className="text-sm">
+                      Products must be in <strong>Approved</strong> or <strong>Published</strong> state before syncing to Shopify.
+                    </p>
+                    <p className="text-sm mt-1">
+                      Current state: <strong>{workflowState}</strong>
+                    </p>
+                  </div>
+                )}
+
+                {/* Sync history */}
+                {product.shopifySync && product.shopifySync.length > 0 && (
+                  <div className="mt-6">
+                    <h4 className="font-medium mb-2">Sync History</h4>
+                    <div className="space-y-2">
+                      {product.shopifySync.map((sync, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-3 rounded border bg-card">
+                          <div>
+                            <p className="font-medium">Store: {sync.storeId}</p>
+                            <p className="text-sm text-muted-foreground">
+                              Shopify ID: {sync.shopifyProductId}
+                            </p>
+                          </div>
+                          <div className="text-right text-sm text-muted-foreground">
+                            <p>Last synced:</p>
+                            <p>{format(parseISO(sync.lastSyncedAt), 'MMM d, yyyy h:mm a')}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
             <TabsContent value="audit" className="mt-6">
               <AuditTrailViewer
                 productId={product.id}
@@ -448,6 +509,36 @@ export default function ProductDetailsPage() {
           </Tabs>
         </CardContent>
       </Card>
+
+      {/* Push to Shopify Dialog */}
+      <PushToShopifyDialog
+        product={product}
+        isOpen={showPushDialog}
+        onClose={() => setShowPushDialog(false)}
+        onSuccess={(storeId, shopifyProductId) => {
+          // Update product with sync info
+          const existingSync = product.shopifySync || [];
+          const syncIndex = existingSync.findIndex(s => s.storeId === storeId);
+          const newSyncRecord = {
+            storeId,
+            shopifyProductId,
+            lastSyncedAt: new Date().toISOString(),
+          };
+
+          const updatedSync = syncIndex >= 0
+            ? existingSync.map((s, i) => i === syncIndex ? newSyncRecord : s)
+            : [...existingSync, newSyncRecord];
+
+          storeUpdateProduct(product.id, {
+            shopifySync: updatedSync,
+            workflowState: WorkflowState.SYNCED,
+          });
+
+          // Refresh product
+          const updated = findProductById(product.id);
+          if (updated) setProduct(updated);
+        }}
+      />
     </div>
   );
 }

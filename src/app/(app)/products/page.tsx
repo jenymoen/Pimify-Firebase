@@ -7,17 +7,18 @@ import { useProductStore } from '@/lib/product-store';
 import type { Product, ProductStatus } from '@/types/product';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { PlusCircle, Search, Package, Filter, X, ListChecks } from 'lucide-react';
+import { PlusCircle, Search, Package, Filter, X, ListChecks, CloudUpload } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { 
-  calculateQualityMetrics, 
-  checkMissingImages, 
-  validateProduct 
+import {
+  calculateQualityMetrics,
+  checkMissingImages,
+  validateProduct
 } from '@/lib/product-quality';
 import { WorkflowFilters } from '@/components/workflow/workflow-filters';
 import { BulkOperationsPanel } from '@/components/workflow/bulk-operations-panel';
+import { ShopifyBulkPushPanel } from '@/components/products/ShopifyBulkPushPanel';
 import { WorkflowState, UserRole } from '@/types/workflow';
 import type { ProductWorkflow } from '@/types/workflow';
 
@@ -28,7 +29,8 @@ export default function ProductsPage() {
   const [mounted, setMounted] = useState(false);
   const [showBulkOps, setShowBulkOps] = useState(false);
   const [showWorkflowFilters, setShowWorkflowFilters] = useState(false);
-  
+  const [showShopifyBulkPush, setShowShopifyBulkPush] = useState(false);
+
   // Mock current user role - in a real app, this would come from auth context
   const currentUserRole = UserRole.ADMIN;
   const currentUserId = 'user-1';
@@ -50,7 +52,7 @@ export default function ProductsPage() {
     if (searchTerm) {
       filtered = filtered.filter(product => {
         const nameMatch = product.basicInfo.name.en?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          product.basicInfo.name.no?.toLowerCase().includes(searchTerm.toLowerCase());
+          product.basicInfo.name.no?.toLowerCase().includes(searchTerm.toLowerCase());
         const skuMatch = product.basicInfo.sku.toLowerCase().includes(searchTerm.toLowerCase());
         const brandMatch = product.basicInfo.brand?.toLowerCase().includes(searchTerm.toLowerCase());
         return nameMatch || skuMatch || brandMatch;
@@ -85,7 +87,7 @@ export default function ProductsPage() {
 
     return filtered;
   }, [allProducts, searchTerm, selectedStatuses, qualityFilter]);
-  
+
   // Helper function to build URL with updated parameters
   const buildFilterUrl = (newQuality?: string | null, newStatus?: string | null) => {
     const params = new URLSearchParams();
@@ -111,7 +113,7 @@ export default function ProductsPage() {
         <h1 className="text-3xl font-bold text-primary">Product Catalog</h1>
         <div className="flex gap-2 w-full sm:w-auto flex-wrap">
           <div className="relative flex-grow sm:flex-grow-0 sm:w-64">
-            <Input 
+            <Input
               type="search"
               placeholder="Search products..."
               className="pl-10"
@@ -120,19 +122,27 @@ export default function ProductsPage() {
             />
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
           </div>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={() => setShowWorkflowFilters(!showWorkflowFilters)}
           >
-            <Filter className="mr-2 h-5 w-5" /> 
+            <Filter className="mr-2 h-5 w-5" />
             Workflow Filters
           </Button>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={() => setShowBulkOps(!showBulkOps)}
           >
-            <ListChecks className="mr-2 h-5 w-5" /> 
+            <ListChecks className="mr-2 h-5 w-5" />
             Bulk Operations
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setShowShopifyBulkPush(!showShopifyBulkPush)}
+            className="border-emerald-500/50 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+          >
+            <CloudUpload className="mr-2 h-5 w-5 text-emerald-600" />
+            Push to Shopify
           </Button>
           <Link href="/products/new" passHref>
             <Button>
@@ -181,6 +191,19 @@ export default function ProductsPage() {
         </div>
       )}
 
+      {/* Shopify Bulk Push Panel */}
+      {showShopifyBulkPush && (
+        <div className="mb-6">
+          <ShopifyBulkPushPanel
+            products={allProducts}
+            onClose={() => setShowShopifyBulkPush(false)}
+            onComplete={(result) => {
+              console.log('Shopify bulk push complete:', result);
+            }}
+          />
+        </div>
+      )}
+
       {/* Active Filters Display */}
       {(qualityFilter || selectedStatuses.length > 0) && (
         <div className="mb-6 p-4 bg-muted/50 rounded-lg">
@@ -205,9 +228,9 @@ export default function ProductsPage() {
                 </Link>
               </Badge>
             ))}
-            <Button 
-              variant="ghost" 
-              size="sm" 
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={clearAllFilters}
               className="h-6 px-2 text-xs"
             >
