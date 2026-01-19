@@ -7,6 +7,7 @@
 
 import { UserSessionsTable, SESSION_SCHEMA_CONSTRAINTS, isSessionExpired, isSessionActive } from './database-schema';
 import { UserService, userService } from './user-service';
+import { firestoreSessionStore } from './session-repository';
 
 /**
  * Session Creation Input
@@ -56,9 +57,6 @@ export interface SessionStats {
  */
 export class SessionService {
   private readonly userService: UserService;
-  // In-memory store (replace with database in production)
-  private sessions: Map<string, UserSessionsTable> = new Map();
-  private sessionsByUser: Map<string, Set<string>> = new Map(); // userId -> sessionIds
 
   constructor(config?: {
     userService?: UserService;
@@ -90,7 +88,7 @@ export class SessionService {
       const activeSessions = await this.getActiveSessions(userId);
       if (activeSessions.length >= SESSION_SCHEMA_CONSTRAINTS.MAX_CONCURRENT_SESSIONS) {
         // Remove oldest session
-        const oldestSession = activeSessions.sort((a, b) => 
+        const oldestSession = activeSessions.sort((a, b) =>
           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
         )[0];
         await this.deleteSession(oldestSession.id);
@@ -98,10 +96,10 @@ export class SessionService {
 
       // Calculate expiry time
       const now = new Date();
-      const expiryHours = rememberMe 
-        ? SESSION_SCHEMA_CONSTRAINTS.REMEMBER_ME_DAYS * 24 
+      const expiryHours = rememberMe
+        ? SESSION_SCHEMA_CONSTRAINTS.REMEMBER_ME_DAYS * 24
         : SESSION_SCHEMA_CONSTRAINTS.SESSION_TIMEOUT_HOURS;
-      
+
       const expiresAt = new Date(now.getTime() + expiryHours * 60 * 60 * 1000);
 
       // Create session
@@ -121,13 +119,7 @@ export class SessionService {
       };
 
       // Store session
-      this.sessions.set(sessionId, session);
-      
-      // Update user's session list
-      if (!this.sessionsByUser.has(userId)) {
-        this.sessionsByUser.set(userId, new Set());
-      }
-      this.sessionsByUser.get(userId)!.add(sessionId);
+      await firestoreSessionStore.save(session);
 
       return {
         success: true,
@@ -147,7 +139,7 @@ export class SessionService {
    */
   async getSession(sessionId: string): Promise<SessionResult> {
     try {
-      const session = this.sessions.get(sessionId);
+      const session = await firestoreSessionStore.getById(sessionId);
 
       if (!session) {
         return {
@@ -184,28 +176,28 @@ export class SessionService {
    */
   async getSessionByToken(token: string): Promise<SessionResult> {
     try {
-      for (const session of this.sessions.values()) {
-        if (session.token === token) {
-          // Check if expired
-          if (isSessionExpired(session)) {
-            return {
-              success: false,
-              error: 'Session has expired',
-              code: 'SESSION_EXPIRED',
-            };
-          }
+      const session = await firestoreSessionStore.getByToken(token);
 
-          return {
-            success: true,
-            session,
-          };
-        }
+      if (!session) {
+        return {
+          success: false,
+          error: 'Session not found',
+          code: 'SESSION_NOT_FOUND',
+        };
+      }
+
+      // Check if expired
+      if (isSessionExpired(session)) {
+        return {
+          success: false,
+          error: 'Session has expired',
+          code: 'SESSION_EXPIRED',
+        };
       }
 
       return {
-        success: false,
-        error: 'Session not found',
-        code: 'SESSION_NOT_FOUND',
+        success: true,
+        session,
       };
     } catch (error) {
       return {
@@ -221,36 +213,21 @@ export class SessionService {
    */
   async getUserSessions(userId: string, filters?: SessionQueryFilters): Promise<SessionResult> {
     try {
-      const userSessionIds = this.sessionsByUser.get(userId);
-      if (!userSessionIds) {
-        return {
-          success: true,
-          sessions: [],
-        };
-      }
-
-      const sessions = Array.from(userSessionIds)
-        .map(id => this.sessions.get(id))
-        .filter((s): s is UserSessionsTable => s !== undefined);
+      let sessions = await firestoreSessionStore.getByUserId(userId);
 
       // Apply filters
-      let filteredSessions = sessions;
-      
-      if (filters?.isActive !== undefined) {
-        filteredSessions = filteredSessions.filter(s => 
-          isSessionActive(s) === filters.isActive
-        );
-      }
-
-      if (filters?.expiresBefore) {
-        filteredSessions = filteredSessions.filter(s => 
-          new Date(s.expires_at) < filters.expiresBefore!
-        );
+      if (filters) {
+        if (filters.isActive !== undefined) {
+          sessions = sessions.filter(s => isSessionActive(s) === filters.isActive);
+        }
+        if (filters.expiresBefore) {
+          sessions = sessions.filter(s => s.expires_at < filters.expiresBefore!);
+        }
       }
 
       return {
         success: true,
-        sessions: filteredSessions,
+        sessions,
       };
     } catch (error) {
       return {
@@ -265,8 +242,8 @@ export class SessionService {
    * Get active sessions for a user
    */
   async getActiveSessions(userId: string): Promise<UserSessionsTable[]> {
-    const result = await this.getUserSessions(userId, { isActive: true });
-    return result.sessions || [];
+    const sessions = await firestoreSessionStore.getByUserId(userId);
+    return sessions.filter(isSessionActive);
   }
 
   /**
@@ -274,7 +251,7 @@ export class SessionService {
    */
   async updateActivity(sessionId: string): Promise<SessionResult> {
     try {
-      const session = this.sessions.get(sessionId);
+      const session = await firestoreSessionStore.getById(sessionId);
 
       if (!session) {
         return {
@@ -294,16 +271,15 @@ export class SessionService {
       }
 
       // Update last activity
-      const updatedSession: UserSessionsTable = {
-        ...session,
+      const updateData: Partial<UserSessionsTable> = {
         last_activity: new Date(),
       };
 
-      this.sessions.set(sessionId, updatedSession);
+      await firestoreSessionStore.update(sessionId, updateData);
 
       return {
         success: true,
-        session: updatedSession,
+        session: { ...session, ...updateData },
       };
     } catch (error) {
       return {
@@ -319,7 +295,7 @@ export class SessionService {
    */
   async refreshSession(sessionId: string, rememberMe?: boolean): Promise<SessionResult> {
     try {
-      const session = this.sessions.get(sessionId);
+      const session = await firestoreSessionStore.getById(sessionId);
 
       if (!session) {
         return {
@@ -340,24 +316,23 @@ export class SessionService {
 
       // Calculate new expiry
       const now = new Date();
-      const expiryHours = rememberMe 
-        ? SESSION_SCHEMA_CONSTRAINTS.REMEMBER_ME_DAYS * 24 
+      const expiryHours = rememberMe
+        ? SESSION_SCHEMA_CONSTRAINTS.REMEMBER_ME_DAYS * 24
         : SESSION_SCHEMA_CONSTRAINTS.SESSION_TIMEOUT_HOURS;
-      
+
       const expiresAt = new Date(now.getTime() + expiryHours * 60 * 60 * 1000);
 
       // Update session
-      const updatedSession: UserSessionsTable = {
-        ...session,
+      const updateData: Partial<UserSessionsTable> = {
         last_activity: now,
         expires_at: expiresAt,
       };
 
-      this.sessions.set(sessionId, updatedSession);
+      await firestoreSessionStore.update(sessionId, updateData);
 
       return {
         success: true,
-        session: updatedSession,
+        session: { ...session, ...updateData },
       };
     } catch (error) {
       return {
@@ -373,7 +348,7 @@ export class SessionService {
    */
   async deleteSession(sessionId: string): Promise<SessionResult> {
     try {
-      const session = this.sessions.get(sessionId);
+      const session = await firestoreSessionStore.getById(sessionId);
 
       if (!session) {
         return {
@@ -383,18 +358,11 @@ export class SessionService {
         };
       }
 
-      // Mark as inactive and remove from user's session list
-      const updatedSession: UserSessionsTable = {
-        ...session,
-        is_active: false,
-      };
-
-      this.sessions.set(sessionId, updatedSession);
-      this.sessionsByUser.get(session.user_id)?.delete(sessionId);
+      // Delete session
+      await firestoreSessionStore.delete(sessionId);
 
       return {
         success: true,
-        session: updatedSession,
       };
     } catch (error) {
       return {
@@ -439,48 +407,30 @@ export class SessionService {
    * Clean up expired sessions
    */
   async cleanupExpiredSessions(): Promise<number> {
-    let cleaned = 0;
-
-    for (const [sessionId, session] of this.sessions.entries()) {
-      if (isSessionExpired(session)) {
-        await this.deleteSession(sessionId);
-        cleaned++;
-      }
-    }
-
-    return cleaned;
+    return firestoreSessionStore.cleanupExpired(new Date());
   }
 
   /**
    * Get session statistics
    */
   async getSessionStats(userId?: string): Promise<SessionStats> {
-    let sessions: UserSessionsTable[];
+    let sessions = userId
+      ? await firestoreSessionStore.getByUserId(userId)
+      : await firestoreSessionStore.getAll();
 
-    if (userId) {
-      const result = await this.getUserSessions(userId);
-      sessions = result.sessions || [];
-    } else {
-      sessions = Array.from(this.sessions.values());
-    }
-
-    const totalSessions = sessions.length;
-    const activeSessions = sessions.filter(s => isSessionActive(s)).length;
-    const expiredSessions = sessions.filter(s => isSessionExpired(s)).length;
-
-    // Count by device
-    const sessionsByDevice = new Map<string, number>();
-    for (const session of sessions) {
-      const device = session.device || 'Unknown';
-      sessionsByDevice.set(device, (sessionsByDevice.get(device) || 0) + 1);
-    }
-
-    return {
-      totalSessions,
-      activeSessions,
-      expiredSessions,
-      sessionsByDevice,
+    const stats: SessionStats = {
+      totalSessions: sessions.length,
+      activeSessions: sessions.filter(isSessionActive).length,
+      expiredSessions: sessions.filter(isSessionExpired).length,
+      sessionsByDevice: new Map(),
     };
+
+    sessions.forEach(s => {
+      const device = s.device || 'Unknown';
+      stats.sessionsByDevice.set(device, (stats.sessionsByDevice.get(device) || 0) + 1);
+    });
+
+    return stats;
   }
 
   /**
@@ -495,8 +445,8 @@ export class SessionService {
    * Check if user has reached concurrent session limit
    */
   async hasReachedSessionLimit(userId: string): Promise<boolean> {
-    const activeSessions = await this.getActiveSessions(userId);
-    return activeSessions.length >= SESSION_SCHEMA_CONSTRAINTS.MAX_CONCURRENT_SESSIONS;
+    const count = await this.getActiveSessionCount(userId);
+    return count >= SESSION_SCHEMA_CONSTRAINTS.MAX_CONCURRENT_SESSIONS;
   }
 
   /**

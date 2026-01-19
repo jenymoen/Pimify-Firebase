@@ -192,7 +192,7 @@ export default function ProductDetailsPage() {
       ]
     };
 
-    storeUpdateProduct(product.id, updateData);
+    await storeUpdateProduct(product.id, updateData);
 
     // Update local state to reflect changes
     const updatedProduct = findProductById(product.id);
@@ -235,9 +235,8 @@ export default function ProductDetailsPage() {
 
   const { basicInfo, attributesAndSpecs, media, marketingSEO, pricingAndStock, options, variants } = product;
 
-  // Cast to ProductWorkflow to access workflow fields
-  const productWorkflow = product as ProductWorkflow;
-  const workflowState = productWorkflow.workflowState || WorkflowState.DRAFT;
+  // Access workflow fields directly from product
+  const workflowState = product.workflowState || WorkflowState.DRAFT;
 
   return (
     <div className="container mx-auto py-8 px-4 md:px-6 lg:px-8">
@@ -271,9 +270,8 @@ export default function ProductDetailsPage() {
         <CardContent className="pb-6">
           <WorkflowProgressIndicator
             currentState={workflowState}
-            history={productWorkflow.workflowHistory}
+            workflowHistory={product.workflowHistory}
             size="md"
-            showHistory={true}
           />
           <div className="mt-4">
             <StateTransitionButtons
@@ -283,7 +281,7 @@ export default function ProductDetailsPage() {
               onStateTransition={handleWorkflowAction}
               onAssignReviewer={handleReviewerAssign}
               availableReviewers={reviewers}
-              size="default"
+              size="md"
             />
           </div>
         </CardContent>
@@ -379,7 +377,7 @@ export default function ProductDetailsPage() {
         )}
       </DetailSection>
 
-      {pricingAndStock && (!variants || variants.length === 0) && (pricingAndStock.standardPrice?.length > 0 || pricingAndStock.salePrice?.length > 0 || pricingAndStock.costPrice?.length > 0) && (
+      {pricingAndStock && (!variants || variants.length === 0) && ((pricingAndStock.standardPrice?.length ?? 0) > 0 || (pricingAndStock.salePrice?.length ?? 0) > 0 || (pricingAndStock.costPrice?.length ?? 0) > 0) && (
         <DetailSection title="Base Pricing" icon={DollarSign}>
           <PriceDisplay label="Original Price" priceEntries={pricingAndStock.standardPrice} />
           <PriceDisplay label="Sales Price" priceEntries={pricingAndStock.salePrice} />
@@ -417,11 +415,8 @@ export default function ProductDetailsPage() {
                 <h3 className="text-lg font-semibold">Workflow Progress</h3>
                 <WorkflowProgressIndicator
                   currentState={workflowState}
-                  history={productWorkflow.workflowHistory}
-                  variant="vertical"
+                  workflowHistory={product.workflowHistory}
                   size="lg"
-                  showHistory={true}
-                  colorScheme="status"
                 />
               </div>
             </TabsContent>
@@ -430,7 +425,6 @@ export default function ProductDetailsPage() {
               <AuditTrailViewer
                 productId={product.id}
                 userRole={currentUserRole}
-                showFilters={true}
                 enableExport={true}
               />
             </TabsContent>
@@ -439,9 +433,10 @@ export default function ProductDetailsPage() {
               <ReviewerAssignment
                 productId={product.id}
                 productName={basicInfo.name.en || basicInfo.sku}
-                currentReviewer={productWorkflow.assignedReviewer}
                 userRole={currentUserRole}
-                onAssign={handleReviewerAssign}
+                onAssign={(assignment) => {
+                  handleReviewerAssign(assignment.reviewerId);
+                }}
                 showReviewerDetails={true}
               />
             </TabsContent>

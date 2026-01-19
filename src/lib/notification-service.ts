@@ -485,7 +485,7 @@ export class NotificationService {
     // This would typically use a templating engine like Handlebars or Mustache
     // For now, we'll return a simple HTML structure
     const { product, user, workflow } = data;
-    
+
     return `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2>${this.getTemplateTitle(template)}</h2>
@@ -524,7 +524,7 @@ export class NotificationService {
    */
   private getTemplateMessage(template: string, data: NotificationTemplateData): string {
     const { product, user, workflow } = data;
-    
+
     switch (template) {
       case 'product_submitted':
         return `The product "${product?.name}" has been submitted for review and is awaiting approval.`;
@@ -560,7 +560,7 @@ export class NotificationService {
    */
   private async processQueue(): Promise<void> {
     if (this.isProcessing) return;
-    
+
     this.isProcessing = true;
 
     try {
@@ -636,6 +636,24 @@ export class NotificationService {
   }
 
   /**
+   * Send a raw email directly (used by system services like password reset)
+   */
+  async sendRawEmail(to: string, subject: string, htmlContent: string): Promise<boolean> {
+    try {
+      console.log('=================================================================');
+      console.log(`EMAIL SENT TO: ${to}`);
+      console.log(`SUBJECT: ${subject}`);
+      console.log('CONTENT:');
+      console.log(htmlContent);
+      console.log('=================================================================');
+      return true;
+    } catch (error) {
+      console.error('Failed to send raw email:', error);
+      return false;
+    }
+  }
+
+  /**
    * Send email notification
    */
   private async sendEmail(message: NotificationMessage): Promise<NotificationDeliveryResult> {
@@ -643,10 +661,10 @@ export class NotificationService {
       // This would integrate with an actual email service
       // For now, we'll simulate the email sending
       console.log(`Sending email to ${message.recipient.email}: ${message.subject}`);
-      
+
       // Simulate email sending delay
       await new Promise(resolve => setTimeout(resolve, 100));
-      
+
       return {
         success: true,
         messageId: `email_${message.id}`,
@@ -702,7 +720,7 @@ export class NotificationService {
     try {
       // This would integrate with a push notification service like FCM
       console.log(`Sending push notification to ${message.recipient.userId}: ${message.subject}`);
-      
+
       return {
         success: true,
         messageId: `push_${message.id}`,
@@ -722,7 +740,7 @@ export class NotificationService {
     try {
       // This would integrate with an SMS service like Twilio
       console.log(`Sending SMS to ${message.recipient.userId}: ${message.content}`);
-      
+
       return {
         success: true,
         messageId: `sms_${message.id}`,
@@ -745,7 +763,7 @@ export class NotificationService {
     offset?: number;
   } = {}): InAppNotification[] {
     const notifications = this.inAppNotifications.get(userId) || [];
-    
+
     return notifications
       .filter(notification => {
         if (!options.includeRead && notification.isRead) return false;
@@ -794,11 +812,11 @@ export class NotificationService {
     if (!preferences.quietHours.enabled) return false;
 
     const now = new Date();
-    const currentTime = now.toLocaleTimeString('en-US', { 
-      hour12: false, 
-      timeZone: preferences.quietHours.timezone 
+    const currentTime = now.toLocaleTimeString('en-US', {
+      hour12: false,
+      timeZone: preferences.quietHours.timezone
     });
-    
+
     const start = preferences.quietHours.start;
     const end = preferences.quietHours.end;
 
@@ -819,11 +837,11 @@ export class NotificationService {
     const now = new Date();
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    
+
     // Set to end of quiet hours tomorrow
     const [hours, minutes] = preferences.quietHours.end.split(':').map(Number);
     tomorrow.setHours(hours, minutes, 0, 0);
-    
+
     return tomorrow;
   }
 
@@ -839,7 +857,7 @@ export class NotificationService {
    */
   private updateStats(message: NotificationMessage, event: 'sent' | 'delivered' | 'failed' | 'bounced' | 'read'): void {
     this.stats.totalSent++;
-    
+
     if (event === 'delivered') {
       this.stats.totalDelivered++;
     } else if (event === 'failed') {
@@ -866,7 +884,7 @@ export class NotificationService {
     } else if (event === 'failed') {
       this.stats.channelStats[message.channel].failed++;
     }
-    this.stats.channelStats[message.channel].deliveryRate = 
+    this.stats.channelStats[message.channel].deliveryRate =
       this.stats.channelStats[message.channel].delivered / this.stats.channelStats[message.channel].sent;
 
     // Update template stats
@@ -879,7 +897,7 @@ export class NotificationService {
     } else if (event === 'failed') {
       this.stats.templateStats[message.template].failed++;
     }
-    this.stats.templateStats[message.template].deliveryRate = 
+    this.stats.templateStats[message.template].deliveryRate =
       this.stats.templateStats[message.template].delivered / this.stats.templateStats[message.template].sent;
   }
 

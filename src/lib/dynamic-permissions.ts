@@ -7,34 +7,34 @@ import { PermissionCheckContext } from '../types/workflow';
 export interface DynamicPermissionAssignment {
   /** Unique identifier for the permission assignment */
   id: string;
-  
+
   /** User ID this permission is assigned to */
   userId: string;
-  
+
   /** The permission being granted (e.g., 'products:create', 'workflow:approve') */
   permission: string;
-  
+
   /** Resource ID this permission applies to (optional, for resource-specific permissions) */
   resourceId?: string;
-  
+
   /** User role this permission is assigned to (for role-based assignments) */
   userRole?: UserRole;
-  
+
   /** Who granted this permission */
   grantedBy: string;
-  
+
   /** When this permission was granted */
   grantedAt: Date;
-  
+
   /** When this permission expires (optional) */
   expiresAt?: Date;
-  
+
   /** Reason for granting this permission */
   reason: string;
-  
+
   /** Whether this permission is currently active */
   isActive: boolean;
-  
+
   /** Additional metadata for the permission */
   metadata?: Record<string, any>;
 }
@@ -45,25 +45,28 @@ export interface DynamicPermissionAssignment {
 export interface DynamicPermissionRevocation {
   /** Unique identifier for the revocation */
   id: string;
-  
+
   /** ID of the permission assignment being revoked */
   assignmentId: string;
-  
+
   /** User ID whose permission is being revoked */
   userId: string;
-  
+
   /** The permission being revoked */
   permission: string;
-  
+
+  /** User role associated with the revoked permission */
+  userRole?: UserRole;
+
   /** Who revoked this permission */
   revokedBy: string;
-  
+
   /** When this permission was revoked */
   revokedAt: Date;
-  
+
   /** Reason for revoking this permission */
   reason: string;
-  
+
   /** Additional metadata for the revocation */
   metadata?: Record<string, any>;
 }
@@ -74,25 +77,25 @@ export interface DynamicPermissionRevocation {
 export interface DynamicPermissionFilters {
   /** Filter by user ID */
   userId?: string;
-  
+
   /** Filter by user role */
   userRole?: UserRole;
-  
+
   /** Filter by permission */
   permission?: string;
-  
+
   /** Filter by resource ID */
   resourceId?: string;
-  
+
   /** Filter by granted by user */
   grantedBy?: string;
-  
+
   /** Filter by active status */
   isActive?: boolean;
-  
+
   /** Filter by expiration status */
   isExpired?: boolean;
-  
+
   /** Filter by date range */
   grantedAfter?: Date;
   grantedBefore?: Date;
@@ -106,13 +109,13 @@ export interface DynamicPermissionFilters {
 export interface DynamicPermissionResult {
   /** Whether the assignment was successful */
   success: boolean;
-  
+
   /** The created assignment (if successful) */
   assignment?: DynamicPermissionAssignment;
-  
+
   /** Error message (if failed) */
   error?: string;
-  
+
   /** Validation errors */
   validationErrors?: string[];
 }
@@ -123,10 +126,10 @@ export interface DynamicPermissionResult {
 export interface DynamicPermissionRevocationResult {
   /** Whether the revocation was successful */
   success: boolean;
-  
+
   /** The revocation record (if successful) */
   revocation?: DynamicPermissionRevocation;
-  
+
   /** Error message (if failed) */
   error?: string;
 }
@@ -137,22 +140,22 @@ export interface DynamicPermissionRevocationResult {
 export interface DynamicPermissionStats {
   /** Total number of active assignments */
   totalActive: number;
-  
+
   /** Total number of expired assignments */
   totalExpired: number;
-  
+
   /** Total number of assignments by role */
   byRole: Record<UserRole, number>;
-  
+
   /** Total number of assignments by permission */
   byPermission: Record<string, number>;
-  
+
   /** Total number of assignments by granter */
   byGranter: Record<string, number>;
-  
+
   /** Recent assignments (last 30 days) */
   recentAssignments: number;
-  
+
   /** Recent revocations (last 30 days) */
   recentRevocations: number;
 }
@@ -270,6 +273,7 @@ export class DynamicPermissionManager {
         assignmentId,
         userId: assignment.userId,
         permission: assignment.permission,
+        userRole: assignment.userRole,
         revokedBy,
         revokedAt: new Date(),
         reason,
@@ -364,7 +368,7 @@ export class DynamicPermissionManager {
     context?: PermissionCheckContext
   ): { hasPermission: boolean; assignment?: DynamicPermissionAssignment } {
     const userPermissions = this.getUserPermissions(userId, context);
-    
+
     for (const assignment of userPermissions) {
       if (this.permissionMatches(assignment.permission, permission)) {
         return {
@@ -470,7 +474,7 @@ export class DynamicPermissionManager {
       if (assignment.userRole) {
         byRole[assignment.userRole]++;
       }
-      
+
       byPermission[assignment.permission] = (byPermission[assignment.permission] || 0) + 1;
       byGranter[assignment.grantedBy] = (byGranter[assignment.grantedBy] || 0) + 1;
     }
@@ -570,11 +574,11 @@ export class DynamicPermissionManager {
 
     for (const assignmentId of userAssignmentIds) {
       const assignment = this.assignments.get(assignmentId);
-      if (assignment && 
-          assignment.isActive && 
-          !this.isExpired(assignment) &&
-          assignment.permission === permission &&
-          assignment.resourceId === resourceId) {
+      if (assignment &&
+        assignment.isActive &&
+        !this.isExpired(assignment) &&
+        assignment.permission === permission &&
+        assignment.resourceId === resourceId) {
         return assignment;
       }
     }

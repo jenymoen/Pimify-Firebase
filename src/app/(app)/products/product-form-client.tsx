@@ -36,6 +36,7 @@ import { useProductStore } from "@/lib/product-store";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { summarizeProductInformation } from "@/ai/flows/summarize-product-information";
+import { generateProductDescriptions } from "@/ai/flows/generate-product-descriptions";
 import { Info, Package, Tag, Image as ImageIconLucide, BarChart3, Brain, CalendarDays, CheckCircle, Save, Trash2, Sparkles, Languages, Edit, DollarSign, ListPlus, Cog } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -181,6 +182,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
   const { addProduct, updateProduct: storeUpdateProduct } = useProductStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [isGeneratingDescriptions, setIsGeneratingDescriptions] = useState(false);
 
   const defaultValues = existingProduct ? {
     basicInfo: {
@@ -417,12 +419,17 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
 
       if (existingProduct) {
         const { id, createdAt, updatedAt, ...updatePayload } = productPayloadForSave;
-        storeUpdateProduct(existingProduct.id, updatePayload);
+        await storeUpdateProduct(existingProduct.id, updatePayload);
         toast({ title: "Product Updated", description: `"${data.basicInfo.name.en || data.basicInfo.name.no || data.basicInfo.sku}" has been successfully updated.` });
       } else {
         const { id, createdAt, updatedAt, aiSummary: _aiSummaryFromPayload, ...productDataForStore } = productPayloadForSave;
-        const newProd = addProduct(productDataForStore, productPayloadForSave.aiSummary);
-        toast({ title: "Product Created", description: `"${newProd.basicInfo.name.en || newProd.basicInfo.name.no || newProd.basicInfo.sku}" has been successfully created.` });
+        const newProd = await addProduct(productDataForStore, productPayloadForSave.aiSummary);
+
+        if (newProd) {
+          toast({ title: "Product Created", description: `"${newProd.basicInfo.name.en || newProd.basicInfo.name.no || newProd.basicInfo.sku}" has been successfully created.` });
+        } else {
+          throw new Error("Failed to create product (API returned no data)");
+        }
       }
       router.push("/products");
       router.refresh();
@@ -442,6 +449,47 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       description: "Please check the form for errors. Some required fields might be missing or invalid.",
       variant: "destructive",
     });
+  };
+
+  const handleGenerateDescriptions = async () => {
+    setIsGeneratingDescriptions(true);
+    const currentData = form.getValues();
+    const name = currentData.basicInfo.name.en || currentData.basicInfo.name.no;
+    const category = currentData.attributesAndSpecs.categories?.[0] || '';
+
+    // Get image URLs that are valid http/https
+    const imageUrls = (currentData.media.images || [])
+      .map(img => img.url)
+      .filter((url): url is string => !!(url && (url.startsWith('http:') || url.startsWith('https:'))));
+
+    if (!name) {
+      toast({ title: "Name Required", description: "Please enter a product name first.", variant: "destructive" });
+      setIsGeneratingDescriptions(false);
+      return;
+    }
+
+    try {
+      const result = await generateProductDescriptions({
+        productName: name,
+        category: category,
+        imageUrls: imageUrls.length > 0 ? imageUrls : undefined
+      });
+
+      if (result) {
+        if (result.shortDescription) {
+          form.setValue("basicInfo.descriptionShort.en", result.shortDescription, { shouldValidate: true, shouldDirty: true });
+        }
+        if (result.longDescription) {
+          form.setValue("basicInfo.descriptionLong.en", result.longDescription, { shouldValidate: true, shouldDirty: true });
+        }
+        toast({ title: "Descriptions Generated", description: "AI has populated the English descriptions." });
+      }
+    } catch (error) {
+      console.error("Description generation error:", error);
+      toast({ title: "AI Error", description: "Failed to generate descriptions.", variant: "destructive" });
+    } finally {
+      setIsGeneratingDescriptions(false);
+    }
   };
 
   const handleGenerateSummary = async () => {
@@ -647,7 +695,20 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       name="basicInfo.descriptionShort"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Short Description <span className="text-destructive">*</span></FormLabel>
+                          <FormLabel className="flex items-center gap-2">
+                            Short Description <span className="text-destructive">*</span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 hover:bg-transparent"
+                              onClick={handleGenerateDescriptions}
+                              disabled={isGeneratingDescriptions}
+                              title="Generate descriptions with AI"
+                            >
+                              <Sparkles className={cn("h-4 w-4 text-purple-600", isGeneratingDescriptions && "animate-spin")} />
+                            </Button>
+                          </FormLabel>
                           <FormControl>
                             <MultilingualInput id="descriptionShort" label="" type="textarea" {...field} value={{ en: field.value?.en || '', no: field.value?.no || '' }} />
                           </FormControl>
@@ -660,7 +721,10 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                       name="basicInfo.descriptionLong"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Long Description <span className="text-destructive">*</span></FormLabel>
+                          <FormLabel className="flex items-center gap-2">
+                            Long Description <span className="text-destructive">*</span>
+                            {/* Optional secondary button/icon if wanted, but one trigger is usually enough for both */}
+                          </FormLabel>
                           <FormControl>
                             <MultilingualInput id="descriptionLong" label="" type="textarea" {...field} value={{ en: field.value?.en || '', no: field.value?.no || '' }} />
                           </FormControl>

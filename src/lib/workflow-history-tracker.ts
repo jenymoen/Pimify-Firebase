@@ -1,6 +1,7 @@
 import {
   ProductWorkflow,
   WorkflowState,
+  WorkflowAction,
   AuditTrailEntry,
   UserRole,
   WorkflowHistoryEntry,
@@ -186,7 +187,7 @@ export class WorkflowHistoryTracker {
     const auditTrails = await this.getAllAuditTrails(products);
 
     const productsInReview = products.filter(p => p.workflowState === WorkflowState.REVIEW).length;
-    
+
     const overdueReviews = products.filter(p => {
       if (p.workflowState !== WorkflowState.REVIEW) return false;
       const reviewStart = p.workflowHistory?.find(h => h.state === WorkflowState.REVIEW);
@@ -264,7 +265,7 @@ export class WorkflowHistoryTracker {
 
   private async getAllAuditTrails(products: ProductWorkflow[]): Promise<Record<string, AuditTrailEntry[]>> {
     const auditTrails: Record<string, AuditTrailEntry[]> = {};
-    
+
     for (const product of products) {
       auditTrails[product.id] = await workflowPersistenceService.getAuditTrail(product.id);
     }
@@ -299,11 +300,11 @@ export class WorkflowHistoryTracker {
 
     products.forEach(product => {
       const history = product.workflowHistory || [];
-      
+
       for (let i = 0; i < history.length - 1; i++) {
         const current = history[i];
         const next = history[i + 1];
-        
+
         const timeInState = (new Date(next.timestamp).getTime() - new Date(current.timestamp).getTime()) / (1000 * 60 * 60); // hours
         times[current.state].push(timeInState);
       }
@@ -332,7 +333,7 @@ export class WorkflowHistoryTracker {
 
     Object.values(auditTrails).forEach(trail => {
       trail.forEach(entry => {
-        if (entry.action === 'STATE_CHANGE' && entry.fieldChanges.length > 0) {
+        if (entry.action === WorkflowAction.STATE_CHANGE && entry.fieldChanges.length > 0) {
           const change = entry.fieldChanges[0];
           if (change.field === 'workflowState') {
             const transition = `${change.oldValue.toUpperCase()}->${change.newValue.toUpperCase()}`;
@@ -346,7 +347,7 @@ export class WorkflowHistoryTracker {
   }
 
   private async calculateUserActivity(
-    products: ProductWorkflow[], 
+    products: ProductWorkflow[],
     auditTrails: Record<string, AuditTrailEntry[]>
   ): Promise<Record<string, UserActivityStats>> {
     const userStats: Record<string, UserActivityStats> = {};
@@ -391,9 +392,9 @@ export class WorkflowHistoryTracker {
         userStats[entry.userId].totalActions++;
         userStats[entry.userId].lastActivity = entry.timestamp;
 
-        if (entry.action === 'APPROVE') {
+        if (entry.action === WorkflowAction.APPROVE) {
           userStats[entry.userId].productsApproved++;
-        } else if (entry.action === 'REJECT') {
+        } else if (entry.action === WorkflowAction.REJECT) {
           userStats[entry.userId].productsRejected++;
         }
       });
@@ -403,7 +404,7 @@ export class WorkflowHistoryTracker {
   }
 
   private async calculateReviewerPerformance(
-    products: ProductWorkflow[], 
+    products: ProductWorkflow[],
     auditTrails: Record<string, AuditTrailEntry[]>
   ): Promise<Record<string, ReviewerStats>> {
     const reviewerStats: Record<string, ReviewerStats> = {};
@@ -431,9 +432,9 @@ export class WorkflowHistoryTracker {
       reviewerStats[reviewerId].totalReviews++;
       reviewerStats[reviewerId].lastReviewDate = trail[trail.length - 1]?.timestamp || '';
 
-      const reviewEntry = trail.find(entry => entry.action === 'APPROVE' || entry.action === 'REJECT');
+      const reviewEntry = trail.find(entry => entry.action === WorkflowAction.APPROVE || entry.action === WorkflowAction.REJECT);
       if (reviewEntry) {
-        if (reviewEntry.action === 'APPROVE') {
+        if (reviewEntry.action === WorkflowAction.APPROVE) {
           reviewerStats[reviewerId].approvedCount++;
         } else {
           reviewerStats[reviewerId].rejectedCount++;
@@ -467,7 +468,7 @@ export class WorkflowHistoryTracker {
 
     Object.values(auditTrails).forEach(trail => {
       trail.forEach(entry => {
-        if (entry.action === 'REJECT' && entry.reason) {
+        if (entry.action === WorkflowAction.REJECT && entry.reason) {
           // Extract key phrases from rejection reasons
           const reason = entry.reason.toLowerCase();
           if (reason.includes('quality')) {
@@ -530,7 +531,7 @@ export class WorkflowHistoryTracker {
   }
 
   private async calculateTrends(
-    products: ProductWorkflow[], 
+    products: ProductWorkflow[],
     auditTrails: Record<string, AuditTrailEntry[]>,
     filters?: WorkflowHistoryFilters
   ): Promise<WorkflowTrends> {
@@ -567,7 +568,7 @@ export class WorkflowHistoryTracker {
 
     Object.values(auditTrails).forEach(trail => {
       trail.forEach(entry => {
-        if (entry.action === 'APPROVE') {
+        if (entry.action === WorkflowAction.APPROVE) {
           const entryDate = new Date(entry.timestamp);
           if (entryDate >= startDate && entryDate <= endDate) {
             const dateKey = entryDate.toISOString().split('T')[0];
@@ -587,7 +588,7 @@ export class WorkflowHistoryTracker {
 
     Object.values(auditTrails).forEach(trail => {
       trail.forEach(entry => {
-        if (entry.action === 'REJECT') {
+        if (entry.action === WorkflowAction.REJECT) {
           const entryDate = new Date(entry.timestamp);
           if (entryDate >= startDate && entryDate <= endDate) {
             const dateKey = entryDate.toISOString().split('T')[0];
@@ -640,12 +641,12 @@ export class WorkflowHistoryTracker {
         if (!dailyTimes[dateKey]) {
           dailyTimes[dateKey] = [];
         }
-        
+
         // Calculate processing time from creation to current state
-        const currentTime = product.workflowState === WorkflowState.PUBLISHED ? 
+        const currentTime = product.workflowState === WorkflowState.PUBLISHED ?
           new Date(product.workflowHistory?.[product.workflowHistory.length - 1]?.timestamp || product.createdAt).getTime() :
           Date.now();
-        
+
         const processingTime = (currentTime - new Date(product.createdAt).getTime()) / (1000 * 60 * 60);
         dailyTimes[dateKey].push(processingTime);
       }
@@ -664,7 +665,7 @@ export class WorkflowHistoryTracker {
 
     products.forEach(product => {
       const reviewStart = product.workflowHistory?.find(h => h.state === WorkflowState.REVIEW);
-      const reviewEnd = product.workflowHistory?.find(h => 
+      const reviewEnd = product.workflowHistory?.find(h =>
         h.state === WorkflowState.APPROVED || h.state === WorkflowState.REJECTED
       );
 
@@ -678,16 +679,16 @@ export class WorkflowHistoryTracker {
   }
 
   private calculateApprovalRate(products: ProductWorkflow[]): number {
-    const totalProcessed = products.filter(p => 
-      p.workflowState === WorkflowState.APPROVED || 
+    const totalProcessed = products.filter(p =>
+      p.workflowState === WorkflowState.APPROVED ||
       p.workflowState === WorkflowState.PUBLISHED ||
       p.workflowState === WorkflowState.REJECTED
     ).length;
 
     if (totalProcessed === 0) return 0;
 
-    const approved = products.filter(p => 
-      p.workflowState === WorkflowState.APPROVED || 
+    const approved = products.filter(p =>
+      p.workflowState === WorkflowState.APPROVED ||
       p.workflowState === WorkflowState.PUBLISHED
     ).length;
 
@@ -695,8 +696,8 @@ export class WorkflowHistoryTracker {
   }
 
   private calculateRejectionRate(products: ProductWorkflow[]): number {
-    const totalProcessed = products.filter(p => 
-      p.workflowState === WorkflowState.APPROVED || 
+    const totalProcessed = products.filter(p =>
+      p.workflowState === WorkflowState.APPROVED ||
       p.workflowState === WorkflowState.PUBLISHED ||
       p.workflowState === WorkflowState.REJECTED
     ).length;
@@ -713,7 +714,7 @@ export class WorkflowHistoryTracker {
 
     Object.values(auditTrails).forEach(trail => {
       trail.forEach(entry => {
-        if (entry.action === 'APPROVE' || entry.action === 'REJECT') {
+        if (entry.action === WorkflowAction.APPROVE || entry.action === WorkflowAction.REJECT) {
           reviewerCounts[entry.userId] = (reviewerCounts[entry.userId] || 0) + 1;
         }
       });
@@ -756,7 +757,7 @@ export class WorkflowHistoryTracker {
   }
 
   private createWorkflowTimeline(
-    history: WorkflowHistoryEntry[], 
+    history: WorkflowHistoryEntry[],
     auditTrail: AuditTrailEntry[]
   ): WorkflowTimelineEntry[] {
     const timeline: WorkflowTimelineEntry[] = [];
@@ -860,9 +861,9 @@ export class WorkflowHistoryTracker {
 
     const rows = products.map(product => {
       const auditTrail = auditTrails[product.id] || [];
-      const rejectionCount = auditTrail.filter(entry => entry.action === 'REJECT').length;
-      const approvalEntry = auditTrail.find(entry => entry.action === 'APPROVE');
-      
+      const rejectionCount = auditTrail.filter(entry => entry.action === WorkflowAction.REJECT).length;
+      const approvalEntry = auditTrail.find(entry => entry.action === WorkflowAction.APPROVE);
+
       // Calculate time in each state
       const draftTime = this.calculateTimeInState(product, WorkflowState.DRAFT);
       const reviewTime = this.calculateTimeInState(product, WorkflowState.REVIEW);
@@ -894,8 +895,8 @@ export class WorkflowHistoryTracker {
     for (let i = 0; i < history.length; i++) {
       if (history[i].state === state) {
         const startTime = new Date(history[i].timestamp).getTime();
-        const endTime = i < history.length - 1 ? 
-          new Date(history[i + 1].timestamp).getTime() : 
+        const endTime = i < history.length - 1 ?
+          new Date(history[i + 1].timestamp).getTime() :
           Date.now();
         totalTime += (endTime - startTime) / (1000 * 60 * 60); // Convert to hours
       }
@@ -909,7 +910,7 @@ export class WorkflowHistoryTracker {
     const endTime = product.workflowState === WorkflowState.PUBLISHED ?
       new Date(product.workflowHistory?.[product.workflowHistory.length - 1]?.timestamp || product.createdAt).getTime() :
       Date.now();
-    
+
     return (endTime - startTime) / (1000 * 60 * 60); // Convert to hours
   }
 }

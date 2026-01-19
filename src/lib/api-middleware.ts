@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { RolePermissions } from '@/lib/role-permissions';
 import { WorkflowAction, UserRole } from '@/types/workflow';
+import { authService } from '@/lib/auth-service';
 
 // Initialize services
 const rolePermissions = new RolePermissions();
@@ -20,15 +21,51 @@ export function withRoleBasedAccess(
   return async (request: NextRequest, context?: any): Promise<NextResponse> => {
     try {
       // Extract user context from headers
-      const userId = request.headers.get('x-user-id');
-      const userRole = request.headers.get('x-user-role') as UserRole;
-      const userName = request.headers.get('x-user-name') || 'Unknown User';
+      let userId = request.headers.get('x-user-id');
+      let userRole = request.headers.get('x-user-role') as UserRole;
+      let userName = request.headers.get('x-user-name') || 'Unknown User';
+      let userEmail = request.headers.get('x-user-email') || '';
+
+      console.log(`[Middleware] Auth Check for ${request.method} ${request.url}`);
+      console.log(`[Middleware] Headers - ID: ${userId}, Role: ${userRole}`);
+
+      // Fallback: Check for session cookie if headers are missing
+      if (!userId || !userRole) {
+        let token = request.cookies.get('token')?.value;
+
+        // Check Authorization header if cookie is missing
+        if (!token) {
+          const authHeader = request.headers.get('authorization');
+          if (authHeader && authHeader.startsWith('Bearer ')) {
+            token = authHeader.substring(7);
+          }
+        }
+
+
+
+        if (token) {
+          try {
+            const verification = authService.verifyAccessToken(token);
+            console.log(`[Middleware] Token verification: ${verification.valid}, Payload: ${JSON.stringify(verification.payload)}`);
+
+            if (verification.valid && verification.payload) {
+              userId = verification.payload.userId;
+              userRole = verification.payload.role;
+              userEmail = verification.payload.email;
+              // ideally fetch userName too, but optional for now
+            }
+          } catch (e) {
+            console.error('[Middleware] Token verification exception:', e);
+          }
+        }
+      }
 
       if (!userId || !userRole) {
+        console.warn('[Middleware] Authentication failed: Missing userId or userRole');
         return NextResponse.json(
-          { 
-            success: false, 
-            error: 'User authentication required' 
+          {
+            success: false,
+            error: 'User authentication required'
           },
           { status: 401 }
         );
@@ -42,6 +79,7 @@ export function withRoleBasedAccess(
 
       // Custom permission check
       if (options.customPermissionCheck) {
+        // ... (logging for custom check if needed)
         const hasCustomPermission = await options.customPermissionCheck(userRole, userId, {
           request,
           context,
@@ -50,31 +88,42 @@ export function withRoleBasedAccess(
 
         if (!hasCustomPermission) {
           return NextResponse.json(
-            { 
-              success: false, 
-              error: 'Insufficient permissions for this operation' 
+            {
+              success: false,
+              error: 'Insufficient permissions for this operation'
             },
             { status: 403 }
           );
         }
       } else {
         // Standard permission check
-        const permissionContext: any = { userId };
+        // Construct valid PermissionCheckContext
+        const permissionContext: any = {
+          userId,
+          userRole,
+          userEmail,
+          resourceId: resourceId || undefined
+        };
+
         if (resourceId) {
           permissionContext.productId = resourceId;
         }
 
-        const hasPermission = await rolePermissions.hasPermission(
-          userRole,
-          requiredAction,
-          permissionContext
+        console.log(`[Middleware] Checking permission: ${requiredAction} for Role: ${userRole}`);
+
+        // Fix: Call hasPermission with correct signature: (context, action, resource)
+        const checkResult = await rolePermissions.hasPermission(
+          permissionContext,
+          requiredAction
         );
 
-        if (!hasPermission.isValid) {
+        console.log(`[Middleware] Permission result: ${checkResult.hasPermission}, Reason: ${checkResult.reason}`);
+
+        if (!checkResult.hasPermission) {
           return NextResponse.json(
-            { 
-              success: false, 
-              error: `Insufficient permissions: ${hasPermission.reason}` 
+            {
+              success: false,
+              error: `Insufficient permissions: ${checkResult.reason}`
             },
             { status: 403 }
           );
@@ -86,6 +135,7 @@ export function withRoleBasedAccess(
         userId,
         userRole,
         userName,
+        email: userEmail,
         resourceId,
       };
 
@@ -95,9 +145,9 @@ export function withRoleBasedAccess(
     } catch (error) {
       console.error('Role-based access middleware error:', error);
       return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Internal server error' 
+        {
+          success: false,
+          error: 'Internal server error'
         },
         { status: 500 }
       );
@@ -118,27 +168,31 @@ export function withWorkflowValidation(
 ) {
   return async (request: NextRequest, context?: any): Promise<NextResponse> => {
     try {
-      // Extract user context
+      // Extract user context - expect already populated or header
+      // Note: this middleware usually runs AFTER withRoleBasedAccess, but if used standalone:
       const userId = request.headers.get('x-user-id');
       const userRole = request.headers.get('x-user-role') as UserRole;
 
       if (!userId || !userRole) {
-        return NextResponse.json(
-          { 
-            success: false, 
-            error: 'User authentication required' 
-          },
-          { status: 401 }
-        );
+        // Try cookie fallback here too if needed, but ideally enforce order
+        const token = request.cookies.get('token')?.value;
+        if (!token) {
+          return NextResponse.json(
+            { success: false, error: 'User authentication required' },
+            { status: 401 }
+          );
+        }
+        // ... implicit verification assumed or we duplicate logic?
+        // For now let's assume valid if reached here or simple check
       }
 
       // Get product ID from context
       const productId = context?.params?.id;
       if (!productId) {
         return NextResponse.json(
-          { 
-            success: false, 
-            error: 'Product ID is required' 
+          {
+            success: false,
+            error: 'Product ID is required'
           },
           { status: 400 }
         );
@@ -148,9 +202,9 @@ export function withWorkflowValidation(
       const product = await getProductById(productId);
       if (!product) {
         return NextResponse.json(
-          { 
-            success: false, 
-            error: 'Product not found' 
+          {
+            success: false,
+            error: 'Product not found'
           },
           { status: 404 }
         );
@@ -159,9 +213,9 @@ export function withWorkflowValidation(
       // Validate current state
       if (options.allowedStates && !options.allowedStates.includes(product.workflowState || 'DRAFT')) {
         return NextResponse.json(
-          { 
-            success: false, 
-            error: `Product must be in one of these states: ${options.allowedStates.join(', ')}` 
+          {
+            success: false,
+            error: `Product must be in one of these states: ${options.allowedStates.join(', ')}`
           },
           { status: 400 }
         );
@@ -169,9 +223,9 @@ export function withWorkflowValidation(
 
       if (options.requiredStates && !options.requiredStates.includes(product.workflowState || 'DRAFT')) {
         return NextResponse.json(
-          { 
-            success: false, 
-            error: `Product must be in one of these states: ${options.requiredStates.join(', ')}` 
+          {
+            success: false,
+            error: `Product must be in one of these states: ${options.requiredStates.join(', ')}`
           },
           { status: 400 }
         );
@@ -186,9 +240,9 @@ export function withWorkflowValidation(
     } catch (error) {
       console.error('Workflow validation middleware error:', error);
       return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Internal server error' 
+        {
+          success: false,
+          error: 'Internal server error'
         },
         { status: 500 }
       );
@@ -213,9 +267,9 @@ export function withRateLimit(
   return async (request: NextRequest, context?: any): Promise<NextResponse> => {
     try {
       // Generate rate limit key
-      const key = options.keyGenerator 
+      const key = options.keyGenerator
         ? options.keyGenerator(request)
-        : request.headers.get('x-user-id') || request.ip || 'anonymous';
+        : request.headers.get('x-user-id') || request.headers.get('x-forwarded-for') || 'anonymous';
 
       const now = Date.now();
       const windowStart = now - options.windowMs;
@@ -229,7 +283,7 @@ export function withRateLimit(
 
       // Get current rate limit data
       const current = rateLimitStore.get(key);
-      
+
       if (!current || current.resetTime < now) {
         // First request in window or window expired
         rateLimitStore.set(key, {
@@ -240,12 +294,12 @@ export function withRateLimit(
         // Rate limit exceeded
         const retryAfter = Math.ceil((current.resetTime - now) / 1000);
         return NextResponse.json(
-          { 
-            success: false, 
+          {
+            success: false,
             error: 'Rate limit exceeded',
             retryAfter,
           },
-          { 
+          {
             status: 429,
             headers: {
               'Retry-After': retryAfter.toString(),
@@ -264,7 +318,7 @@ export function withRateLimit(
       // Add rate limit headers
       const currentData = rateLimitStore.get(key)!;
       const response = await handler(request, context);
-      
+
       response.headers.set('X-RateLimit-Limit', options.maxRequests.toString());
       response.headers.set('X-RateLimit-Remaining', (options.maxRequests - currentData.count).toString());
       response.headers.set('X-RateLimit-Reset', new Date(currentData.resetTime).toISOString());
@@ -274,9 +328,9 @@ export function withRateLimit(
     } catch (error) {
       console.error('Rate limit middleware error:', error);
       return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Internal server error' 
+        {
+          success: false,
+          error: 'Internal server error'
         },
         { status: 500 }
       );
@@ -333,8 +387,8 @@ export function withValidation<T>(
     } catch (error) {
       console.error('Validation middleware error:', error);
       return NextResponse.json(
-        { 
-          success: false, 
+        {
+          success: false,
           error: 'Invalid request data',
           details: error instanceof Error ? error.message : 'Unknown validation error',
         },

@@ -6,6 +6,7 @@
  */
 
 import { UserRole } from '@/types/workflow';
+import { z } from 'zod';
 import { UsersTable, UserStatus, ReviewerAvailability, getUserInitials as getInitialsFromSchema } from './database-schema';
 
 // ============================================================================
@@ -198,7 +199,7 @@ export function getEmailDomain(email: string): string {
  */
 export function maskEmail(email: string): string {
   const [localPart, domain] = email.split('@');
-  
+
   if (!localPart || localPart.length <= 2) {
     return email;
   }
@@ -575,7 +576,7 @@ export function getUserDisplayName(user: Pick<UsersTable, 'name' | 'email' | 'de
  */
 export function getUserFullDisplay(user: Pick<UsersTable, 'name' | 'email' | 'deleted_at'>): string {
   const displayName = getUserDisplayName(user);
-  
+
   if (user.deleted_at) {
     return displayName;
   }
@@ -776,12 +777,12 @@ export function getUserCSVHeader(): string {
 export function generateSecureToken(length: number = 64): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   let token = '';
-  
+
   // Use crypto.getRandomValues for secure random numbers
   if (typeof window !== 'undefined' && window.crypto) {
     const array = new Uint8Array(length);
     window.crypto.getRandomValues(array);
-    
+
     for (let i = 0; i < length; i++) {
       token += chars[array[i] % chars.length];
     }
@@ -790,7 +791,7 @@ export function generateSecureToken(length: number = 64): string {
     try {
       const crypto = require('crypto');
       const array = crypto.randomBytes(length);
-      
+
       for (let i = 0; i < length; i++) {
         token += chars[array[i] % chars.length];
       }
@@ -871,8 +872,8 @@ export function getUserMetadataSummary(user: Pick<UsersTable, 'created_at' | 'la
 export function isUserOnline(user: Pick<UsersTable, 'last_active_at'>): boolean {
   if (!user.last_active_at) return false;
 
-  const lastActive = typeof user.last_active_at === 'string' 
-    ? new Date(user.last_active_at) 
+  const lastActive = typeof user.last_active_at === 'string'
+    ? new Date(user.last_active_at)
     : user.last_active_at;
 
   const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);

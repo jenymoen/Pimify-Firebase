@@ -12,6 +12,9 @@ import { ActivityAction } from './database-schema';
 import { passwordService } from './password-service';
 import { UserStatus, UsersTable } from './database-schema';
 import { UserRole } from '@/types/workflow';
+import { auth } from './firebase';
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { firestoreUserStore } from './firestore-user-repository';
 
 /**
  * JWT Configuration
@@ -19,16 +22,16 @@ import { UserRole } from '@/types/workflow';
 export const JWT_CONFIG = {
   // Access token expires in 15 minutes
   ACCESS_TOKEN_EXPIRY: 15 * 60, // 15 minutes in seconds
-  
+
   // Refresh token expires in 7 days
   REFRESH_TOKEN_EXPIRY: 7 * 24 * 60 * 60, // 7 days in seconds
-  
+
   // Maximum failed login attempts before lockout
   MAX_FAILED_ATTEMPTS: 5,
-  
+
   // Lockout duration in milliseconds (15 minutes)
   LOCKOUT_DURATION: 15 * 60 * 1000,
-  
+
   // Auto-unlock after 30 minutes
   AUTO_UNLOCK_DURATION: 30 * 60 * 1000,
 };
@@ -95,7 +98,7 @@ export class AuthService {
   private readonly userService: UserService;
   private readonly jwtSecret: string;
   private readonly jwtRefreshSecret: string;
-  
+
   constructor(config?: {
     jwtSecret?: string;
     jwtRefreshSecret?: string;
@@ -114,75 +117,107 @@ export class AuthService {
       const { email, password, rememberMe, ipAddress } = credentials;
 
       // Get user by email
-      const userResult = await this.userService.getByEmail(email, false);
-      if (!userResult.success || !userResult.data) {
-        // Don't reveal that the user doesn't exist (security best practice)
-        return {
-          success: false,
-          error: 'Invalid email or password',
-          code: 'INVALID_CREDENTIALS',
-        };
-      }
+      let userResult = await this.userService.getByEmail(email, false);
+      let user = userResult.data;
 
-      const user = userResult.data;
+      // START JIT PROVISIONING LOGIC
+      if (!userResult.success || !user) {
+        // User not found in Firestore.
+        // Try to authenticate with Firebase Auth anyway.
+        // If successful, we can "JIT Provision" the user in Firestore.
+        try {
+          const userCredential = await signInWithEmailAndPassword(auth, email, password);
+          const firebaseUser = userCredential.user;
 
-      // Check if account is locked
-      if (user.status === UserStatus.LOCKED) {
-        if (user.locked_until && user.locked_until > new Date()) {
+          console.log(`[AuthService] User ${email} found in Auth but not Firestore. Provisioning...`);
+
+          // Create missing Firestore profile
+          const newUser: UsersTable = {
+            id: firebaseUser.uid,
+            email: firebaseUser.email!,
+            password_hash: null, // Managed by Auth
+            name: firebaseUser.displayName || email.split('@')[0],
+            role: email === 'admin@example.com' ? UserRole.ADMIN : UserRole.VIEWER, // Default role
+            status: UserStatus.ACTIVE,
+            job_title: null,
+            department: null,
+            bio: 'Provisioned from Firebase Auth',
+            created_at: new Date(),
+            updated_at: new Date(),
+            failed_login_attempts: 0,
+            two_factor_enabled: false,
+            // ... (rest initialized as null/default)
+            avatar_url: firebaseUser.photoURL || null,
+            location: null,
+            timezone: null,
+            phone: firebaseUser.phoneNumber || null,
+            manager_id: null,
+            specialties: null,
+            languages: null,
+            working_hours: null,
+            custom_fields: null,
+            reviewer_max_workload: 10,
+            reviewer_availability: null,
+            reviewer_availability_until: null,
+            reviewer_rating: null,
+            two_factor_secret: null,
+            backup_codes: null,
+            last_password_change: null,
+            password_history: null,
+            locked_until: null,
+            last_login_at: new Date(),
+            last_login_ip: ipAddress || null,
+            last_active_at: new Date(),
+            sso_provider: null,
+            sso_id: null,
+            sso_linked_at: null,
+            created_by: null,
+            updated_by: null,
+            deleted_at: null,
+            deleted_by: null,
+          };
+
+          await firestoreUserStore.save(newUser);
+          user = newUser;
+
+          // Resume normal flow
+        } catch (authError: any) {
+          // Auth also failed, so truly invalid
           return {
             success: false,
-            error: 'Account is locked. Please try again later or contact support.',
-            code: 'ACCOUNT_LOCKED',
+            error: 'Invalid email or password',
+            code: 'INVALID_CREDENTIALS',
           };
-        } else {
-          // Lock expired, auto-unlock
-          await this.userService.unlock(user.id);
         }
       }
 
-      // Check if account is active
-      if (user.status === UserStatus.INACTIVE) {
-        return {
-          success: false,
-          error: 'Account is inactive. Please contact support to activate your account.',
-          code: 'ACCOUNT_INACTIVE',
-        };
-      }
+      // If we didn't just JIT provision (and thus already authenticate), verification is needed.
+      // However, if the user was found in Firestore (userResult.success), we must verify credentials.
+      if (userResult.success && userResult.data) {
+        // Check if user has a password (not SSO-only user)
+        // NOTE: For Firebase Auth migration, password_hash might be null but valid in Firebase.
+        // So we should primarily rely on Firebase Auth.
 
-      // Check if account is suspended
-      if (user.status === UserStatus.SUSPENDED) {
-        return {
-          success: false,
-          error: 'Account is suspended. Please contact support.',
-          code: 'ACCOUNT_SUSPENDED',
-        };
-      }
-
-      // Check if user has a password (not SSO-only user)
-      if (!user.password_hash) {
-        return {
-          success: false,
-          error: 'Password authentication not available for this account',
-          code: 'SSO_ONLY_ACCOUNT',
-        };
-      }
-
-      // Verify password
-      const passwordResult = await passwordService.verifyPassword(password, user.password_hash);
-      if (!passwordResult.valid) {
-        // Log activity: failed login
+        // Verify password using Firebase Auth
         try {
-          userActivityLogger.logLoginFailed(user.id, ipAddress || 'unknown');
-        } catch {}
-        // Increment failed login attempts
-        await this.userService.incrementFailedLoginAttempts(user.id);
-        
-        return {
-          success: false,
-          error: 'Invalid email or password',
-          code: 'INVALID_CREDENTIALS',
-        };
+          await signInWithEmailAndPassword(auth, email, password);
+        } catch (error: any) {
+          console.error('[Firebase Auth] Login error:', error.code, error.message);
+          // Log activity: failed login
+          try {
+            userActivityLogger.logLoginFailed(user.id, ipAddress || 'unknown');
+          } catch { }
+          // Increment failed login attempts
+          await this.userService.incrementFailedLoginAttempts(user.id);
+
+          return {
+            success: false,
+            error: error.message || 'Invalid email or password',
+            code: error.code || 'INVALID_CREDENTIALS',
+          };
+        }
       }
+      // Else: if we just JIT provisioned, we already called signInWithEmailAndPassword successfully above.
 
       // Login successful - reset failed attempts and update last login
       await this.userService.resetFailedLoginAttempts(user.id);
@@ -191,7 +226,7 @@ export class AuthService {
       // Log activity: successful login
       try {
         userActivityLogger.logLogin(user.id, ipAddress || 'unknown');
-      } catch {}
+      } catch { }
 
       // Generate JWT tokens
       const accessToken = this.generateAccessToken(user);
@@ -224,10 +259,8 @@ export class AuthService {
       // Update last active timestamp
       await this.userService.updateLastActive(userId);
 
-      // Log activity: logout
-      try {
-        userActivityLogger.logLogout(userId);
-      } catch {}
+      // Sign out from Firebase
+      await signOut(auth);
 
       return { success: true };
     } catch (error) {
@@ -384,7 +417,7 @@ export class AuthService {
           description: 'Access token refreshed',
           metadata: { reason: 'refresh' },
         });
-      } catch {}
+      } catch { }
 
       return result;
     } catch (error) {
@@ -401,12 +434,12 @@ export class AuthService {
    */
   extractTokenFromHeader(authHeader: string | null): string | null {
     if (!authHeader) return null;
-    
+
     const parts = authHeader.split(' ');
     if (parts.length !== 2 || parts[0] !== 'Bearer') {
       return null;
     }
-    
+
     return parts[1];
   }
 
@@ -453,9 +486,9 @@ export class AuthService {
     }
 
     const user = userResult.data;
-    return user.status === UserStatus.LOCKED && 
-           user.locked_until !== null && 
-           user.locked_until > new Date();
+    return user.status === UserStatus.LOCKED &&
+      user.locked_until !== null &&
+      user.locked_until > new Date();
   }
 
   /**

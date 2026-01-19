@@ -10,6 +10,7 @@ interface QualityBadgeProps {
   size?: 'sm' | 'md' | 'lg';
   showIcon?: boolean;
   showText?: boolean;
+  className?: string;
 }
 
 const sizeStyles = {
@@ -57,6 +58,7 @@ export const QualityBadge = React.memo(function QualityBadge({
   size = 'md',
   showIcon = true,
   showText = false,
+  className,
 }: QualityBadgeProps) {
   const config = getQualityConfig(completenessScore);
   const Icon = config.icon;
@@ -67,7 +69,8 @@ export const QualityBadge = React.memo(function QualityBadge({
       <div className={cn(
         'inline-flex items-center gap-1.5 px-2 py-1 rounded-full',
         config.color,
-        styles.text
+        styles.text,
+        className
       )}>
         {showIcon && <Icon className={styles.icon} />}
         <span>{Math.round(completenessScore)}%</span>
@@ -81,7 +84,8 @@ export const QualityBadge = React.memo(function QualityBadge({
       className={cn(
         'rounded-full flex items-center justify-center',
         config.color,
-        styles.container
+        styles.container,
+        className
       )}
       title={`Quality Score: ${Math.round(completenessScore)}% - ${config.label}`}
       aria-label={`Quality Score: ${Math.round(completenessScore)}% - ${config.label}`}

@@ -192,6 +192,14 @@ export const workflowActionPermissions: Record<WorkflowAction, string[]> = {
   [WorkflowAction.MANAGE_NOTIFICATIONS]: ['notifications:manage'],
   [WorkflowAction.PERFORM_BULK_OPERATIONS]: ['workflow:bulk'],
   [WorkflowAction.EXPORT_PRODUCTS]: ['products:read', 'products:export'],
+  [WorkflowAction.SUBMIT_FOR_REVIEW]: ['workflow:submit'],
+  [WorkflowAction.REVERT_TO_DRAFT]: ['products:write'],
+  [WorkflowAction.ADD_COMMENT]: ['products:read'],
+  [WorkflowAction.VIEW_BULK_OPERATIONS]: ['workflow:bulk'],
+  [WorkflowAction.CANCEL_BULK_OPERATIONS]: ['workflow:bulk'],
+  [WorkflowAction.BULK_OPERATIONS]: ['workflow:bulk'],
+  [WorkflowAction.DELETE]: ['products:delete'],
+  [WorkflowAction.STATE_CHANGE]: ['workflow:edit'],
 };
 
 /**
@@ -262,7 +270,7 @@ export const workflowValidationRules = {
     'basicInfo.brand',
     'attributesAndSpecs.categories',
   ],
-  
+
   // Fields that must be completed before approval
   approvalRequiredFields: [
     'basicInfo.name',
@@ -275,7 +283,7 @@ export const workflowValidationRules = {
     'marketingSEO.seoTitle',
     'marketingSEO.seoDescription',
   ],
-  
+
   // Fields that must be completed before publication
   publicationRequiredFields: [
     'basicInfo.name',
@@ -290,7 +298,7 @@ export const workflowValidationRules = {
     'marketingSEO.seoDescription',
     'marketingSEO.keywords',
   ],
-  
+
   // Quality check requirements
   qualityChecks: {
     minImageCount: 1,
@@ -316,14 +324,14 @@ export const workflowTimingConfig = {
     [WorkflowState.PUBLISHED]: Infinity, // No limit
     [WorkflowState.REJECTED]: 168, // 1 week
   },
-  
+
   // Reminder intervals (in hours)
   reminderIntervals: {
     [WorkflowState.REVIEW]: [24, 48], // Remind after 1 day and 2 days
     [WorkflowState.APPROVED]: [12], // Remind after 12 hours
     [WorkflowState.REJECTED]: [24, 72], // Remind after 1 day and 3 days
   },
-  
+
   // Auto-escalation settings
   autoEscalation: {
     [WorkflowState.REVIEW]: {
@@ -345,6 +353,16 @@ export const workflowTimingConfig = {
 export const completeWorkflowConfig: WorkflowConfig = {
   stateTransitionRules: workflowStateTransitionRules,
   defaultNotificationPreferences: defaultNotificationPreferences,
+  notificationSettings: {
+    enableEmailNotifications: true,
+    enableInAppNotifications: true,
+    batchNotificationDelay: 5,
+  },
+  auditTrailSettings: {
+    retentionPeriod: 730, // 2 years
+    enableFieldLevelTracking: true,
+    enableExport: true,
+  },
 };
 
 /**
@@ -356,8 +374,8 @@ export const completeWorkflowConfig: WorkflowConfig = {
  */
 export function getValidNextStates(currentState: WorkflowState, userRole: UserRole): WorkflowState[] {
   return workflowStateTransitionRules
-    .filter(rule => 
-      rule.from === currentState && 
+    .filter(rule =>
+      rule.from === currentState &&
       rule.requiredRole === userRole &&
       !rule.isAutomatic
     )
@@ -369,8 +387,8 @@ export function getValidNextStates(currentState: WorkflowState, userRole: UserRo
  */
 export function getValidPreviousStates(currentState: WorkflowState, userRole: UserRole): WorkflowState[] {
   return workflowStateTransitionRules
-    .filter(rule => 
-      rule.to === currentState && 
+    .filter(rule =>
+      rule.to === currentState &&
       rule.requiredRole === userRole &&
       !rule.isAutomatic
     )
@@ -383,9 +401,9 @@ export function getValidPreviousStates(currentState: WorkflowState, userRole: Us
 export function hasPermission(userRole: UserRole, action: WorkflowAction): boolean {
   const rolePermissions = workflowRolePermissions[userRole];
   const requiredPermissions = workflowActionPermissions[action];
-  
-  return requiredPermissions.every(permission => 
-    rolePermissions.includes(permission) || 
+
+  return requiredPermissions.every(permission =>
+    rolePermissions.includes(permission) ||
     rolePermissions.includes(permission.split(':')[0] + ':*') ||
     rolePermissions.includes('*')
   );
@@ -427,8 +445,8 @@ export function getQualityCheckRequirements() {
 export function getStateTimingConfig(state: WorkflowState) {
   return {
     maxDuration: workflowTimingConfig.maxStateDuration[state],
-    reminders: workflowTimingConfig.reminderIntervals[state] || [],
-    autoEscalation: workflowTimingConfig.autoEscalation[state] || null,
+    reminders: (workflowTimingConfig.reminderIntervals as Record<WorkflowState, number[] | undefined>)[state] || [],
+    autoEscalation: (workflowTimingConfig.autoEscalation as Record<WorkflowState, { enabled: boolean; escalateAfterHours: number; escalateToRole: UserRole } | undefined>)[state] || null,
   };
 }
 
@@ -440,7 +458,7 @@ export function isTransitionAllowed(
   to: WorkflowState,
   userRole: UserRole
 ): boolean {
-  const rule = workflowStateTransitionRules.find(r => 
+  const rule = workflowStateTransitionRules.find(r =>
     r.from === from && r.to === to && r.requiredRole === userRole
   );
   return rule !== undefined;
@@ -453,7 +471,7 @@ export function getRequiredRoleForTransition(
   from: WorkflowState,
   to: WorkflowState
 ): UserRole | null {
-  const rule = workflowStateTransitionRules.find(r => 
+  const rule = workflowStateTransitionRules.find(r =>
     r.from === from && r.to === to
   );
   return rule ? rule.requiredRole : null;
@@ -463,7 +481,7 @@ export function getRequiredRoleForTransition(
  * Get all automatic transitions for a given state
  */
 export function getAutomaticTransitions(state: WorkflowState): StateTransitionRule[] {
-  return workflowStateTransitionRules.filter(rule => 
+  return workflowStateTransitionRules.filter(rule =>
     rule.from === state && rule.isAutomatic
   );
 }
@@ -478,10 +496,10 @@ export function getWorkflowProgress(currentState: WorkflowState): number {
     WorkflowState.APPROVED,
     WorkflowState.PUBLISHED,
   ];
-  
+
   const currentIndex = stateOrder.indexOf(currentState);
   if (currentIndex === -1) return 0;
-  
+
   return Math.round((currentIndex / (stateOrder.length - 1)) * 100);
 }
 
@@ -496,12 +514,13 @@ export function getWorkflowStatusSummary(products: any[]): Record<WorkflowState,
     [WorkflowState.PUBLISHED]: 0,
     [WorkflowState.REJECTED]: 0,
   };
-  
+
   products.forEach(product => {
-    if (product.workflowState && summary.hasOwnProperty(product.workflowState)) {
-      summary[product.workflowState]++;
+    const state = product.workflowState as WorkflowState;
+    if (state && Object.prototype.hasOwnProperty.call(summary, state)) {
+      summary[state]++;
     }
   });
-  
+
   return summary;
 }

@@ -92,8 +92,12 @@ export const UserSearch: React.FC<UserSearchProps> = ({
 		localFilters.roles?.length ? params.set('roles', localFilters.roles.join(',')) : params.delete('roles')
 		localFilters.status?.length ? params.set('status', localFilters.status.join(',')) : params.delete('status')
 		localFilters.departments?.length ? params.set('departments', localFilters.departments.join(',')) : params.delete('departments')
-		router.replace(`${pathname}?${params.toString()}`)
-	}, [query, localFilters, router, pathname, searchParams, syncWithUrl])
+
+		const newSearchString = params.toString()
+		if (newSearchString !== searchParams.toString()) {
+			router.replace(`${pathname}?${newSearchString}`)
+		}
+	}, [query, localFilters, router, pathname, searchParams.toString(), syncWithUrl])
 
 	function updateFilters(update: Partial<UserSearchFilters>) {
 		const next = { ...localFilters, ...update }
@@ -162,7 +166,7 @@ export const UserSearch: React.FC<UserSearchProps> = ({
 						<div>
 							<div className="text-sm font-medium mb-2">Status</div>
 							<div className="flex flex-wrap gap-3">
-								{['ACTIVE','INACTIVE','SUSPENDED','PENDING','LOCKED'].map(st => (
+								{['ACTIVE', 'INACTIVE', 'SUSPENDED', 'PENDING', 'LOCKED'].map(st => (
 									<label key={st} className="flex items-center gap-2 text-sm">
 										<Checkbox checked={!!localFilters.status?.includes(st as any)} onCheckedChange={() => updateFilters({ status: toggleArrayItem(localFilters.status as any, st as any) })} />
 										<span className="capitalize">{st.toLowerCase()}</span>
@@ -182,7 +186,7 @@ export const UserSearch: React.FC<UserSearchProps> = ({
 											const val = (e.target as HTMLInputElement).value.trim()
 											if (val) {
 												updateFilters({ departments: [...(localFilters.departments || []), val] })
-												;(e.target as HTMLInputElement).value = ''
+													; (e.target as HTMLInputElement).value = ''
 											}
 										}
 									}}

@@ -11,10 +11,10 @@ import { PlusCircle, Search, Package, Filter, X, ListChecks } from 'lucide-react
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { 
-  calculateQualityMetrics, 
-  checkMissingImages, 
-  validateProduct 
+import {
+  calculateQualityMetrics,
+  checkMissingImages,
+  validateProduct
 } from '@/lib/product-quality';
 import { WorkflowFilters } from '@/components/workflow/workflow-filters';
 import { BulkOperationsPanel } from '@/components/workflow/bulk-operations-panel';
@@ -22,13 +22,17 @@ import { WorkflowState, UserRole } from '@/types/workflow';
 import type { ProductWorkflow } from '@/types/workflow';
 
 export default function ProductsPage() {
-  const { products: allProducts } = useProductStore();
+  const { products: allProducts, fetchProducts, isLoading } = useProductStore();
+
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
   const searchParams = useSearchParams();
   const [searchTerm, setSearchTerm] = useState('');
   const [mounted, setMounted] = useState(false);
   const [showBulkOps, setShowBulkOps] = useState(false);
   const [showWorkflowFilters, setShowWorkflowFilters] = useState(false);
-  
+
   // Mock current user role - in a real app, this would come from auth context
   const currentUserRole = UserRole.ADMIN;
   const currentUserId = 'user-1';
@@ -50,7 +54,7 @@ export default function ProductsPage() {
     if (searchTerm) {
       filtered = filtered.filter(product => {
         const nameMatch = product.basicInfo.name.en?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          product.basicInfo.name.no?.toLowerCase().includes(searchTerm.toLowerCase());
+          product.basicInfo.name.no?.toLowerCase().includes(searchTerm.toLowerCase());
         const skuMatch = product.basicInfo.sku.toLowerCase().includes(searchTerm.toLowerCase());
         const brandMatch = product.basicInfo.brand?.toLowerCase().includes(searchTerm.toLowerCase());
         return nameMatch || skuMatch || brandMatch;
@@ -85,7 +89,7 @@ export default function ProductsPage() {
 
     return filtered;
   }, [allProducts, searchTerm, selectedStatuses, qualityFilter]);
-  
+
   // Helper function to build URL with updated parameters
   const buildFilterUrl = (newQuality?: string | null, newStatus?: string | null) => {
     const params = new URLSearchParams();
@@ -101,7 +105,7 @@ export default function ProductsPage() {
     window.location.reload();
   };
 
-  if (!mounted) {
+  if (!mounted || isLoading) {
     return <div className="flex justify-center items-center h-64"><p>Loading products...</p></div>;
   }
 
@@ -111,7 +115,7 @@ export default function ProductsPage() {
         <h1 className="text-3xl font-bold text-primary">Product Catalog</h1>
         <div className="flex gap-2 w-full sm:w-auto flex-wrap">
           <div className="relative flex-grow sm:flex-grow-0 sm:w-64">
-            <Input 
+            <Input
               type="search"
               placeholder="Search products..."
               className="pl-10"
@@ -120,18 +124,18 @@ export default function ProductsPage() {
             />
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
           </div>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={() => setShowWorkflowFilters(!showWorkflowFilters)}
           >
-            <Filter className="mr-2 h-5 w-5" /> 
+            <Filter className="mr-2 h-5 w-5" />
             Workflow Filters
           </Button>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={() => setShowBulkOps(!showBulkOps)}
           >
-            <ListChecks className="mr-2 h-5 w-5" /> 
+            <ListChecks className="mr-2 h-5 w-5" />
             Bulk Operations
           </Button>
           <Link href="/products/new" passHref>
@@ -169,12 +173,22 @@ export default function ProductsPage() {
       {showBulkOps && (
         <div className="mb-6">
           <BulkOperationsPanel
-            products={allProducts as ProductWorkflow[]}
+            products={allProducts.map(p => ({
+              ...p,
+              workflowState: p.workflowState || WorkflowState.DRAFT,
+              assignedReviewer: p.assignedReviewer?.userId,
+              workflowHistory: p.workflowHistory?.map(h => ({
+                state: h.toState,
+                timestamp: h.timestamp,
+                userId: h.userId,
+                reason: h.reason,
+              })) || [],
+            }))}
             userRole={currentUserRole}
-            userId={currentUserId}
-            onClose={() => setShowBulkOps(false)}
-            onOperationComplete={(result) => {
-              console.log('Bulk operation complete:', result);
+            isVisible={showBulkOps}
+            onVisibilityChange={(visible) => setShowBulkOps(visible)}
+            onBulkOperation={(operation) => {
+              console.log('Bulk operation:', operation);
               // In a real app, this would refresh the product list
             }}
           />
@@ -205,9 +219,9 @@ export default function ProductsPage() {
                 </Link>
               </Badge>
             ))}
-            <Button 
-              variant="ghost" 
-              size="sm" 
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={clearAllFilters}
               className="h-6 px-2 text-xs"
             >

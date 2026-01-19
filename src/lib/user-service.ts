@@ -18,6 +18,9 @@ import {
   getUserDisplayName,
   getUserInitials,
 } from './database-schema';
+import { firestoreUserStore } from './firestore-user-repository';
+import { auth } from './firebase';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 
 /**
  * User Create Input
@@ -62,6 +65,7 @@ export interface CreateUserInput {
 export interface UpdateUserInput {
   email?: string;
   name?: string;
+  role?: UserRole;
   avatar_url?: string;
 
   // Profile fields
@@ -145,10 +149,12 @@ export interface UserListResult {
  * In production, replace with actual database queries.
  */
 export class UserService {
-  // In-memory store (replace with database in production)
-  private users: Map<string, UsersTable> = new Map();
-  private emailIndex: Map<string, string> = new Map(); // email -> user_id
   private static readonly SOFT_DELETE_RETENTION_DAYS = 90;
+
+  constructor() {
+    // Attempt to ensure default admin exists on initialization
+    this.ensureDefaultAdmin().catch(err => console.error('Error ensuring default admin:', err));
+  }
 
   /**
    * Create a new user
@@ -166,7 +172,8 @@ export class UserService {
       }
 
       // Check if email already exists
-      if (this.emailIndex.has(input.email.toLowerCase())) {
+      const existingUser = await firestoreUserStore.getByEmail(input.email);
+      if (existingUser) {
         return {
           success: false,
           error: 'A user with this email already exists',
@@ -235,9 +242,25 @@ export class UserService {
         deleted_by: null,
       };
 
-      // Store user
-      this.users.set(userId, user);
-      this.emailIndex.set(input.email.toLowerCase(), userId);
+      // Create user in Firebase Auth if password is provided
+      if (input.password) {
+        try {
+          await createUserWithEmailAndPassword(auth, input.email, input.password);
+        } catch (error: any) {
+          // If user already exists in Auth but not Firestore, we might have a sync issue,
+          // but for now we'll fail to be safe.
+          if (error.code !== 'auth/email-already-in-use') {
+            return {
+              success: false,
+              error: `Firebase Auth error: ${error.message}`,
+              code: 'AUTH_ERROR',
+            };
+          }
+        }
+      }
+
+      // Store user in Firestore
+      await firestoreUserStore.save(user);
 
       return {
         success: true,
@@ -257,7 +280,7 @@ export class UserService {
    */
   async getById(userId: string, includeDeleted: boolean = false): Promise<UserServiceResult> {
     try {
-      const user = this.users.get(userId);
+      const user = await firestoreUserStore.getById(userId);
 
       if (!user) {
         return {
@@ -294,9 +317,9 @@ export class UserService {
    */
   async getByEmail(email: string, includeDeleted: boolean = false): Promise<UserServiceResult> {
     try {
-      const userId = this.emailIndex.get(email.toLowerCase());
+      const user = await firestoreUserStore.getByEmail(email);
 
-      if (!userId) {
+      if (!user) {
         return {
           success: false,
           error: 'User not found',
@@ -304,7 +327,7 @@ export class UserService {
         };
       }
 
-      return this.getById(userId, includeDeleted);
+      return this.getById(user.id, includeDeleted);
     } catch (error) {
       return {
         success: false,
@@ -315,103 +338,93 @@ export class UserService {
   }
 
   /**
+   * Ensure default admin user exists
+   */
+  private async ensureDefaultAdmin(): Promise<void> {
+    const adminEmail = 'admin@example.com';
+    const adminPassword = 'password123';
+
+    // Check if admin exits in Firestore
+    const existing = await firestoreUserStore.getByEmail(adminEmail);
+
+    // Always ensure the user exists in Firebase Auth (for development convenience)
+    try {
+      await createUserWithEmailAndPassword(auth, adminEmail, adminPassword);
+      console.log(`[Firebase Auth] Default admin created in Auth: ${adminEmail}`);
+    } catch (error: any) {
+      // Ignore if already exists in Auth
+      if (error.code !== 'auth/email-already-in-use') {
+        console.error('[Firebase Auth] Failed to ensure admin in Auth:', error.code, error.message);
+      }
+    }
+
+    if (existing) return;
+
+    try {
+      // Create default admin in Firestore
+      const user: UsersTable = {
+        id: (auth.currentUser?.uid) || crypto.randomUUID(), // Use Auth UID if available, else random
+        email: adminEmail,
+        password_hash: null, // Managed by Firebase Auth
+        name: 'System Admin',
+        role: UserRole.ADMIN,
+        status: UserStatus.ACTIVE,
+        job_title: 'Administrator',
+        department: 'IT',
+        bio: 'Default system administrator',
+        created_at: new Date(),
+        updated_at: new Date(),
+        failed_login_attempts: 0,
+        two_factor_enabled: false,
+        avatar_url: null,
+        location: null,
+        timezone: null,
+        phone: null,
+        manager_id: null,
+        specialties: null,
+        languages: null,
+        working_hours: null,
+        custom_fields: null,
+        reviewer_max_workload: 10,
+        reviewer_availability: null,
+        reviewer_availability_until: null,
+        reviewer_rating: null,
+        two_factor_secret: null,
+        backup_codes: null,
+        last_password_change: null,
+        password_history: null,
+        locked_until: null,
+        last_login_at: null,
+        last_login_ip: null,
+        last_active_at: null,
+        sso_provider: null,
+        sso_id: null,
+        sso_linked_at: null,
+        created_by: null,
+        updated_by: null,
+        deleted_at: null,
+        deleted_by: null,
+      };
+
+      await firestoreUserStore.save(user);
+      console.log(`[Firestore] Default admin user created successfully: ${adminEmail}`);
+
+    } catch (error) {
+      console.error('Failed to create default admin user:', error);
+    }
+  }
+
+  /**
    * List users with optional filters and pagination
    */
   async list(filters?: UserQueryFilters, options?: UserQueryOptions): Promise<UserListResult> {
     try {
-      let users = Array.from(this.users.values());
-
-      // Apply filters
-      if (filters) {
-        users = users.filter(user => {
-          // Exclude deleted users unless specifically requested
-          if (!filters.include_deleted && isUserDeleted(user)) {
-            return false;
-          }
-
-          // Role filter
-          if (filters.role && user.role !== filters.role) {
-            return false;
-          }
-
-          // Status filter
-          if (filters.status && user.status !== filters.status) {
-            return false;
-          }
-
-          // Department filter
-          if (filters.department && user.department !== filters.department) {
-            return false;
-          }
-
-          // Manager filter
-          if (filters.manager_id && user.manager_id !== filters.manager_id) {
-            return false;
-          }
-
-          // Reviewer availability filter
-          if (filters.reviewer_availability && user.reviewer_availability !== filters.reviewer_availability) {
-            return false;
-          }
-
-          // SSO provider filter
-          if (filters.sso_provider && user.sso_provider !== filters.sso_provider) {
-            return false;
-          }
-
-          // Search filter (name or email)
-          if (filters.search) {
-            const searchLower = filters.search.toLowerCase();
-            const nameMatch = user.name.toLowerCase().includes(searchLower);
-            const emailMatch = user.email.toLowerCase().includes(searchLower);
-            if (!nameMatch && !emailMatch) {
-              return false;
-            }
-          }
-
-          return true;
-        });
-      } else {
-        // By default, exclude deleted users
-        users = users.filter(user => !isUserDeleted(user));
-      }
-
-      const total = users.length;
-
-      // Apply sorting
-      if (options?.sort_by) {
-        const sortBy = options.sort_by;
-        const sortOrder = options.sort_order || 'asc';
-
-        users.sort((a, b) => {
-          let aVal: any = a[sortBy];
-          let bVal: any = b[sortBy];
-
-          // Handle null values
-          if (aVal === null) return sortOrder === 'asc' ? 1 : -1;
-          if (bVal === null) return sortOrder === 'asc' ? -1 : 1;
-
-          // Handle dates
-          if (aVal instanceof Date) aVal = aVal.getTime();
-          if (bVal instanceof Date) bVal = bVal.getTime();
-
-          // Compare
-          if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
-          if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
-          return 0;
-        });
-      }
-
-      // Apply pagination
-      if (options?.limit) {
-        const offset = options.offset || 0;
-        users = users.slice(offset, offset + options.limit);
-      }
+      const result = await firestoreUserStore.list(filters || {}, options || {});
 
       return {
         success: true,
-        data: users,
-        total,
+        data: result.data,
+        total: result.total,
       };
     } catch (error) {
       return {
@@ -427,7 +440,7 @@ export class UserService {
    */
   async update(userId: string, input: UpdateUserInput): Promise<UserServiceResult> {
     try {
-      const user = this.users.get(userId);
+      const user = await firestoreUserStore.getById(userId);
 
       if (!user) {
         return {
@@ -448,8 +461,8 @@ export class UserService {
 
       // Validate email uniqueness if changing email
       if (input.email && input.email.toLowerCase() !== user.email) {
-        const existingUserId = this.emailIndex.get(input.email.toLowerCase());
-        if (existingUserId && existingUserId !== userId) {
+        const existingUser = await firestoreUserStore.getByEmail(input.email);
+        if (existingUser && existingUser.id !== userId) {
           return {
             success: false,
             error: 'A user with this email already exists',
@@ -458,17 +471,35 @@ export class UserService {
         }
       }
 
-      // Update email index if email changed
-      if (input.email && input.email.toLowerCase() !== user.email) {
-        this.emailIndex.delete(user.email);
-        this.emailIndex.set(input.email.toLowerCase(), userId);
+      // Handle role change safely
+      if (input.role && input.role !== user.role) {
+        const newRole = input.role;
+        const changedBy = input.updated_by || 'system'; // Default if not provided
+
+        // Validate role
+        if (!Object.values(UserRole).includes(newRole)) {
+          return { success: false, error: 'Invalid role', code: 'INVALID_ROLE' };
+        }
+
+        // Safeguard 1: Prevent admin from removing own role
+        if (user.role === UserRole.ADMIN && newRole !== UserRole.ADMIN && userId === changedBy) {
+          return { success: false, error: 'Admins cannot remove their own admin role', code: 'SELF_DEMOTION_NOT_ALLOWED' };
+        }
+
+        // Safeguard 2: Require at least 1 active admin
+        if (user.role === UserRole.ADMIN && newRole !== UserRole.ADMIN) {
+          const activeAdminCount = await this.count({ role: UserRole.ADMIN, status: UserStatus.ACTIVE });
+          if (activeAdminCount <= 1) {
+            return { success: false, error: 'Cannot demote the last active admin', code: 'LAST_ADMIN' };
+          }
+        }
       }
 
       // Update user fields
-      const updatedUser: UsersTable = {
-        ...user,
+      const updateData: Partial<UsersTable> = {
         email: input.email?.toLowerCase() || user.email,
         name: input.name || user.name,
+        role: input.role || user.role,
         avatar_url: input.avatar_url !== undefined ? input.avatar_url : user.avatar_url,
         job_title: input.job_title !== undefined ? input.job_title : user.job_title,
         department: input.department !== undefined ? input.department : user.department,
@@ -489,18 +520,20 @@ export class UserService {
       };
 
       // Store updated user
-      this.users.set(userId, updatedUser);
+      await firestoreUserStore.update(userId, updateData);
+
+      const updatedUser = { ...user, ...updateData };
 
       // Log profile changes to activity trail (summarized diff)
       try {
         const changedFields: string[] = [];
         const compareKeys: Array<keyof UsersTable> = [
-          'email', 'name', 'avatar_url', 'job_title', 'department', 'location', 'timezone', 'phone', 'manager_id', 'bio', 'specialties', 'languages', 'working_hours', 'custom_fields', 'reviewer_max_workload', 'reviewer_availability', 'reviewer_availability_until'
+          'email', 'name', 'role', 'avatar_url', 'job_title', 'department', 'location', 'timezone', 'phone', 'manager_id', 'bio', 'specialties', 'languages', 'working_hours', 'custom_fields', 'reviewer_max_workload', 'reviewer_availability', 'reviewer_availability_until'
         ];
         for (const key of compareKeys) {
           const beforeVal = (user as any)[key];
-          const afterVal = (updatedUser as any)[key];
-          if (JSON.stringify(beforeVal) !== JSON.stringify(afterVal)) {
+          const afterVal = (updateData as any)[key];
+          if (afterVal !== undefined && JSON.stringify(beforeVal) !== JSON.stringify(afterVal)) {
             changedFields.push(String(key));
           }
         }
@@ -538,7 +571,7 @@ export class UserService {
     reason: string
   ): Promise<UserServiceResult> {
     try {
-      const user = this.users.get(userId);
+      const user = await firestoreUserStore.getById(userId);
       if (!user) {
         return { success: false, error: 'User not found', code: 'USER_NOT_FOUND' };
       }
@@ -565,8 +598,7 @@ export class UserService {
         }
       }
 
-      const updatedUser: UsersTable = {
-        ...user,
+      const updateData: Partial<UsersTable> = {
         role: newRole,
         updated_at: new Date(),
         updated_by: changedBy,
@@ -585,8 +617,8 @@ export class UserService {
         },
       };
 
-      this.users.set(userId, updatedUser);
-      return { success: true, data: updatedUser };
+      await firestoreUserStore.update(userId, updateData);
+      return { success: true, data: { ...user, ...updateData } };
     } catch (error) {
       return { success: false, error: 'Failed to change role', code: 'INTERNAL_ERROR' };
     }
@@ -597,7 +629,7 @@ export class UserService {
    */
   async delete(userId: string, deletedBy?: string): Promise<UserServiceResult> {
     try {
-      const user = this.users.get(userId);
+      const user = await firestoreUserStore.getById(userId);
 
       if (!user) {
         return {
@@ -617,19 +649,18 @@ export class UserService {
       }
 
       // Soft delete user
-      const deletedUser: UsersTable = {
-        ...user,
+      const updateData: Partial<UsersTable> = {
         deleted_at: new Date(),
         deleted_by: deletedBy || null,
         status: UserStatus.INACTIVE,
       };
 
       // Store updated user
-      this.users.set(userId, deletedUser);
+      await firestoreUserStore.update(userId, updateData);
 
       return {
         success: true,
-        data: deletedUser,
+        data: { ...user, ...updateData },
       };
     } catch (error) {
       return {
@@ -646,14 +677,13 @@ export class UserService {
    */
   async anonymize(userId: string, anonymizedBy?: string): Promise<UserServiceResult> {
     try {
-      const user = this.users.get(userId);
+      const user = await firestoreUserStore.getById(userId);
       if (!user) {
         return { success: false, error: 'User not found', code: 'USER_NOT_FOUND' };
       }
 
       const anonymizedEmail = `deleted+${user.id}@example.com`;
-      const anonymizedUser: UsersTable = {
-        ...user,
+      const updateData: Partial<UsersTable> = {
         email: anonymizedEmail,
         name: 'Deleted User',
         avatar_url: null,
@@ -667,12 +697,8 @@ export class UserService {
         updated_by: anonymizedBy || null,
       };
 
-      // Update email index
-      this.emailIndex.delete(user.email);
-      this.emailIndex.set(anonymizedEmail, userId);
-
-      this.users.set(userId, anonymizedUser);
-      return { success: true, data: anonymizedUser };
+      await firestoreUserStore.update(userId, updateData);
+      return { success: true, data: { ...user, ...updateData } };
     } catch (error) {
       return { success: false, error: 'Failed to anonymize user', code: 'INTERNAL_ERROR' };
     }
@@ -683,15 +709,14 @@ export class UserService {
    */
   async adminResetPassword(userId: string, newPlainPassword: string, resetBy?: string): Promise<UserServiceResult> {
     try {
-      const user = this.users.get(userId);
+      const user = await firestoreUserStore.getById(userId);
       if (!user) {
         return { success: false, error: 'User not found', code: 'USER_NOT_FOUND' };
       }
       // Hash new password
       const newHash = await this.hashPassword(newPlainPassword);
       const now = new Date();
-      const updated: UsersTable = {
-        ...user,
+      const updateData: Partial<UsersTable> = {
         password_hash: newHash,
         last_password_change: now,
         // Prepend previous hash to history
@@ -699,8 +724,8 @@ export class UserService {
         updated_at: now,
         updated_by: resetBy || null,
       };
-      this.users.set(userId, updated);
-      return { success: true, data: updated };
+      await firestoreUserStore.update(userId, updateData);
+      return { success: true, data: { ...user, ...updateData } };
     } catch (error) {
       return { success: false, error: 'Failed to reset password', code: 'INTERNAL_ERROR' };
     }
@@ -714,12 +739,15 @@ export class UserService {
     let purged = 0;
     const now = Date.now();
     const retentionMs = UserService.SOFT_DELETE_RETENTION_DAYS * 24 * 60 * 60 * 1000;
-    for (const [id, user] of this.users.entries()) {
+
+    // Potentially expensive in Firestore, but sticking to logic
+    const { data } = await firestoreUserStore.list({ include_deleted: true }, {});
+
+    for (const user of data) {
       if (user.deleted_at) {
         const age = now - user.deleted_at.getTime();
         if (age > retentionMs) {
-          this.users.delete(id);
-          this.emailIndex.delete(user.email);
+          await firestoreUserStore.delete(user.id);
           purged++;
         }
       }
@@ -739,12 +767,11 @@ export class UserService {
    * Check if email exists
    */
   async emailExists(email: string, excludeUserId?: string): Promise<boolean> {
-    const userId = this.emailIndex.get(email.toLowerCase());
-    if (!userId) return false;
-    if (excludeUserId && userId === excludeUserId) return false;
+    const user = await firestoreUserStore.getByEmail(email);
+    if (!user) return false;
+    if (excludeUserId && user.id === excludeUserId) return false;
 
-    const user = this.users.get(userId);
-    return user ? !isUserDeleted(user) : false;
+    return !isUserDeleted(user);
   }
 
   // ============================================================================
@@ -757,7 +784,7 @@ export class UserService {
    */
   async activate(userId: string, activatedBy?: string, reason?: string): Promise<UserServiceResult> {
     try {
-      const user = this.users.get(userId);
+      const user = await firestoreUserStore.getById(userId);
 
       if (!user) {
         return {
@@ -784,9 +811,7 @@ export class UserService {
         };
       }
 
-      // Clear any lock status
-      const activatedUser: UsersTable = {
-        ...user,
+      const updateData: Partial<UsersTable> = {
         status: UserStatus.ACTIVE,
         locked_until: null,
         failed_login_attempts: 0,
@@ -794,12 +819,11 @@ export class UserService {
         updated_by: activatedBy || null,
       };
 
-      // Store updated user
-      this.users.set(userId, activatedUser);
+      await firestoreUserStore.update(userId, updateData);
 
       return {
         success: true,
-        data: activatedUser,
+        data: { ...user, ...updateData },
       };
     } catch (error) {
       return {
@@ -816,7 +840,7 @@ export class UserService {
    */
   async deactivate(userId: string, deactivatedBy?: string, reason?: string): Promise<UserServiceResult> {
     try {
-      const user = this.users.get(userId);
+      const user = await firestoreUserStore.getById(userId);
 
       if (!user) {
         return {
@@ -845,7 +869,6 @@ export class UserService {
 
       // Prevent self-deactivation for admins (optional safeguard)
       if (user.role === UserRole.ADMIN && user.id === deactivatedBy) {
-        // Check if there are other active admins
         const activeAdminCount = await this.count({
           role: UserRole.ADMIN,
           status: UserStatus.ACTIVE,
@@ -860,19 +883,17 @@ export class UserService {
         }
       }
 
-      const deactivatedUser: UsersTable = {
-        ...user,
+      const updateData: Partial<UsersTable> = {
         status: UserStatus.INACTIVE,
         updated_at: new Date(),
         updated_by: deactivatedBy || null,
       };
 
-      // Store updated user
-      this.users.set(userId, deactivatedUser);
+      await firestoreUserStore.update(userId, updateData);
 
       return {
         success: true,
-        data: deactivatedUser,
+        data: { ...user, ...updateData },
       };
     } catch (error) {
       return {
@@ -894,7 +915,7 @@ export class UserService {
     suspendUntil?: Date
   ): Promise<UserServiceResult> {
     try {
-      const user = this.users.get(userId);
+      const user = await firestoreUserStore.getById(userId);
 
       if (!user) {
         return {
@@ -922,20 +943,18 @@ export class UserService {
         };
       }
 
-      const suspendedUser: UsersTable = {
-        ...user,
+      const updateData: Partial<UsersTable> = {
         status: UserStatus.SUSPENDED,
         locked_until: suspendUntil || null,
         updated_at: new Date(),
         updated_by: suspendedBy || null,
       };
 
-      // Store updated user
-      this.users.set(userId, suspendedUser);
+      await firestoreUserStore.update(userId, updateData);
 
       return {
         success: true,
-        data: suspendedUser,
+        data: { ...user, ...updateData },
       };
     } catch (error) {
       return {
@@ -952,7 +971,7 @@ export class UserService {
    */
   async unlock(userId: string, unlockedBy?: string): Promise<UserServiceResult> {
     try {
-      const user = this.users.get(userId);
+      const user = await firestoreUserStore.getById(userId);
 
       if (!user) {
         return {
@@ -979,8 +998,7 @@ export class UserService {
         };
       }
 
-      const unlockedUser: UsersTable = {
-        ...user,
+      const updateData: Partial<UsersTable> = {
         status: user.status === UserStatus.LOCKED ? UserStatus.ACTIVE : user.status,
         locked_until: null,
         failed_login_attempts: 0,
@@ -988,12 +1006,11 @@ export class UserService {
         updated_by: unlockedBy || null,
       };
 
-      // Store updated user
-      this.users.set(userId, unlockedUser);
+      await firestoreUserStore.update(userId, updateData);
 
       return {
         success: true,
-        data: unlockedUser,
+        data: { ...user, ...updateData },
       };
     } catch (error) {
       return {
@@ -1010,7 +1027,7 @@ export class UserService {
    */
   async lock(userId: string, lockedBy?: string, reason?: string, lockUntil?: Date): Promise<UserServiceResult> {
     try {
-      const user = this.users.get(userId);
+      const user = await firestoreUserStore.getById(userId);
 
       if (!user) {
         return {
@@ -1040,20 +1057,18 @@ export class UserService {
       // Calculate lock expiration (default 30 minutes)
       const lockExpiration = lockUntil || new Date(Date.now() + USER_SCHEMA_CONSTRAINTS.AUTO_UNLOCK_MINUTES * 60 * 1000);
 
-      const lockedUser: UsersTable = {
-        ...user,
+      const updateData: Partial<UsersTable> = {
         status: UserStatus.LOCKED,
         locked_until: lockExpiration,
         updated_at: new Date(),
         updated_by: lockedBy || null,
       };
 
-      // Store updated user
-      this.users.set(userId, lockedUser);
+      await firestoreUserStore.update(userId, updateData);
 
       return {
         success: true,
-        data: lockedUser,
+        data: { ...user, ...updateData },
       };
     } catch (error) {
       return {
@@ -1069,7 +1084,7 @@ export class UserService {
    */
   async incrementFailedLoginAttempts(userId: string): Promise<UserServiceResult> {
     try {
-      const user = this.users.get(userId);
+      const user = await firestoreUserStore.getById(userId);
 
       if (!user) {
         return {
@@ -1082,8 +1097,7 @@ export class UserService {
       const newAttempts = user.failed_login_attempts + 1;
       const shouldLock = newAttempts >= USER_SCHEMA_CONSTRAINTS.MAX_FAILED_LOGIN_ATTEMPTS;
 
-      const updatedUser: UsersTable = {
-        ...user,
+      const updateData: Partial<UsersTable> = {
         failed_login_attempts: newAttempts,
         status: shouldLock ? UserStatus.LOCKED : user.status,
         locked_until: shouldLock
@@ -1092,12 +1106,11 @@ export class UserService {
         updated_at: new Date(),
       };
 
-      // Store updated user
-      this.users.set(userId, updatedUser);
+      await firestoreUserStore.update(userId, updateData);
 
       return {
         success: true,
-        data: updatedUser,
+        data: { ...user, ...updateData },
       };
     } catch (error) {
       return {
@@ -1114,7 +1127,7 @@ export class UserService {
    */
   async resetFailedLoginAttempts(userId: string): Promise<UserServiceResult> {
     try {
-      const user = this.users.get(userId);
+      const user = await firestoreUserStore.getById(userId);
 
       if (!user) {
         return {
@@ -1131,18 +1144,16 @@ export class UserService {
         };
       }
 
-      const updatedUser: UsersTable = {
-        ...user,
+      const updateData: Partial<UsersTable> = {
         failed_login_attempts: 0,
         updated_at: new Date(),
       };
 
-      // Store updated user
-      this.users.set(userId, updatedUser);
+      await firestoreUserStore.update(userId, updateData);
 
       return {
         success: true,
-        data: updatedUser,
+        data: { ...user, ...updateData },
       };
     } catch (error) {
       return {
@@ -1158,7 +1169,7 @@ export class UserService {
    */
   async updateLastLogin(userId: string, ipAddress: string): Promise<UserServiceResult> {
     try {
-      const user = this.users.get(userId);
+      const user = await firestoreUserStore.getById(userId);
 
       if (!user) {
         return {
@@ -1169,20 +1180,18 @@ export class UserService {
       }
 
       const now = new Date();
-      const updatedUser: UsersTable = {
-        ...user,
+      const updateData: Partial<UsersTable> = {
         last_login_at: now,
         last_login_ip: ipAddress,
         last_active_at: now,
         failed_login_attempts: 0,
       };
 
-      // Store updated user
-      this.users.set(userId, updatedUser);
+      await firestoreUserStore.update(userId, updateData);
 
       return {
         success: true,
-        data: updatedUser,
+        data: { ...user, ...updateData },
       };
     } catch (error) {
       return {
@@ -1198,7 +1207,7 @@ export class UserService {
    */
   async updateLastActive(userId: string): Promise<UserServiceResult> {
     try {
-      const user = this.users.get(userId);
+      const user = await firestoreUserStore.getById(userId);
 
       if (!user) {
         return {
@@ -1208,17 +1217,15 @@ export class UserService {
         };
       }
 
-      const updatedUser: UsersTable = {
-        ...user,
+      const updateData: Partial<UsersTable> = {
         last_active_at: new Date(),
       };
 
-      // Store updated user
-      this.users.set(userId, updatedUser);
+      await firestoreUserStore.update(userId, updateData);
 
       return {
         success: true,
-        data: updatedUser,
+        data: { ...user, ...updateData },
       };
     } catch (error) {
       return {

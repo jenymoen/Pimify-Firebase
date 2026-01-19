@@ -10,19 +10,20 @@
  */
 
 import { PermissionCheckContext } from './role-permissions';
+import { PermissionResult } from '@/types/workflow';
 
 /**
  * Cache entry with enhanced metadata
  */
 export interface EnhancedCacheEntry {
   permission: string;
-  result: boolean;
+  result: PermissionResult;
   timestamp: number;
   expiresAt: number;
   accessCount: number;
   lastAccessed: number;
   context: Partial<PermissionCheckContext>;
-  source: 'role' | 'hierarchy' | 'dynamic' | 'admin_override' | 'denied';
+  source: PermissionResult['source'];
   ttl: number;
   priority: CachePriority;
   tags: string[];
@@ -93,14 +94,14 @@ export class PermissionCacheManager {
   private statistics: CacheStatistics;
   private warmingConfig: CacheWarmingConfig;
   private invalidationConfig: CacheInvalidationConfig;
-  
+
   // Configuration
   private l1MaxSize: number = 1000;
   private l2MaxSize: number = 10000;
   private defaultTTL: number = 5 * 60 * 1000; // 5 minutes
   private criticalTTL: number = 30 * 60 * 1000; // 30 minutes
   private lowTTL: number = 1 * 60 * 1000; // 1 minute
-  
+
   // Performance tracking
   private totalAccesses: number = 0;
   private totalAccessTime: number = 0;
@@ -140,7 +141,7 @@ export class PermissionCacheManager {
     };
 
     this.statistics = this.initializeStatistics();
-    
+
     // Start background processes
     this.startBackgroundProcesses();
   }
@@ -175,7 +176,7 @@ export class PermissionCacheManager {
     // Cache miss
     this.statistics.misses++;
     this.totalAccessTime += Date.now() - startTime;
-    return undefined;
+    return null;
   }
 
   /**
@@ -194,7 +195,7 @@ export class PermissionCacheManager {
     const priority = options?.priority || CachePriority.NORMAL;
     const ttl = options?.ttl || this.calculateTTL(priority);
     const tags = options?.tags || [];
-    
+
     const entry: EnhancedCacheEntry = {
       permission: key,
       result,
@@ -202,7 +203,7 @@ export class PermissionCacheManager {
       expiresAt: now + ttl,
       accessCount: 0,
       lastAccessed: now,
-      context: result.context,
+      context: {},
       source: result.source,
       ttl,
       priority,
@@ -211,7 +212,7 @@ export class PermissionCacheManager {
 
     // Store in L1 cache
     this.storeInL1(key, entry);
-    
+
     // Store in L2 cache if high priority or frequently accessed
     if (priority >= CachePriority.HIGH || this.isFrequentlyAccessed(key)) {
       this.storeInL2(key, entry);
@@ -486,7 +487,7 @@ export class PermissionCacheManager {
   private compactCache(): void {
     // Remove expired entries
     const now = Date.now();
-    
+
     for (const [key, entry] of this.l1Cache.entries()) {
       if (entry.expiresAt <= now) {
         this.l1Cache.delete(key);
@@ -527,17 +528,17 @@ export class PermissionCacheManager {
    */
   delete(key: string): boolean {
     let deleted = false;
-    
+
     if (this.l1Cache.has(key)) {
       this.l1Cache.delete(key);
       deleted = true;
     }
-    
+
     if (this.l2Cache.has(key)) {
       this.l2Cache.delete(key);
       deleted = true;
     }
-    
+
     return deleted;
   }
 
@@ -572,13 +573,13 @@ export class PermissionCacheManager {
     this.statistics.evictedEntries = this.evictedEntries;
     this.statistics.warmingOperations = this.warmingOperations;
     this.statistics.invalidationOperations = this.invalidationOperations;
-    
+
     // Update priority distribution
     this.updatePriorityDistribution();
-    
+
     // Update tag distribution
     this.updateTagDistribution();
-    
+
     // Calculate memory usage (simplified)
     this.statistics.memoryUsage = this.estimateMemoryUsage();
   }

@@ -39,7 +39,7 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ reviewers,
 		<div className={`space-y-6 ${className || ''}`.trim()}>
 			{overworked.length > 0 && (
 				<div className="rounded border border-orange-300 bg-orange-50 text-orange-800 p-3">
-					<div className="font-medium">⚠️ {overworked.length} reviewer{overworked.length !== 1 ? 's' : ''} over capacity (>80%)</div>
+					<div className="font-medium">⚠️ {overworked.length} reviewer{overworked.length !== 1 ? 's' : ''} over capacity (more than 80%)</div>
 					<ul className="mt-1 text-sm list-disc pl-5">
 						{overworked.map(r => <li key={r.id}>{r.name} ({Math.round(r.capacityPercentage)}%)</li>)}
 					</ul>
@@ -66,12 +66,11 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ reviewers,
 							<tr key={r.id} className={`border-t ${r.capacityPercentage > 80 ? 'bg-orange-50' : ''}`}>
 								<td className="p-2">{r.name}</td>
 								<td className="p-2">
-									<span className={`px-2 py-0.5 rounded text-xs ${
-										r.availability === 'AVAILABLE' ? 'bg-green-100' :
+									<span className={`px-2 py-0.5 rounded text-xs ${r.availability === 'AVAILABLE' ? 'bg-green-100' :
 										r.availability === 'BUSY' ? 'bg-yellow-100' :
-										r.availability === 'AWAY' ? 'bg-gray-100' :
-										'bg-orange-100'
-									}`}>
+											r.availability === 'AWAY' ? 'bg-gray-100' :
+												'bg-orange-100'
+										}`}>
 										{r.availability}
 									</span>
 								</td>

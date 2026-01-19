@@ -6,6 +6,7 @@
  */
 
 import { UserRole, WorkflowState } from '@/types/workflow';
+import { MultilingualString } from '@/types/product';
 
 /**
  * User Status Enum
@@ -91,6 +92,83 @@ export interface UsersTable {
   updated_by: string | null; // Foreign key to users.id
   deleted_at: Date | null; // Soft delete timestamp
   deleted_by: string | null; // Foreign key to users.id
+}
+
+/**
+ * Products Table Schema
+ * 
+ * Stores product information. Complex nested objects (like translations, media, variants)
+ * are stored as JSON maps/arrays to map cleanly to Firestore documents.
+ */
+export interface ProductsTable {
+  id: string; // UUID or SKU-based ID
+
+  // Basic Info
+  name: MultilingualString; // Multilingual JSON
+  sku: string;
+  gtin: string | null;
+  description_short: MultilingualString; // Multilingual JSON: 'en': '...', 'no': '...'
+  description_long: MultilingualString;
+  brand: string;
+  status: string; // 'active', 'inactive', 'development', 'discontinued'
+  launch_date: string | null; // ISO Date
+  end_date: string | null;    // ISO Date
+
+  // Attributes & Specs (Stored as JSON objects/arrays)
+  categories: string[];
+  properties: Array<{ id: string; key: string; value: string }>;
+  technical_specs: Array<{ id: string; key: string; value: string }>;
+  maintenance_instructions: MultilingualString | null;
+  warranty_info: MultilingualString | null;
+  country_of_origin: string | null;
+
+  // Media (JSON)
+  media_images: any[]; // Array of MediaEntry
+  media_videos: any[] | null;
+  media_models3d: any[] | null;
+  media_manuals: any[] | null;
+  media_certificates: any[] | null;
+
+  // Marketing & SEO
+  seo_title: MultilingualString | null;
+  seo_description: MultilingualString | null;
+  keywords: string[] | null;
+  marketing_texts: any[] | null;
+  campaign_codes: any[] | null;
+
+  // Pricing & Stock
+  standard_price: any[]; // Array of PriceEntry
+  sale_price: any[] | null;
+  cost_price: any[] | null;
+
+  // Options & Variants
+  options: any[] | null; // Array of ProductOption
+  variants: any[] | null; // Array of ProductVariant
+
+  // Relations
+  related_products: string[] | null;
+  accessories: string[] | null;
+  replacement_products: string[] | null;
+
+  // Localization
+  norwegian_regulations: string | null;
+
+  // AI & Quality
+  ai_summary: MultilingualString | null;
+  quality_metrics: any | null; // QualityMetrics object
+
+  // Workflow
+  workflow_state: string; // WorkflowState enum
+  assigned_reviewer_id: string | null;
+  assigned_reviewer_name: string | null;
+  assigned_reviewer_role: string | null;
+  workflow_history: any[]; // Array of history objects
+
+  // Metadata
+  created_at: string; // ISO Date
+  updated_at: string; // ISO Date
+  created_by: string | null;
+  updated_by: string | null;
 }
 
 /**
@@ -281,11 +359,11 @@ export function getUserDisplayName(user: Pick<UsersTable, 'name' | 'email' | 'de
 export function getUserInitials(user: Pick<UsersTable, 'name' | 'email'>): string {
   const name = user.name || user.email;
   const parts = name.split(/[\s@]+/).filter(Boolean);
-  
+
   if (parts.length >= 2) {
     return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
   }
-  
+
   return parts[0] ? parts[0].substring(0, 2).toUpperCase() : '??';
 }
 
@@ -555,7 +633,7 @@ export enum ActivityAction {
   TWO_FACTOR_DISABLED = 'TWO_FACTOR_DISABLED',
   TWO_FACTOR_VERIFIED = 'TWO_FACTOR_VERIFIED',
   TWO_FACTOR_FAILED = 'TWO_FACTOR_FAILED',
-  
+
   // User Management
   USER_CREATED = 'USER_CREATED',
   USER_UPDATED = 'USER_UPDATED',
@@ -566,38 +644,38 @@ export enum ActivityAction {
   USER_UNLOCKED = 'USER_UNLOCKED',
   PROFILE_UPDATED = 'PROFILE_UPDATED',
   AVATAR_UPDATED = 'AVATAR_UPDATED',
-  
+
   // Role and Permission Changes
   ROLE_CHANGED = 'ROLE_CHANGED',
   PERMISSION_GRANTED = 'PERMISSION_GRANTED',
   PERMISSION_REVOKED = 'PERMISSION_REVOKED',
-  
+
   // Session Management
   SESSION_CREATED = 'SESSION_CREATED',
   SESSION_TERMINATED = 'SESSION_TERMINATED',
   SESSION_EXPIRED = 'SESSION_EXPIRED',
-  
+
   // Account Security
   ACCOUNT_LOCKED = 'ACCOUNT_LOCKED',
   ACCOUNT_UNLOCKED = 'ACCOUNT_UNLOCKED',
   SECURITY_ALERT = 'SECURITY_ALERT',
   SUSPICIOUS_ACTIVITY = 'SUSPICIOUS_ACTIVITY',
-  
+
   // SSO Actions
   SSO_LINKED = 'SSO_LINKED',
   SSO_UNLINKED = 'SSO_UNLINKED',
   SSO_LOGIN = 'SSO_LOGIN',
-  
+
   // Invitation Actions
   INVITATION_SENT = 'INVITATION_SENT',
   INVITATION_ACCEPTED = 'INVITATION_ACCEPTED',
   INVITATION_CANCELLED = 'INVITATION_CANCELLED',
-  
+
   // API Access
   API_ACCESS = 'API_ACCESS',
   API_ERROR = 'API_ERROR',
   API_RATE_LIMIT_EXCEEDED = 'API_RATE_LIMIT_EXCEEDED',
-  
+
   // Data Operations
   DATA_EXPORTED = 'DATA_EXPORTED',
   DATA_IMPORTED = 'DATA_IMPORTED',
@@ -748,13 +826,13 @@ export interface DynamicPermissionsTable {
   // Permission Assignment
   user_id: string; // NOT NULL - Foreign key to users.id
   permission: string; // NOT NULL - Permission being granted (e.g., 'products:export')
-  
+
   // Grant Details
   granted_by: string; // NOT NULL - Foreign key to users.id (who granted this permission)
   granted_at: Date; // NOT NULL - When permission was granted
   expires_at: Date | null; // Optional expiration date
   reason: string; // NOT NULL - Reason for granting permission
-  
+
   // Context (for resource-specific or contextual permissions)
   resource_type: string | null; // Type of resource (e.g., 'product', 'category')
   resource_id: string | null; // Specific resource ID
@@ -887,15 +965,15 @@ export function permissionMatchesContext(
   if (permission.resource_type && permission.resource_type !== context.resourceType) {
     return false;
   }
-  
+
   if (permission.resource_id && permission.resource_id !== context.resourceId) {
     return false;
   }
-  
+
   if (permission.user_role && permission.user_role !== context.userRole) {
     return false;
   }
-  
+
   return true;
 }
 

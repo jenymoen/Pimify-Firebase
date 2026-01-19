@@ -1,10 +1,10 @@
-vimport React from 'react';
+import React from 'react';
 import { render, screen } from '@testing-library/react';
-import { 
-  RoleBasedWrapper, 
-  AdminOnly, 
-  ReviewerOnly, 
-  EditorOnly, 
+import {
+  RoleBasedWrapper,
+  AdminOnly,
+  ReviewerOnly,
+  EditorOnly,
   ViewerOnly,
   AdminAndReviewer,
   AdminAndEditor,
@@ -55,8 +55,8 @@ describe('RoleBasedWrapper', () => {
 
     it('renders content when user has one of multiple allowed roles', () => {
       render(
-        <RoleBasedWrapper 
-          {...defaultProps} 
+        <RoleBasedWrapper
+          {...defaultProps}
           userRole={UserRole.REVIEWER}
           allowedRoles={[UserRole.ADMIN, UserRole.REVIEWER]}
         >
@@ -70,8 +70,8 @@ describe('RoleBasedWrapper', () => {
 
     it('hides content when user does not have required role', () => {
       render(
-        <RoleBasedWrapper 
-          {...defaultProps} 
+        <RoleBasedWrapper
+          {...defaultProps}
           userRole={UserRole.VIEWER}
           allowedRoles={UserRole.ADMIN}
         >
@@ -84,8 +84,8 @@ describe('RoleBasedWrapper', () => {
 
     it('shows fallback when user does not have required role', () => {
       render(
-        <RoleBasedWrapper 
-          {...defaultProps} 
+        <RoleBasedWrapper
+          {...defaultProps}
           userRole={UserRole.VIEWER}
           allowedRoles={UserRole.ADMIN}
           fallback={<div data-testid="fallback">Access Denied</div>}
@@ -102,8 +102,8 @@ describe('RoleBasedWrapper', () => {
   describe('Permission-based Rendering', () => {
     it('renders content when user has required permission', () => {
       render(
-        <RoleBasedWrapper 
-          {...defaultProps} 
+        <RoleBasedWrapper
+          {...defaultProps}
           requiredPermissions={WorkflowAction.EDIT}
         >
           <TestComponent>Edit Content</TestComponent>
@@ -116,8 +116,8 @@ describe('RoleBasedWrapper', () => {
 
     it('renders content when user has one of multiple required permissions', () => {
       render(
-        <RoleBasedWrapper 
-          {...defaultProps} 
+        <RoleBasedWrapper
+          {...defaultProps}
           requiredPermissions={[WorkflowAction.EDIT, WorkflowAction.APPROVE]}
         >
           <TestComponent>Edit or Approve Content</TestComponent>
@@ -130,8 +130,8 @@ describe('RoleBasedWrapper', () => {
 
     it('hides content when user does not have required permission', () => {
       render(
-        <RoleBasedWrapper 
-          {...defaultProps} 
+        <RoleBasedWrapper
+          {...defaultProps}
           userRole={UserRole.VIEWER}
           requiredPermissions={WorkflowAction.MANAGE_USERS}
         >
@@ -146,8 +146,8 @@ describe('RoleBasedWrapper', () => {
   describe('Role Hierarchy', () => {
     it('allows higher roles when allowHigherRoles is true', () => {
       render(
-        <RoleBasedWrapper 
-          {...defaultProps} 
+        <RoleBasedWrapper
+          {...defaultProps}
           userRole={UserRole.ADMIN}
           allowedRoles={UserRole.REVIEWER}
           allowHigherRoles={true}
@@ -161,8 +161,8 @@ describe('RoleBasedWrapper', () => {
 
     it('denies higher roles when allowHigherRoles is false', () => {
       render(
-        <RoleBasedWrapper 
-          {...defaultProps} 
+        <RoleBasedWrapper
+          {...defaultProps}
           userRole={UserRole.ADMIN}
           allowedRoles={UserRole.REVIEWER}
           allowHigherRoles={false}
@@ -176,8 +176,8 @@ describe('RoleBasedWrapper', () => {
 
     it('allows lower roles when allowLowerRoles is true', () => {
       render(
-        <RoleBasedWrapper 
-          {...defaultProps} 
+        <RoleBasedWrapper
+          {...defaultProps}
           userRole={UserRole.VIEWER}
           allowedRoles={UserRole.ADMIN}
           allowLowerRoles={true}
@@ -195,8 +195,8 @@ describe('RoleBasedWrapper', () => {
       const customCheck = jest.fn().mockReturnValue(true);
 
       render(
-        <RoleBasedWrapper 
-          {...defaultProps} 
+        <RoleBasedWrapper
+          {...defaultProps}
           customPermissionCheck={customCheck}
         >
           <TestComponent>Custom Permission Content</TestComponent>
@@ -219,8 +219,8 @@ describe('RoleBasedWrapper', () => {
       const customCheck = jest.fn().mockReturnValue(false);
 
       render(
-        <RoleBasedWrapper 
-          {...defaultProps} 
+        <RoleBasedWrapper
+          {...defaultProps}
           customPermissionCheck={customCheck}
         >
           <TestComponent>Custom Permission Content</TestComponent>
@@ -234,8 +234,8 @@ describe('RoleBasedWrapper', () => {
   describe('Hide When Denied', () => {
     it('returns null when hideWhenDenied is true and access is denied', () => {
       const { container } = render(
-        <RoleBasedWrapper 
-          {...defaultProps} 
+        <RoleBasedWrapper
+          {...defaultProps}
           userRole={UserRole.VIEWER}
           allowedRoles={UserRole.ADMIN}
           hideWhenDenied={true}
@@ -249,8 +249,8 @@ describe('RoleBasedWrapper', () => {
 
     it('renders content when hideWhenDenied is true and access is granted', () => {
       render(
-        <RoleBasedWrapper 
-          {...defaultProps} 
+        <RoleBasedWrapper
+          {...defaultProps}
           hideWhenDenied={true}
         >
           <TestComponent>Admin Content</TestComponent>
@@ -264,8 +264,8 @@ describe('RoleBasedWrapper', () => {
   describe('Placeholder', () => {
     it('shows placeholder when showPlaceholder is true and access is denied', () => {
       render(
-        <RoleBasedWrapper 
-          {...defaultProps} 
+        <RoleBasedWrapper
+          {...defaultProps}
           userRole={UserRole.VIEWER}
           allowedRoles={UserRole.ADMIN}
           showPlaceholder={true}
@@ -280,8 +280,8 @@ describe('RoleBasedWrapper', () => {
 
     it('shows custom placeholder when provided', () => {
       render(
-        <RoleBasedWrapper 
-          {...defaultProps} 
+        <RoleBasedWrapper
+          {...defaultProps}
           userRole={UserRole.VIEWER}
           allowedRoles={UserRole.ADMIN}
           showPlaceholder={true}
@@ -299,8 +299,8 @@ describe('RoleBasedWrapper', () => {
   describe('Tooltip', () => {
     it('shows tooltip when showTooltip is true', () => {
       render(
-        <RoleBasedWrapper 
-          {...defaultProps} 
+        <RoleBasedWrapper
+          {...defaultProps}
           showTooltip={true}
         >
           <TestComponent>Admin Content</TestComponent>
@@ -313,8 +313,8 @@ describe('RoleBasedWrapper', () => {
 
     it('shows custom tooltip message when provided', () => {
       render(
-        <RoleBasedWrapper 
-          {...defaultProps} 
+        <RoleBasedWrapper
+          {...defaultProps}
           showTooltip={true}
           tooltipMessage="Custom tooltip message"
         >
@@ -332,8 +332,8 @@ describe('RoleBasedWrapper', () => {
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
 
       render(
-        <RoleBasedWrapper 
-          {...defaultProps} 
+        <RoleBasedWrapper
+          {...defaultProps}
           userRole={UserRole.VIEWER}
           allowedRoles={UserRole.ADMIN}
           debugMode={true}
@@ -545,16 +545,16 @@ describe('Hook', () => {
 
   it('useRoleBasedAccess returns permission information', () => {
     render(
-      <TestHookComponent 
-        userRole={UserRole.ADMIN} 
-        allowedRoles={UserRole.ADMIN} 
-        requiredPermissions={WorkflowAction.EDIT} 
+      <TestHookComponent
+        userRole={UserRole.ADMIN}
+        allowedRoles={UserRole.ADMIN}
+        requiredPermissions={WorkflowAction.EDIT}
       />
     );
 
     const resultElement = screen.getByTestId('hook-result');
     expect(resultElement).toBeInTheDocument();
-    
+
     const result = JSON.parse(resultElement.textContent || '{}');
     expect(result).toHaveProperty('hasAccess');
     expect(result).toHaveProperty('userRole');

@@ -1,261 +1,215 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import type { Product, PriceEntry, ProductOption, ProductVariant } from '@/types/product';
+import type { Product } from '@/types/product';
 import { initialProductData, defaultMultilingualString } from '@/types/product';
-import { WorkflowState } from '@/types/workflow';
-import { v4 as uuidv4 } from 'uuid';
-import { getCurrentTenantId } from './tenant';
 import { calculateQualityMetrics } from './product-quality';
 
 interface ProductState {
   products: Product[];
-  addProduct: (productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'aiSummary'>, aiSummary?: Product['aiSummary']) => Product;
-  updateProduct: (productId: string, productData: Partial<Omit<Product, 'id' | 'createdAt' | 'updatedAt'>>) => void;
-  deleteProduct: (productId: string) => void;
+  isLoading: boolean;
+  error: string | null;
+
+  // Actions
+  fetchProducts: () => Promise<void>;
+  addProduct: (productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'aiSummary'> & { id?: string }, aiSummary?: Product['aiSummary']) => Promise<Product | null>;
+  importProducts: (products: Product[]) => Promise<void>;
+  updateProduct: (productId: string, productData: Partial<Product>) => Promise<void>;
+  deleteProduct: (productId: string) => Promise<void>;
+  recalculateAllQuality: () => void; // Added back to fix runtime crash
+
+  // Helpers (synchronous lookup from state)
   findProductById: (productId: string) => Product | undefined;
-  importProducts: (newProducts: Product[]) => void;
-  setProducts: (products: Product[]) => void;
-  recalculateAllQuality: () => void;
 }
 
-const getProductStorageName = () => {
-  if (typeof window === 'undefined') return 'products-storage-default';
-  const tenantId = getCurrentTenantId();
-  return `products-storage-${tenantId}`;
-}
+export const useProductStore = create<ProductState>((set, get) => ({
+  products: [],
+  isLoading: false,
+  error: null,
 
-export const useProductStore = create<ProductState>()(
-  persist(
-    (set, get) => ({
-      products: [],
-      addProduct: (productDataWithoutMeta, aiSummaryArgument) => {
-        const newProduct: Product = {
-          ...initialProductData, // Start with defaults
-          ...productDataWithoutMeta, // Spread the incoming data, this includes basicInfo, attributesAndSpecs etc.
-          // and should also include options and variants if provided in productDataWithoutMeta
-          id: productDataWithoutMeta.basicInfo.sku || uuidv4(), // Ensure ID is set
-          // Explicitly ensure options and variants from payload take precedence or default to empty arrays
-          options: productDataWithoutMeta.options ? [...productDataWithoutMeta.options] : [],
-          variants: productDataWithoutMeta.variants ? [...productDataWithoutMeta.variants] : [],
-          aiSummary: aiSummaryArgument || { ...defaultMultilingualString },
-          // Ensure workflow state is set
-          workflowState: productDataWithoutMeta.workflowState || WorkflowState.DRAFT,
-          workflowHistory: productDataWithoutMeta.workflowHistory || [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-
-        // Calculate and attach quality metrics
-        newProduct.qualityMetrics = calculateQualityMetrics(newProduct);
-
-        const updatedProducts = [...get().products, newProduct];
-        set({ products: updatedProducts });
-        return newProduct;
-      },
-      updateProduct: (productId, productUpdateData) => {
-        set(state => ({
-          products: state.products.map(p => {
-            if (p.id === productId) {
-              const updatedProduct: Product = {
-                ...p, // existing product data
-                ...productUpdateData, // incoming updates for top-level fields
-                basicInfo: { ...p.basicInfo, ...productUpdateData.basicInfo },
-                attributesAndSpecs: { ...p.attributesAndSpecs, ...productUpdateData.attributesAndSpecs },
-                media: productUpdateData.media ? { ...p.media, ...productUpdateData.media } : p.media,
-                marketingSEO: { ...p.marketingSEO, ...productUpdateData.marketingSEO },
-                pricingAndStock: productUpdateData.pricingAndStock ? {
-                  ...p.pricingAndStock,
-                  ...productUpdateData.pricingAndStock,
-                  standardPrice: productUpdateData.pricingAndStock.standardPrice !== undefined ? productUpdateData.pricingAndStock.standardPrice : p.pricingAndStock?.standardPrice || [],
-                  salePrice: productUpdateData.pricingAndStock.salePrice !== undefined ? productUpdateData.pricingAndStock.salePrice : p.pricingAndStock?.salePrice || [],
-                  costPrice: productUpdateData.pricingAndStock.costPrice !== undefined ? productUpdateData.pricingAndStock.costPrice : p.pricingAndStock?.costPrice || [],
-                } : p.pricingAndStock,
-                // Ensure options and variants are correctly updated or preserved
-                options: productUpdateData.options !== undefined ? [...productUpdateData.options] : p.options || [],
-                variants: productUpdateData.variants !== undefined ? [...productUpdateData.variants] : p.variants || [],
-                aiSummary: productUpdateData.aiSummary ? { ...p.aiSummary, ...productUpdateData.aiSummary } : p.aiSummary,
-                updatedAt: new Date().toISOString(),
-              };
-
-              // Recalculate quality metrics after update
-              updatedProduct.qualityMetrics = calculateQualityMetrics(updatedProduct);
-
-              return updatedProduct;
-            }
-            return p;
-          })
-        }));
-      },
-      deleteProduct: (productId) => {
-        set(state => ({
-          products: state.products.filter(p => p.id !== productId)
-        }));
-      },
-      findProductById: (productId) => {
-        return get().products.find(p => p.id === productId);
-      },
-      importProducts: (newProducts) => {
-        if (!Array.isArray(newProducts)) {
-          console.error("Import failed: data is not an array.");
-          return;
-        }
-        const existingProducts = get().products;
-        const productMap = new Map(existingProducts.map(p => [p.id, p]));
-        const skuMap = new Map(existingProducts.filter(p => p.basicInfo.sku).map(p => [p.basicInfo.sku, p]));
-
-        newProducts.forEach(np => {
-          // Try to find existing product by ID or SKU
-          let existingP = productMap.get(np.id);
-          if (!existingP && np.basicInfo?.sku) {
-            existingP = skuMap.get(np.basicInfo.sku);
-          }
-
-          // If we found an existing product, use its ID
-          const id = existingP ? existingP.id : (np.id || uuidv4());
-
-          const importedProduct = {
-            ...initialProductData,
-            ...existingP, // Start with existing data if available
-            ...np,        // Override with new data
-            id,           // Ensure we use the correct ID (existing or new)
-            basicInfo: {
-              ...initialProductData.basicInfo,
-              ...(existingP?.basicInfo || {}),
-              ...(np.basicInfo || {}),
-            },
-            attributesAndSpecs: {
-              ...initialProductData.attributesAndSpecs,
-              ...(existingP?.attributesAndSpecs || {}),
-              ...(np.attributesAndSpecs || {}),
-            },
-            media: np.media ? { ...np.media } : (existingP?.media || { images: [] }),
-            pricingAndStock: np.pricingAndStock ? {
-              standardPrice: np.pricingAndStock.standardPrice || existingP?.pricingAndStock?.standardPrice || [],
-              salePrice: np.pricingAndStock.salePrice || existingP?.pricingAndStock?.salePrice || [],
-              costPrice: np.pricingAndStock.costPrice || existingP?.pricingAndStock?.costPrice || [],
-            } : (existingP?.pricingAndStock || { ...(initialProductData.pricingAndStock || { standardPrice: [], salePrice: [], costPrice: [] }) }),
-            options: np.options || existingP?.options || [],
-            variants: np.variants || existingP?.variants || [],
-            updatedAt: new Date().toISOString(),
-            createdAt: existingP?.createdAt || new Date().toISOString()
-          };
-
-          // Calculate quality metrics for imported product
-          importedProduct.qualityMetrics = calculateQualityMetrics(importedProduct);
-
-          productMap.set(id, importedProduct);
-        });
-
-        const updatedProducts = Array.from(productMap.values());
-        set({ products: updatedProducts });
-      },
-      setProducts: (products) => {
-        set({ products });
-      },
-      recalculateAllQuality: () => {
-        set(state => ({
-          products: state.products.map(product => ({
-            ...product,
-            qualityMetrics: calculateQualityMetrics(product),
-            updatedAt: new Date().toISOString(),
-          }))
-        }));
-      }
-    }),
-    {
-      name: getProductStorageName(),
-      storage: createJSONStorage(() => {
-        if (typeof window === 'undefined') {
-          return {
-            getItem: () => null,
-            setItem: () => { },
-            removeItem: () => { },
-          };
-        }
-        return localStorage;
-      }),
-    }
-  )
-);
-
-// This effect runs once on client mount
-if (typeof window !== 'undefined') {
-  // Use a small delay to ensure the store is properly initialized
-  setTimeout(() => {
+  fetchProducts: async () => {
+    set({ isLoading: true, error: null });
     try {
-      const tenantId = getCurrentTenantId();
-      const productsInitializedKey = `products_initialized-${tenantId}`;
-      const isAlreadyInitialized = localStorage.getItem(productsInitializedKey);
-      const currentStoreState = useProductStore.getState();
+      const token = localStorage.getItem('accessToken');
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      if (!isAlreadyInitialized && (tenantId === 'default_host' || tenantId.startsWith('default_') || tenantId.startsWith('localhost'))) {
-        localStorage.setItem(productsInitializedKey, 'true');
+      const response = await fetch('/api/products?limit=100', { headers }); // Fetch reasonable batch
+      if (!response.ok) {
+        console.error(`Fetch failed: ${response.status} ${response.statusText}`);
+        const text = await response.text();
+        console.error('Response body:', text);
+        throw new Error(`Failed to fetch products: ${response.status} ${response.statusText}`);
+      }
 
-        if (currentStoreState.products.length === 0) { // Only seed if store is still empty
-          const exampleProduct: Product = {
-            id: 'EXAMPLE-SKU-001',
-            basicInfo: {
-              name: { en: 'Example Laptop (Default)', no: 'Eksempel Bærbar PC (Standard)' },
-              sku: 'EXAMPLE-SKU-001',
-              gtin: '1234567890123',
-              descriptionShort: { en: 'A powerful and versatile laptop.', no: 'En kraftig og allsidig bærbar PC.' },
-              descriptionLong: { en: 'This laptop features the latest generation processor, a stunning display, and long battery life, perfect for work and play.', no: 'Denne bærbare PC-en har siste generasjons prosessor, en fantastisk skjerm og lang batterilevetid, perfekt for arbeid og fritid.' },
-              brand: 'TechBrand',
-              status: 'active',
-              launchDate: '2023-01-15T00:00:00.000Z',
-            },
-            attributesAndSpecs: {
-              categories: ['Electronics', 'Computers', 'Laptops'],
-              properties: [
-                { id: uuidv4(), key: 'Color', value: 'Silver' },
-                { id: uuidv4(), key: 'RAM', value: '16GB' },
-                { id: uuidv4(), key: 'Storage', value: '512GB SSD' },
-              ],
-              technicalSpecs: [
-                { id: uuidv4(), key: 'Processor', value: 'Intel Core i7 12th Gen' },
-                { id: uuidv4(), key: 'Screen Size', value: '14 inch' },
-                { id: uuidv4(), key: 'Weight', value: '1.3 kg' },
-              ],
-              countryOfOrigin: 'China',
-            },
-            media: {
-              images: [{ id: uuidv4(), url: 'https://placehold.co/600x400.png', altText: { en: 'Laptop front view', no: 'Bærbar PC forfra' }, type: 'image', dataAiHint: 'laptop' }],
-            },
-            marketingSEO: {
-              seoTitle: { en: 'Buy Example Laptop | TechBrand', no: 'Kjøp Eksempel Bærbar PC | TechBrand' },
-              seoDescription: { en: 'Get the best deals on the Example Laptop. High performance, great value.', no: 'Få de beste tilbudene på Eksempel Bærbar PC. Høy ytelse, god verdi.' },
-              keywords: ['laptop', 'computer', 'TechBrand', 'notebook', 'bærbar pc'],
-            },
-            pricingAndStock: {
-              standardPrice: [{ id: uuidv4(), amount: 9999, currency: 'NOK' }],
-              salePrice: [{ id: uuidv4(), amount: 8999, currency: 'NOK' }],
-              costPrice: [{ id: uuidv4(), amount: 6000, currency: 'NOK' }],
-            },
-            options: [
-              { id: uuidv4(), name: "Color", values: ["Silver", "Space Gray"] },
-              { id: uuidv4(), name: "Storage", values: ["256GB", "512GB"] }
-            ],
-            variants: [
-              { id: uuidv4(), sku: "EX-LT-SIL-256", optionValues: { "Color": "Silver", "Storage": "256GB" }, standardPrice: [{ id: uuidv4(), amount: 9999, currency: 'NOK' }], salePrice: [] },
-              { id: uuidv4(), sku: "EX-LT-SIL-512", optionValues: { "Color": "Silver", "Storage": "512GB" }, standardPrice: [{ id: uuidv4(), amount: 10999, currency: 'NOK' }], salePrice: [] },
-              { id: uuidv4(), sku: "EX-LT-GRY-256", optionValues: { "Color": "Space Gray", "Storage": "256GB" }, standardPrice: [{ id: uuidv4(), amount: 9999, currency: 'NOK' }], salePrice: [] },
-              { id: uuidv4(), sku: "EX-LT-GRY-512", optionValues: { "Color": "Space Gray", "Storage": "512GB" }, standardPrice: [{ id: uuidv4(), amount: 10999, currency: 'NOK' }], salePrice: [] }
-            ],
-            aiSummary: { en: 'A high-performance Silver laptop with 16GB RAM and 512GB SSD.', no: 'En høytytende sølvfarget bærbar PC med 16 GB RAM og 512 GB SSD.' },
-            workflowState: WorkflowState.DRAFT,
-            workflowHistory: [],
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
-
-          // Calculate quality metrics for example product
-          exampleProduct.qualityMetrics = calculateQualityMetrics(exampleProduct);
-          currentStoreState.setProducts([exampleProduct]);
-          console.log(`Seeded example product for tenant: ${tenantId} because store was empty after initialization and init flag not set.`);
-        }
+      const data = await response.json();
+      if (data.success && Array.isArray(data.data.products)) {
+        set({ products: data.data.products, isLoading: false });
+      } else {
+        throw new Error('Invalid response format');
       }
     } catch (error) {
-      console.error('Error during product store initialization:', error);
+      console.error('Error fetching products:', error);
+      set({ error: (error as Error).message, isLoading: false });
     }
-  }, 100); // Small delay for rehydration check
-}
+  },
+
+  importProducts: async (products) => {
+    set({ isLoading: true, error: null });
+    try {
+      const { addProduct } = get();
+      const results = [];
+
+      // Process in parallel (or sequential if consistency matters more, but parallel is faster)
+      // Limit concurrency if needed, but for 50 items it's fine.
+      await Promise.all(products.map(async (prod) => {
+        // We assume imported products have IDs. We want to preserve them.
+        // addProduct calls the API which now respects ID.
+        const { id, createdAt, updatedAt, aiSummary, ...rest } = prod;
+        // Pass ID explicitly
+        await addProduct({ ...rest, id }, aiSummary);
+      }));
+
+      // Refresh list
+      await get().fetchProducts();
+      set({ isLoading: false });
+    } catch (error) {
+      console.error('Error importing products:', error);
+      set({ error: (error as Error).message, isLoading: false });
+      throw error; // Re-throw so UI can show toast failure
+    }
+  },
+
+  addProduct: async (productData, aiSummary) => {
+    set({ isLoading: true, error: null });
+    try {
+      // Prepare payload to match what API expects (validatedData)
+      // The API creates the ID and timestamps, so we just send the fields
+      // However, for imports, we might provide an ID, which the API should respect.
+      const payload = {
+        id: (productData as any).id, // Pass ID if provided (for imports)
+        basicInfo: productData.basicInfo,
+        attributesAndSpecs: productData.attributesAndSpecs,
+        media: productData.media,
+        marketingSEO: productData.marketingSEO,
+        pricingAndStock: productData.pricingAndStock,
+        options: productData.options,
+        variants: productData.variants,
+        workflowState: productData.workflowState,
+        assignedReviewer: productData.assignedReviewer,
+        aiSummary: aiSummary,
+      };
+
+      const token = localStorage.getItem('accessToken');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const response = await fetch('/api/products', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to create product');
+      }
+
+      const data = await response.json();
+      const newProduct = data.data;
+
+      // Optimistic update or Append result
+      set(state => ({
+        products: [...state.products, newProduct],
+        isLoading: false
+      }));
+
+      return newProduct;
+    } catch (error) {
+      console.error('Error adding product:', error);
+      set({ error: (error as Error).message, isLoading: false });
+      return null;
+    }
+  },
+
+  updateProduct: async (productId, productUpdateData) => {
+    set({ isLoading: true, error: null });
+    try {
+      const token = localStorage.getItem('accessToken');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const response = await fetch(`/api/products/${productId}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(productUpdateData),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to update product');
+      }
+
+      const data = await response.json();
+      const updatedProduct = data.data;
+
+      set(state => ({
+        products: state.products.map(p => p.id === productId ? updatedProduct : p),
+        isLoading: false
+      }));
+    } catch (error) {
+      console.error('Error updating product:', error);
+      set({ error: (error as Error).message, isLoading: false });
+    }
+  },
+
+  deleteProduct: async (productId) => {
+    set({ isLoading: true, error: null });
+    try {
+      const token = localStorage.getItem('accessToken');
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const response = await fetch(`/api/products/${productId}`, {
+        method: 'DELETE',
+        headers,
+      });
+
+      if (!response.ok) {
+        let errorMessage = `Failed to delete product (${response.status})`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+          console.error('Delete product error response:', errorData);
+        } catch (e) {
+          console.error('Delete product error (non-JSON response):', response.statusText);
+        }
+        throw new Error(errorMessage);
+      }
+
+      set(state => ({
+        products: state.products.filter(p => p.id !== productId),
+        isLoading: false
+      }));
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      set({ error: (error as Error).message, isLoading: false });
+      throw error; // Re-throw so UI can handle it
+    }
+  },
+
+  recalculateAllQuality: () => {
+    set(state => ({
+      products: state.products.map(product => ({
+        ...product,
+        qualityMetrics: calculateQualityMetrics(product)
+      }))
+    }));
+  },
+
+  findProductById: (productId) => {
+    return get().products.find(p => p.id === productId);
+  },
+}));

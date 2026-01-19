@@ -3,8 +3,10 @@ import { z } from 'zod';
 import { RolePermissions } from '@/lib/role-permissions';
 import { WorkflowStateManager } from '@/lib/workflow-state-manager';
 import { AuditTrailIntegration } from '@/lib/audit-trail-integration';
+import { withRoleBasedAccess } from '@/lib/api-middleware';
 import { WorkflowState, WorkflowAction, UserRole } from '@/types/workflow';
 import { Product } from '@/types/product';
+import { productService } from '@/lib/product-service';
 
 // Validation schemas
 const ProductUpdateSchema = z.object({
@@ -48,23 +50,21 @@ const rolePermissions = new RolePermissions();
 const workflowStateManager = new WorkflowStateManager();
 const auditTrailIntegration = new AuditTrailIntegration(workflowStateManager, rolePermissions);
 
-// Mock product storage (in production, use database)
-const products: Product[] = [];
-
 /**
  * GET /api/products/[id]
  * Get a specific product by ID
  */
-export async function GET(
+async function getProduct(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
 
-    // Extract user context from headers
-    const userId = request.headers.get('x-user-id');
-    const userRole = request.headers.get('x-user-role') as UserRole;
+    // Extract user context from middleware
+    const user = (request as any).user;
+    const userId = user?.userId;
+    const userRole = user?.userRole as UserRole;
 
     if (!userId || !userRole) {
       return NextResponse.json(
@@ -76,8 +76,8 @@ export async function GET(
       );
     }
 
-    // Find product
-    const product = products.find(p => p.id === id);
+    // Find product via service
+    const product = await productService.getProductById(id);
     if (!product) {
       return NextResponse.json(
         {
@@ -133,7 +133,7 @@ export async function GET(
  * PUT /api/products/[id]
  * Update a specific product
  */
-export async function PUT(
+async function updateProduct(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -149,9 +149,10 @@ export async function PUT(
       assignedReviewer: validatedData.assignedReviewer
     });
 
-    // Extract user context from headers
-    const userId = request.headers.get('x-user-id');
-    const userRole = request.headers.get('x-user-role') as UserRole;
+    // Extract user context from middleware
+    const user = (request as any).user;
+    const userId = user?.userId;
+    const userRole = user?.userRole as UserRole;
 
     if (!userId || !userRole) {
       return NextResponse.json(
@@ -163,9 +164,9 @@ export async function PUT(
       );
     }
 
-    // Find product
-    const productIndex = products.findIndex(p => p.id === id);
-    if (productIndex === -1) {
+    // Find existing product via service
+    const existingProduct = await productService.getProductById(id);
+    if (!existingProduct) {
       return NextResponse.json(
         {
           success: false,
@@ -174,8 +175,6 @@ export async function PUT(
         { status: 404 }
       );
     }
-
-    const existingProduct = products[productIndex];
 
     // Check if user has permission to edit this product
     const context = {
@@ -231,7 +230,7 @@ export async function PUT(
       }
     }
 
-    // Update product
+    // Update product object (merging logic)
     const updatedProduct: Product = {
       ...existingProduct,
       ...validatedData,
@@ -284,8 +283,11 @@ export async function PUT(
       ];
     }
 
-    // Update in storage
-    products[productIndex] = updatedProduct;
+    // Update in storage via service
+    // Note: We are passing the fully merged object as `updateProduct` currently overwrites/merges.
+    // Ideally we'd use `updateProduct(id, validatedData)` but our service takes `Partial<Product>`.
+    // Passing `updatedProduct` ensures all nested merges we did above are preserved.
+    await productService.updateProduct(id, updatedProduct);
 
     // Create audit trail entry
     await auditTrailIntegration.createProductUpdateAuditEntry(
@@ -335,16 +337,17 @@ export async function PUT(
  * DELETE /api/products/[id]
  * Delete a specific product
  */
-export async function DELETE(
+async function deleteProduct(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
 
-    // Extract user context from headers
-    const userId = request.headers.get('x-user-id');
-    const userRole = request.headers.get('x-user-role') as UserRole;
+    // Extract user context from middleware
+    const user = (request as any).user;
+    const userId = user?.userId;
+    const userRole = user?.userRole as UserRole;
 
     if (!userId || !userRole) {
       return NextResponse.json(
@@ -356,9 +359,9 @@ export async function DELETE(
       );
     }
 
-    // Find product
-    const productIndex = products.findIndex(p => p.id === id);
-    if (productIndex === -1) {
+    // Find product via service (to check permission and for audit log)
+    const product = await productService.getProductById(id);
+    if (!product) {
       return NextResponse.json(
         {
           success: false,
@@ -367,8 +370,6 @@ export async function DELETE(
         { status: 404 }
       );
     }
-
-    const product = products[productIndex];
 
     // Check if user has permission to delete this product
     const context = {
@@ -394,8 +395,8 @@ export async function DELETE(
       );
     }
 
-    // Remove from storage
-    products.splice(productIndex, 1);
+    // Remove from storage via service
+    await productService.deleteProduct(id);
 
     // Create audit trail entry
     await auditTrailIntegration.createProductDeleteAuditEntry(
@@ -426,3 +427,8 @@ export async function DELETE(
     );
   }
 }
+
+// Export functions with middleware
+export const GET = withRoleBasedAccess(getProduct, WorkflowAction.VIEW_ALL_PRODUCTS);
+export const PUT = withRoleBasedAccess(updateProduct, WorkflowAction.EDIT);
+export const DELETE = withRoleBasedAccess(deleteProduct, WorkflowAction.DELETE);

@@ -9,6 +9,7 @@
  */
 
 import { ActivityAction } from './database-schema';
+import { firestoreActivityStore } from './activity-repository';
 
 /**
  * Activity log entry shape
@@ -56,13 +57,11 @@ export interface ActivityLogQueryResult {
  * Activity Logger Service
  */
 export class UserActivityLogger {
-  private entries: Map<string, ActivityLogEntry> = new Map();
-  private byUser: Map<string, string[]> = new Map(); // userId -> entryIds (append-only order)
 
   /**
    * Log a new activity entry
    */
-  log(entry: Omit<ActivityLogEntry, 'id' | 'timestamp'> & { timestamp?: Date }): ActivityLogEntry {
+  async log(entry: Omit<ActivityLogEntry, 'id' | 'timestamp'> & { timestamp?: Date }): Promise<ActivityLogEntry> {
     const id = this.generateId();
     const item: ActivityLogEntry = {
       id,
@@ -70,12 +69,7 @@ export class UserActivityLogger {
       ...entry,
     };
 
-    this.entries.set(id, item);
-
-    if (!this.byUser.has(item.userId)) {
-      this.byUser.set(item.userId, []);
-    }
-    this.byUser.get(item.userId)!.push(id);
+    await firestoreActivityStore.save(item);
 
     return item;
   }
@@ -83,71 +77,14 @@ export class UserActivityLogger {
   /**
    * Query activity logs with filters, pagination, and sorting
    */
-  query(filters: ActivityLogQuery = {}): ActivityLogQueryResult {
+  async query(filters: ActivityLogQuery = {}): Promise<ActivityLogQueryResult> {
     try {
-      const {
-        userId,
-        actions,
-        dateFrom,
-        dateTo,
-        resourceType,
-        resourceId,
-        search,
-        limit = 100,
-        offset = 0,
-        sortOrder = 'desc',
-      } = filters;
-
-      let items: ActivityLogEntry[];
-
-      if (userId && this.byUser.has(userId)) {
-        // Fast path: restrict to user's entries
-        items = this.byUser
-          .get(userId)!
-          .map((id) => this.entries.get(id)!)
-          .filter(Boolean);
-      } else {
-        // Full scan (acceptable for in-memory demo)
-        items = Array.from(this.entries.values());
-      }
-
-      // Apply filters
-      if (actions && actions.length > 0) {
-        const set = new Set(actions.map(String));
-        items = items.filter((e) => set.has(String(e.action)));
-      }
-      if (dateFrom) {
-        items = items.filter((e) => e.timestamp >= dateFrom);
-      }
-      if (dateTo) {
-        items = items.filter((e) => e.timestamp <= dateTo);
-      }
-      if (resourceType) {
-        items = items.filter((e) => e.resourceType === resourceType);
-      }
-      if (resourceId) {
-        items = items.filter((e) => e.resourceId === resourceId);
-      }
-      if (search && search.trim().length > 0) {
-        const needle = search.toLowerCase();
-        items = items.filter((e) => {
-          const desc = (e.description || '').toLowerCase();
-          const meta = e.metadata ? JSON.stringify(e.metadata).toLowerCase() : '';
-          return desc.includes(needle) || meta.includes(needle);
-        });
-      }
-
-      // Sort by timestamp
-      items.sort((a, b) => {
-        const aT = a.timestamp.getTime();
-        const bT = b.timestamp.getTime();
-        return sortOrder === 'asc' ? aT - bT : bT - aT;
-      });
-
-      const total = items.length;
-      const slice = items.slice(offset, offset + limit);
-
-      return { success: true, total, items: slice };
+      const result = await firestoreActivityStore.query(filters);
+      return {
+        success: true,
+        total: result.total,
+        items: result.items
+      };
     } catch (error) {
       return {
         success: false,
@@ -205,9 +142,8 @@ export class UserActivityLogger {
   /**
    * Clear all entries (useful for tests)
    */
-  clear(): void {
-    this.entries.clear();
-    this.byUser.clear();
+  async clear(): Promise<void> {
+    await firestoreActivityStore.clear();
   }
 
   private generateId(): string {
@@ -219,14 +155,14 @@ export class UserActivityLogger {
 export const userActivityLogger = new UserActivityLogger();
 
 // Convenience exports
-export function logActivity(entry: Omit<ActivityLogEntry, 'id' | 'timestamp'> & { timestamp?: Date }) {
+export async function logActivity(entry: Omit<ActivityLogEntry, 'id' | 'timestamp'> & { timestamp?: Date }) {
   return userActivityLogger.log(entry);
 }
 
-export function queryActivityLogs(filters?: ActivityLogQuery): ActivityLogQueryResult {
+export async function queryActivityLogs(filters?: ActivityLogQuery): Promise<ActivityLogQueryResult> {
   return userActivityLogger.query(filters);
 }
 
-export function clearActivityLogs(): void {
-  userActivityLogger.clear();
+export async function clearActivityLogs(): Promise<void> {
+  await userActivityLogger.clear();
 }

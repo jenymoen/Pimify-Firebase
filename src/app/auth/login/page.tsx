@@ -3,17 +3,20 @@ import React from 'react'
 import LoginForm, { type LoginFormValues } from '@/components/auth/login-form'
 import { SsoLoginButtons, type SsoProvider } from '@/components/auth/sso-login-buttons'
 import { useToast } from '@/hooks/use-toast'
+import { useAuth } from '@/context/auth-context'
 
 export default function LoginPage() {
 	const { toast } = useToast()
+	const { login } = useAuth() // toast is not in AuthContextValue
+	// Actually useToast is imported.
 	async function handleLogin(values: LoginFormValues) {
-		const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(values) })
-		if (!res.ok) {
-			toast({ title: 'Login failed', description: 'Check your credentials.', variant: 'destructive' })
+		const res = await login(values)
+		if (!res.success) {
+			toast({ title: 'Login failed', description: res.error || 'Check your credentials.', variant: 'destructive' })
 			return
 		}
 		toast({ title: 'Welcome back!' })
-		location.href = '/'
+		location.href = '/dashboard'
 	}
 	function handleSso(provider: SsoProvider) {
 		location.href = `/api/auth/sso/${provider}`

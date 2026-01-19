@@ -52,12 +52,13 @@ export enum WorkflowAction {
   CANCEL_BULK_OPERATIONS = 'cancel_bulk_operations',
   BULK_OPERATIONS = 'bulk_operations',
   DELETE = 'delete',
+  STATE_CHANGE = 'state_change',
 }
 
 // Field Change Tracking
 export interface FieldChange {
   field: string;
-  previousValue: any;
+  oldValue: any;
   newValue: any;
   fieldType: 'string' | 'number' | 'boolean' | 'object' | 'array';
 }
@@ -125,17 +126,20 @@ export interface ProductWorkflow extends Omit<Product, 'assignedReviewer' | 'wor
   publishedBy?: string;
   publishedAt?: string;
   rejectionReason?: string;
-  workflowHistory: WorkflowStateHistory[];
+  workflowHistory: WorkflowHistoryEntry[];
 }
 
-// Workflow State History
-export interface WorkflowStateHistory {
+// Workflow History Entry
+export interface WorkflowHistoryEntry {
   state: WorkflowState;
   timestamp: string;
   userId: string;
   reason?: string;
   comment?: string;
 }
+
+// Workflow State History (Alias for backward compatibility if needed)
+export type WorkflowStateHistory = WorkflowHistoryEntry;
 
 // Bulk Operation Request
 export interface BulkOperationRequest {
@@ -361,7 +365,7 @@ export interface PermissionContext {
 export interface PermissionResult {
   hasPermission: boolean;
   reason: string;
-  source: 'role' | 'dynamic' | 'hierarchy' | 'ownership' | 'assignment' | 'admin_override' | 'denied';
+  source: 'role' | 'dynamic' | 'hierarchy' | 'ownership' | 'assignment' | 'admin_override' | 'denied' | 'cache' | 'legacy_cache';
   cached?: boolean;
   checkTime?: number;
 }
@@ -371,4 +375,22 @@ export interface RolePermissionConfig {
   permissions: string[];
   inheritsFrom?: UserRole[];
   restrictions?: string[];
+}
+
+/**
+ * Interface for permission checking context
+ */
+export interface PermissionCheckContext {
+  userId: string;
+  userRole: UserRole;
+  userEmail: string;
+  targetUserId?: string; // For user-specific operations
+  productId?: string;
+  productOwnerId?: string;
+  assignedReviewerId?: string;
+  currentWorkflowState?: WorkflowState;
+  targetWorkflowState?: WorkflowState;
+  resourceType?: 'product' | 'user' | 'workflow' | 'audit' | 'notification';
+  resourceId?: string;
+  metadata?: Record<string, any>;
 }

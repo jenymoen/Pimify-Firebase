@@ -1,6 +1,6 @@
 import React from 'react'
 import { Button } from '@/components/ui/button'
-import { SiGoogle, SiMicrosoft } from 'react-icons/si'
+import { FaGoogle, FaMicrosoft } from 'react-icons/fa'
 
 export type SsoProvider = 'google' | 'microsoft'
 
@@ -16,12 +16,12 @@ export const SsoLoginButtons: React.FC<SsoLoginButtonsProps> = ({ onLogin, disab
 		<div className={`flex flex-col gap-2 ${className || ''}`.trim()}>
 			{providers.includes('google') && (
 				<Button type="button" variant="outline" onClick={() => onLogin('google')} disabled={disabled} className="w-full justify-center">
-					<SiGoogle className="mr-2" /> Continue with Google
+					<FaGoogle className="mr-2" /> Continue with Google
 				</Button>
 			)}
 			{providers.includes('microsoft') && (
 				<Button type="button" variant="outline" onClick={() => onLogin('microsoft')} disabled={disabled} className="w-full justify-center">
-					<SiMicrosoft className="mr-2" /> Continue with Microsoft
+					<FaMicrosoft className="mr-2" /> Continue with Microsoft
 				</Button>
 			)}
 		</div>

@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation'; // Added useRouter
 import { LayoutDashboard, PackagePlus, Package, UploadCloud, Settings, Menu, LogOut, TrendingUp, PanelLeft, Users, Mail, ListChecks, UserCheck, Shield, Key, Network } from 'lucide-react'; // Added LogOut
@@ -19,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useAuth } from '@/context/auth-context';
 
 interface NavItem {
   href: string;
@@ -35,6 +36,22 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const isMobile = useIsMobile();
+  const { isAuthenticated, isLoading } = useAuth(); // Create this hook usage
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.push('/auth/login');
+    }
+  }, [isLoading, isAuthenticated, router]);
+
+  // Show loading state authentication or determining mobile state
+  if (isLoading || isMobile === undefined) {
+    return <div className="flex h-screen items-center justify-center"><p>Loading...</p></div>;
+  }
+
+  if (!isAuthenticated) {
+    return null; // prevent flash of content before redirect
+  }
 
   const handleLogout = () => {
     // In a real app, you'd clear auth tokens, etc. here
@@ -70,27 +87,27 @@ export function AppShell({ children }: AppShellProps) {
   const sidebarContent = (
     <>
       <SidebarHeader className="p-4">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-8 w-8 text-primary">
+        <Link href="/dashboard" className="flex items-center gap-2 overflow-hidden">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-8 w-8 text-primary shrink-0">
             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
           </svg>
-          <h1 className="text-2xl font-semibold text-foreground">Pimify</h1>
+          <h1 className="text-2xl font-semibold text-foreground group-data-[collapsible=icon]:hidden">Pimify</h1>
         </Link>
       </SidebarHeader>
       <SidebarContent className="flex-grow">
         <SidebarMenu>
           {navItems.map((item) => (
             <SidebarMenuItem key={item.label}>
-              <Link href={item.href} passHref legacyBehavior>
-                <SidebarMenuButton
-                  isActive={pathname === item.href || (item.href !== '/products' && item.href !== '/dashboard' && item.href !== '/quality' && pathname.startsWith(item.href)) || (item.href === '/dashboard' && pathname === '/dashboard') || (item.href === '/quality' && pathname === '/quality') }
-                  asChild={false} 
-                  tooltip={item.label}
-                >
+              <SidebarMenuButton
+                isActive={pathname === item.href || (item.href !== '/products' && item.href !== '/dashboard' && item.href !== '/quality' && pathname.startsWith(item.href)) || (item.href === '/dashboard' && pathname === '/dashboard') || (item.href === '/quality' && pathname === '/quality')}
+                asChild
+                tooltip={item.label}
+              >
+                <Link href={item.href}>
                   <item.icon />
                   <span>{item.label}</span>
-                </SidebarMenuButton>
-              </Link>
+                </Link>
+              </SidebarMenuButton>
             </SidebarMenuItem>
           ))}
         </SidebarMenu>
@@ -114,8 +131,8 @@ export function AppShell({ children }: AppShellProps) {
   );
 
   // Show loading state while determining mobile state
-  if (isMobile === undefined) { 
-    return <div className="flex h-screen items-center justify-center"><p>Loading...</p></div>; 
+  if (isMobile === undefined) {
+    return <div className="flex h-screen items-center justify-center"><p>Loading...</p></div>;
   }
 
   return (
@@ -124,9 +141,9 @@ export function AppShell({ children }: AppShellProps) {
         <div className="flex flex-col min-h-screen">
           <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-card px-4">
             <Link href="/dashboard" className="flex items-center gap-2">
-               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-7 w-7 text-primary">
-                 <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
-               </svg>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-7 w-7 text-primary">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+              </svg>
               <span className="text-xl font-semibold text-foreground">Pimify</span>
             </Link>
             <Sheet>

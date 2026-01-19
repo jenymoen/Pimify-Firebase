@@ -6,6 +6,7 @@ import { AuditTrailIntegration } from '@/lib/audit-trail-integration';
 import { withRoleBasedAccess, withValidation } from '@/lib/api-middleware';
 import { WorkflowState, WorkflowAction, UserRole } from '@/types/workflow';
 import { Product } from '@/types/product';
+import { productService } from '@/lib/product-service';
 
 // Validation schemas
 const ProductQuerySchema = z.object({
@@ -19,12 +20,18 @@ const ProductQuerySchema = z.object({
 });
 
 const ProductUpdateSchema = z.object({
+  id: z.string().optional(),
   basicInfo: z.object({
     name: z.any().optional(),
+    sku: z.string().optional(),
+    gtin: z.string().optional(),
     descriptionShort: z.any().optional(),
     descriptionLong: z.any().optional(),
     brand: z.string().optional(),
     status: z.string().optional(),
+    launchDate: z.string().optional(), // ISODate string
+    endDate: z.string().optional(), // ISODate string
+    internalId: z.string().optional(),
   }).optional(),
   attributesAndSpecs: z.object({
     categories: z.array(z.string()).optional(),
@@ -55,12 +62,9 @@ const ProductUpdateSchema = z.object({
 });
 
 // Initialize services
-const rolePermissions = new RolePermissions();
 const workflowStateManager = new WorkflowStateManager();
-const auditTrailIntegration = new AuditTrailIntegration();
-
-// Mock product storage (in production, use database)
-const products: Product[] = [];
+const rolePermissions = new RolePermissions();
+const auditTrailIntegration = new AuditTrailIntegration(workflowStateManager, rolePermissions);
 
 /**
  * GET /api/products
@@ -69,9 +73,6 @@ const products: Product[] = [];
 async function getProducts(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    
-    // User context is already validated by middleware
-    const userId = (request as any).user.userId;
 
     // Parse query parameters
     const queryParams = {
@@ -87,52 +88,31 @@ async function getProducts(request: NextRequest) {
     // Validate query parameters
     const validatedQuery = ProductQuerySchema.parse(queryParams);
 
-    // Filter products
-    let filteredProducts = [...products];
+    // Fetch from service (with safe defaults)
+    const page = validatedQuery.pagination?.page || 1;
+    const limit = validatedQuery.pagination?.limit || 20;
 
-    // Apply workflow state filter
-    if (validatedQuery.workflowState) {
-      filteredProducts = filteredProducts.filter(p => p.workflowState === validatedQuery.workflowState);
-    }
+    const { products, total } = await productService.getProducts({
+      workflowState: validatedQuery.workflowState,
+      assignedReviewerId: validatedQuery.assignedReviewer,
+      search: validatedQuery.search,
+      page,
+      limit
+    });
 
-    // Apply reviewer filter
-    if (validatedQuery.assignedReviewer) {
-      filteredProducts = filteredProducts.filter(p => 
-        p.assignedReviewer?.userId === validatedQuery.assignedReviewer
-      );
-    }
-
-    // Apply search filter
-    if (validatedQuery.search) {
-      const searchTerm = validatedQuery.search.toLowerCase();
-      filteredProducts = filteredProducts.filter(p => 
-        p.basicInfo.name.en.toLowerCase().includes(searchTerm) ||
-        p.basicInfo.name.no.toLowerCase().includes(searchTerm) ||
-        p.basicInfo.sku.toLowerCase().includes(searchTerm) ||
-        p.basicInfo.brand.toLowerCase().includes(searchTerm)
-      );
-    }
-
-    // Apply pagination
-    const { page, limit } = validatedQuery.pagination;
-    const startIndex = (page - 1) * limit;
-    const endIndex = startIndex + limit;
-    const paginatedProducts = filteredProducts.slice(startIndex, endIndex);
-
-    // Calculate pagination info
-    const total = filteredProducts.length;
+    // Calculate pagination info (approximate for Firestore)
     const totalPages = Math.ceil(total / limit);
 
     return NextResponse.json({
       success: true,
       data: {
-        products: paginatedProducts,
+        products: products,
         pagination: {
           page,
           limit,
           total,
           totalPages,
-          hasNext: page < totalPages,
+          hasNext: products.length === limit, // Basic check
           hasPrevious: page > 1,
         },
         filters: {
@@ -148,19 +128,19 @@ async function getProducts(request: NextRequest) {
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { 
-          success: false, 
+        {
+          success: false,
           error: 'Invalid query parameters',
-          details: error.errors 
+          details: error.errors
         },
         { status: 400 }
       );
     }
 
     return NextResponse.json(
-      { 
-        success: false, 
-        error: 'Internal server error' 
+      {
+        success: false,
+        error: 'Internal server error'
       },
       { status: 500 }
     );
@@ -175,14 +155,18 @@ async function createProduct(request: NextRequest) {
   try {
     // Request body is already validated by middleware
     const validatedData = (request as any).validatedData;
-    
-    // User context is already validated by middleware
-    const userId = (request as any).user.userId;
-    const userName = (request as any).user.userName;
 
-    // Create new product
+    // User context is already validated by middleware
+    const user = (request as any).user;
+    const userId = user.userId;
+    const userName = user.userName;
+    const userRole = user.userRole;
+    const userEmail = user.email || '';
+
+    // Create new product object
+    // Allow ID to be explicitly set (e.g. for imports), otherwise generate one
     const newProduct: Product = {
-      id: `product_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: validatedData.id || `product_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       basicInfo: {
         name: { en: '', no: '' },
         sku: '',
@@ -232,15 +216,18 @@ async function createProduct(request: NextRequest) {
       updatedAt: new Date().toISOString(),
     };
 
-    // Add to storage
-    products.push(newProduct);
+    // Save to Firestore via service
+    await productService.createProduct(newProduct);
 
     // Create audit trail entry
-    await auditTrailIntegration.createProductCreatedAuditEntry(newProduct.id, {
+    auditTrailIntegration.createProductAuditEntry(
       userId,
-      userName,
-      productData: newProduct,
-    });
+      userRole,
+      userEmail,
+      newProduct.id,
+      newProduct,
+      { source: 'api' }
+    );
 
     return NextResponse.json({
       success: true,
@@ -253,19 +240,19 @@ async function createProduct(request: NextRequest) {
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { 
-          success: false, 
+        {
+          success: false,
           error: 'Invalid request data',
-          details: error.errors 
+          details: error.errors
         },
         { status: 400 }
       );
     }
 
     return NextResponse.json(
-      { 
-        success: false, 
-        error: 'Internal server error' 
+      {
+        success: false,
+        error: 'Internal server error'
       },
       { status: 500 }
     );

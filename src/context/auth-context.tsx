@@ -22,7 +22,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 	})
 	const router = useRouter()
 
-	// Initialize auth state from storage
+	// Initialize auth state from storage or cookies
 	useEffect(() => {
 		async function initAuth() {
 			try {
@@ -39,9 +39,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 						accessToken: storedToken,
 						refreshToken: storedRefreshToken,
 					})
-				} else {
-					setState(prev => ({ ...prev, isLoading: false }))
+					return; // Successfully restored from localStorage
 				}
+
+				// Fallback: Try to restore session from HttpOnly cookies via API
+				try {
+					const res = await fetch('/api/auth/me');
+					if (res.ok) {
+						const data = await res.json();
+						if (data.user) {
+							console.log('Restored session from cookies');
+							// Map API response to CurrentUser type
+							const currentUser: CurrentUser = {
+								...data.user,
+								twoFactorEnabled: (data.user as any).two_factor_enabled || false,
+								permissions: [],
+								avatarUrl: data.user.avatar_url || null,
+								department: data.user.department || null,
+							} as unknown as CurrentUser;
+
+							localStorage.setItem('currentUser', JSON.stringify(currentUser));
+							// Note: we can't get the token string from HttpOnly cookie, but the backend has it.
+							// We set isAuthenticated to true. Future API calls will rely on the cookie.
+							setState({
+								isAuthenticated: true,
+								isLoading: false,
+								user: currentUser,
+								accessToken: null, // No access token available client-side (cookie-only mode), or we could assume it's valid.
+								refreshToken: null,
+							});
+							return;
+						}
+					}
+				} catch (e) {
+					console.error('Failed to restore session from cookies', e);
+				}
+
+				// If both fail:
+				setState(prev => ({ ...prev, isLoading: false }))
+
 			} catch (err) {
 				console.error('Failed to initialize auth', err)
 				setState(prev => ({ ...prev, isLoading: false }))
@@ -65,13 +101,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				if (data.refreshToken) {
 					localStorage.setItem('refreshToken', data.refreshToken)
 				}
-				localStorage.setItem('currentUser', JSON.stringify(data.user))
+
+				// Map API response to CurrentUser type
+				// Types differ: API sends snake_case DB fields, Frontend expects camelCase
+				const userAny = data.user as any;
+				const currentUser: CurrentUser = {
+					...data.user,
+					twoFactorEnabled: userAny.two_factor_enabled || false,
+					permissions: [], // Permissions are loaded separately or derived from role
+					// Ensure we handle potential nulls from DB
+					avatarUrl: userAny.avatar_url || null,
+					department: userAny.department || null,
+				} as unknown as CurrentUser;
+
+				localStorage.setItem('currentUser', JSON.stringify(currentUser))
 				localStorage.setItem('currentUserRole', data.user.role)
 
 				setState({
 					isAuthenticated: true,
 					isLoading: false,
-					user: data.user,
+					user: currentUser,
 					accessToken: data.accessToken,
 					refreshToken: data.refreshToken || null,
 				})

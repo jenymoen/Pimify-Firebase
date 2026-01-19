@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import ErrorBoundary from "@/components/ui/error-boundary";
+import { AuthProvider } from "@/context/auth-context";
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -43,7 +44,9 @@ export default function RootLayout({
     <html lang="en" className="min-h-screen" suppressHydrationWarning={true}>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen flex flex-col`} suppressHydrationWarning={true}>
         <ErrorBoundary>
-          {children}
+          <AuthProvider>
+            {children}
+          </AuthProvider>
         </ErrorBoundary>
         <Toaster />
       </body>

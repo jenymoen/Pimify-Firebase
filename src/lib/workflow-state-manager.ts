@@ -178,6 +178,17 @@ export class WorkflowStateManager {
   }
 
   /**
+   * Gets all valid transition rules for a given current state and user role
+   */
+  getAvailableTransitions(currentState: WorkflowState, userRole: UserRole): StateTransitionRule[] {
+    return this.stateTransitionRules.filter(rule =>
+      rule.from === currentState &&
+      rule.requiredRole === userRole &&
+      !rule.isAutomatic
+    );
+  }
+
+  /**
    * Gets all valid previous states for a given current state and user role
    */
   getValidPreviousStates(currentState: WorkflowState, userRole: UserRole): WorkflowState[] {

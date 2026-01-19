@@ -39,7 +39,7 @@ class UserEmailService {
       rec.attempts = attempt;
       rec.updatedAt = Date.now();
       try {
-        await notificationService.sendEmail(to, subject, htmlBody, { templateId: opts.templateId, variables: opts.variables });
+        await notificationService.sendRawEmail(to, subject, htmlBody);
         rec.status = 'SENT';
         this.deliveries.set(id, rec);
         return rec;

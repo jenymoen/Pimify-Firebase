@@ -8,35 +8,20 @@ import {
   PermissionResult,
   RolePermissionConfig,
   DynamicPermission,
+  PermissionCheckContext,
 } from '@/types/workflow';
-import { 
-  PermissionCacheManager, 
-  CachePriority, 
-  permissionCacheManager 
+import {
+  PermissionCacheManager,
+  CachePriority,
+  permissionCacheManager
 } from './permission-cache';
-import { 
-  DynamicPermissionManager, 
-  dynamicPermissionManager 
+import {
+  DynamicPermissionManager,
+  dynamicPermissionManager
 } from './dynamic-permissions';
 import { permissionAuditLogger, AuditLogType } from './permission-audit-logger';
 
-/**
- * Interface for permission checking context
- */
-export interface PermissionCheckContext {
-  userId: string;
-  userRole: UserRole;
-  userEmail: string;
-  targetUserId?: string; // For user-specific operations
-  productId?: string;
-  productOwnerId?: string;
-  assignedReviewerId?: string;
-  currentWorkflowState?: WorkflowState;
-  targetWorkflowState?: WorkflowState;
-  resourceType?: 'product' | 'user' | 'workflow' | 'audit' | 'notification';
-  resourceId?: string;
-  metadata?: Record<string, any>;
-}
+
 
 /**
  * Interface for permission cache entry
@@ -110,7 +95,7 @@ export class RolePermissions {
 
     // Clean up expired cache entries periodically
     setInterval(() => this.cleanupExpiredCache(), this.cacheTimeout);
-    
+
     // Warm cache with common permissions only if not in test environment
     if (!process.env.NODE_ENV || process.env.NODE_ENV !== 'test') {
       this.warmCommonPermissions();
@@ -127,7 +112,7 @@ export class RolePermissions {
   ): Promise<PermissionResult> {
     const startTime = Date.now();
     const permissionKey = this.generatePermissionKey(context, action, resource);
-    
+
     // Check advanced cache first
     const cachedResult = this.advancedCache.get(permissionKey);
     if (cachedResult) {
@@ -150,7 +135,7 @@ export class RolePermissions {
           resourceType: context.resourceType,
         }
       );
-      
+
       return {
         ...cachedResult,
         cached: true,
@@ -180,22 +165,23 @@ export class RolePermissions {
           resourceType: context.resourceType,
         }
       );
-      
+
       return {
         hasPermission: legacyCachedResult,
         reason: 'Cached result (legacy)',
         cached: true,
         checkTime: Date.now() - startTime,
+        source: 'legacy_cache',
       };
     }
 
     // Perform permission check
     const result = await this.performPermissionCheck(context, action, resource);
-    
+
     // Determine cache priority based on permission type and context
     const priority = this.determineCachePriority(context, action, resource, result);
     const tags = this.generateCacheTags(context, action, resource);
-    
+
     // Cache in advanced cache
     this.advancedCache.set(
       permissionKey,
@@ -205,10 +191,10 @@ export class RolePermissions {
         tags
       }
     );
-    
+
     // Also cache in legacy cache for backward compatibility
     this.cachePermission(permissionKey, result.hasPermission, context);
-    
+
     // Log the permission check
     this.logPermissionCheck(context, action, resource, result.hasPermission, result.reason);
 
@@ -227,7 +213,7 @@ export class RolePermissions {
     permissions: Array<{ action: WorkflowAction | string; resource?: string }>
   ): Promise<Record<string, PermissionResult>> {
     const results: Record<string, PermissionResult> = {};
-    
+
     const promises = permissions.map(async (permission) => {
       const key = `${permission.action}${permission.resource ? `:${permission.resource}` : ''}`;
       results[key] = await this.hasPermission(context, permission.action, permission.resource);
@@ -304,19 +290,19 @@ export class RolePermissions {
   ): Promise<string[]> {
     const basePermissions = this.getBaseRolePermissions(context.userRole);
     let allPermissions = [...basePermissions];
-    
+
     // Include hierarchy permissions
     if (includeHierarchy) {
       const hierarchyPermissions = this.getHierarchyPermissions(context.userRole);
       allPermissions = [...allPermissions, ...hierarchyPermissions];
     }
-    
+
     // Include dynamic permissions
     if (includeDynamic) {
       const dynamicPermissions = await this.getDynamicPermissions(context);
       allPermissions = [...allPermissions, ...dynamicPermissions];
     }
-    
+
     // Remove duplicates
     return [...new Set(allPermissions)];
   }
@@ -328,7 +314,7 @@ export class RolePermissions {
     const roleHierarchy = this.getRoleHierarchy();
     const userRoleLevel = roleHierarchy[userRole];
     const inheritedPermissions: string[] = [];
-    
+
     // Get permissions from all lower roles (higher level numbers)
     for (const [role, level] of Object.entries(roleHierarchy)) {
       if (level > userRoleLevel) { // Check lower roles (higher level numbers)
@@ -336,7 +322,7 @@ export class RolePermissions {
         inheritedPermissions.push(...rolePermissions);
       }
     }
-    
+
     // Remove duplicates
     return [...new Set(inheritedPermissions)];
   }
@@ -419,9 +405,9 @@ export class RolePermissions {
         this.permissionCache.delete(key);
       }
     }
-    
+
     // Clear advanced cache by user pattern - cache key format is userId:userRole:action:resource:productId:targetUserId
-    this.advancedCache.invalidateByPattern(`${userId}:*`);
+    this.advancedCache.invalidate(`${userId}:*`);
   }
 
   /**
@@ -465,8 +451,8 @@ export class RolePermissions {
     // Check context-specific permissions first for ownership and assignment
     if (context.productOwnerId || context.assignedReviewerId) {
       const hasContextPermission = this.checkContextSpecificPermissions(context, action, resource);
-      if (hasContextPermission.hasPermission && 
-          (hasContextPermission.source === 'ownership' || hasContextPermission.source === 'assignment')) {
+      if (hasContextPermission.hasPermission &&
+        (hasContextPermission.source === 'ownership' || hasContextPermission.source === 'assignment')) {
         return hasContextPermission;
       }
     }
@@ -495,12 +481,6 @@ export class RolePermissions {
         hasPermission: true,
         reason: `Permission granted by dynamic assignment: ${dynamicPermissionResult.assignment?.reason}`,
         source: 'dynamic',
-        metadata: {
-          assignmentId: dynamicPermissionResult.assignment?.id,
-          grantedBy: dynamicPermissionResult.assignment?.grantedBy,
-          grantedAt: dynamicPermissionResult.assignment?.grantedAt,
-          expiresAt: dynamicPermissionResult.assignment?.expiresAt,
-        },
       };
     }
 
@@ -556,7 +536,7 @@ export class RolePermissions {
         'system:*',
         'reports:*',
         'settings:*',
-        
+
         // Workflow management permissions
         'workflow:publish',
         'workflow:unpublish',
@@ -571,7 +551,7 @@ export class RolePermissions {
         'workflow:manage_escalations',
         'workflow:view_all_products',
         'workflow:manage_assignments',
-        
+
         // Product management permissions
         'products:create',
         'products:read',
@@ -591,7 +571,7 @@ export class RolePermissions {
         'products:view_all',
         'products:edit_any',
         'products:delete_any',
-        
+
         // User management permissions
         'users:create',
         'users:read',
@@ -609,7 +589,7 @@ export class RolePermissions {
         'users:export_data',
         'users:manage_groups',
         'users:manage_departments',
-        
+
         // Audit and compliance permissions
         'audit:read',
         'audit:write',
@@ -618,7 +598,7 @@ export class RolePermissions {
         'audit:manage_retention',
         'audit:generate_reports',
         'audit:compliance_checks',
-        
+
         // Notification management permissions
         'notifications:manage',
         'notifications:create',
@@ -627,7 +607,7 @@ export class RolePermissions {
         'notifications:view_all',
         'notifications:manage_templates',
         'notifications:bulk_send',
-        
+
         // System administration permissions
         'system:configure',
         'system:maintenance',
@@ -638,7 +618,7 @@ export class RolePermissions {
         'system:performance',
         'system:security',
         'system:updates',
-        
+
         // Reports and analytics permissions
         'reports:generate',
         'reports:view_all',
@@ -649,7 +629,7 @@ export class RolePermissions {
         'reports:workflow_metrics',
         'reports:user_activity',
         'reports:product_metrics',
-        
+
         // Settings and configuration permissions
         'settings:general',
         'settings:workflow',
@@ -662,6 +642,7 @@ export class RolePermissions {
         'settings:webhooks',
       ],
       [UserRole.EDITOR]: [
+        'workflow:view_all_products',
         // Product creation and editing permissions
         'products:create',
         'products:read',
@@ -684,7 +665,7 @@ export class RolePermissions {
         'products:manage_relationships_own',
         'products:export_own',
         'products:import_own',
-        
+
         // Workflow permissions for draft products
         'workflow:submit',
         'workflow:edit',
@@ -706,7 +687,7 @@ export class RolePermissions {
         'workflow:respond_to_feedback',
         'workflow:view_rejection_reasons',
         'workflow:view_approval_notes',
-        
+
         // Draft-specific permissions
         'draft:create',
         'draft:edit',
@@ -722,7 +703,7 @@ export class RolePermissions {
         'draft:version_control',
         'draft:restore_version',
         'draft:compare_versions',
-        
+
         // Content management permissions
         'content:create',
         'content:edit',
@@ -737,7 +718,7 @@ export class RolePermissions {
         'content:manage_specifications',
         'content:manage_features',
         'content:manage_benefits',
-        
+
         // Collaboration permissions
         'collaboration:view_own_products',
         'collaboration:share_own_products',
@@ -746,7 +727,7 @@ export class RolePermissions {
         'collaboration:view_team_products',
         'collaboration:request_help',
         'collaboration:provide_feedback',
-        
+
         // Notification and communication permissions
         'notifications:read',
         'notifications:manage_own',
@@ -755,21 +736,21 @@ export class RolePermissions {
         'notifications:view_approval_notifications',
         'notifications:view_rejection_notifications',
         'notifications:view_reminder_notifications',
-        
+
         // Audit and history permissions
         'audit:read_own',
         'audit:view_own_history',
         'audit:view_own_changes',
         'audit:view_own_activity',
         'audit:export_own_history',
-        
+
         // Limited bulk operations for own products
         'bulk:edit_own_products',
         'bulk:submit_own_products',
         'bulk:export_own_products',
         'bulk:duplicate_own_products',
         'bulk:manage_own_products',
-        
+
         // Quality and validation permissions
         'quality:check_own_products',
         'quality:validate_own_products',
@@ -777,7 +758,7 @@ export class RolePermissions {
         'quality:improve_quality_scores',
         'quality:view_quality_recommendations',
         'quality:apply_quality_fixes',
-        
+
         // Search and filtering permissions
         'search:search_own_products',
         'search:filter_own_products',
@@ -786,6 +767,7 @@ export class RolePermissions {
         'search:manage_search_favorites',
       ],
       [UserRole.REVIEWER]: [
+        'workflow:view_all_products',
         // Product viewing permissions - can view all products
         'products:read',
         'products:view_all',
@@ -813,7 +795,7 @@ export class RolePermissions {
         'products:export_review_data',
         'products:export_approved_products',
         'products:export_rejected_products',
-        
+
         // Workflow approval and rejection permissions
         'workflow:approve',
         'workflow:reject',
@@ -832,7 +814,7 @@ export class RolePermissions {
         'workflow:batch_approve',
         'workflow:batch_reject',
         'workflow:bulk_review_actions',
-        
+
         // Review-specific permissions
         'review:create',
         'review:edit',
@@ -864,7 +846,7 @@ export class RolePermissions {
         'review:create_review_checklists',
         'review:assign_review_checklists',
         'review:track_checklist_completion',
-        
+
         // Workflow history and tracking permissions
         'workflow:view_history',
         'workflow:view_all_history',
@@ -890,7 +872,7 @@ export class RolePermissions {
         'workflow:export_review_data',
         'workflow:export_approval_data',
         'workflow:export_rejection_data',
-        
+
         // Comment and feedback permissions
         'comments:create',
         'comments:edit',
@@ -914,7 +896,7 @@ export class RolePermissions {
         'comments:manage_comment_templates',
         'comments:create_comment_templates',
         'comments:use_comment_templates',
-        
+
         // Quality assessment permissions
         'quality:assess',
         'quality:rate',
@@ -952,7 +934,7 @@ export class RolePermissions {
         'quality:create_quality_checklists',
         'quality:update_quality_checklists',
         'quality:assign_quality_checklists',
-        
+
         // Notification and communication permissions
         'notifications:read',
         'notifications:view_all',
@@ -974,7 +956,7 @@ export class RolePermissions {
         'notifications:send_notifications',
         'notifications:schedule_notifications',
         'notifications:track_notification_metrics',
-        
+
         // Audit and compliance permissions
         'audit:read',
         'audit:read_all',
@@ -1001,7 +983,7 @@ export class RolePermissions {
         'audit:view_audit_history',
         'audit:view_audit_timeline',
         'audit:view_audit_statistics',
-        
+
         // Search and filtering permissions
         'search:search_all_products',
         'search:search_review_queue',
@@ -1031,7 +1013,7 @@ export class RolePermissions {
         'search:export_search_results',
         'search:create_search_alerts',
         'search:manage_search_alerts',
-        
+
         // Reporting and analytics permissions
         'reports:view_review_reports',
         'reports:view_approval_reports',
@@ -1064,7 +1046,7 @@ export class RolePermissions {
         'reports:track_report_metrics',
         'reports:view_report_history',
         'reports:view_report_statistics',
-        
+
         // Limited bulk operations for review actions
         'bulk:approve_products',
         'bulk:reject_products',
@@ -1086,6 +1068,7 @@ export class RolePermissions {
         'bulk:track_rejection_metrics',
       ],
       [UserRole.VIEWER]: [
+        'workflow:view_all_products',
         // Read-only product access
         'products:read',
         'products:view_published',
@@ -1109,7 +1092,7 @@ export class RolePermissions {
         'products:view_metrics',
         'products:export_published',
         'products:export_approved',
-        
+
         // Read-only audit access
         'audit:read',
         'audit:view_published_audit',
@@ -1120,7 +1103,7 @@ export class RolePermissions {
         'audit:export_public_audit',
         'audit:view_audit_timeline',
         'audit:view_audit_statistics',
-        
+
         // Read-only notification access
         'notifications:read',
         'notifications:view_public',
@@ -1129,7 +1112,7 @@ export class RolePermissions {
         'notifications:view_announcements',
         'notifications:view_updates',
         'notifications:view_changes',
-        
+
         // Read-only search and filtering
         'search:search_published',
         'search:search_approved',
@@ -1139,7 +1122,7 @@ export class RolePermissions {
         'search:sort_approved',
         'search:save_public_queries',
         'search:export_public_results',
-        
+
         // Read-only reporting
         'reports:view_public_reports',
         'reports:view_published_reports',
@@ -1150,7 +1133,7 @@ export class RolePermissions {
         'reports:export_public_reports',
         'reports:export_published_reports',
         'reports:export_approved_reports',
-        
+
         // Read-only quality viewing
         'quality:view_scores',
         'quality:view_standards',
@@ -1158,7 +1141,7 @@ export class RolePermissions {
         'quality:view_metrics',
         'quality:view_reports',
         'quality:export_public_data',
-        
+
         // Read-only workflow viewing
         'workflow:view_public_status',
         'workflow:view_public_progress',
@@ -1200,13 +1183,13 @@ export class RolePermissions {
     resource?: string
   ): boolean {
     if (!action) return false;
-    
+
     const actionStr = action.toString().toLowerCase();
     const fullPermission = resource ? `${actionStr}:${resource}` : actionStr;
 
     return permissions.some(permission => {
       const lowerPermission = permission.toLowerCase();
-      
+
       // Exact match
       if (lowerPermission === fullPermission) {
         return true;
@@ -1233,11 +1216,11 @@ export class RolePermissions {
 
   private hasWildcardPermission(permissions: string[], permission: string): boolean {
     if (!permission) return false;
-    
+
     return permissions.some(p => {
       const lowerP = p.toLowerCase();
       const lowerPermission = permission.toLowerCase();
-      
+
       if (lowerP === '*') return true;
       if (lowerP.endsWith(':*')) {
         const prefix = lowerP.slice(0, -2);
@@ -1259,15 +1242,15 @@ export class RolePermissions {
         source: 'denied',
       };
     }
-    
+
     const actionStr = action.toString().toLowerCase();
-    
+
     // Product ownership checks
     if (context.productId && context.productOwnerId) {
       if (context.userId === context.productOwnerId) {
         // Owner can edit their own products in draft state
-        if (context.currentWorkflowState === WorkflowState.DRAFT && 
-            ['products:write', 'workflow:edit', 'edit'].includes(actionStr)) {
+        if (context.currentWorkflowState === WorkflowState.DRAFT &&
+          ['products:write', 'workflow:edit', 'edit'].includes(actionStr)) {
           return {
             hasPermission: true,
             reason: 'Product owner can edit draft products',
@@ -1280,7 +1263,7 @@ export class RolePermissions {
     // Reviewer assignment checks
     if (context.assignedReviewerId && context.userId === context.assignedReviewerId) {
       if (['workflow:approve', 'workflow:reject', 'approve', 'reject'].includes(actionStr) &&
-          context.currentWorkflowState === WorkflowState.REVIEW) {
+        context.currentWorkflowState === WorkflowState.REVIEW) {
         return {
           hasPermission: true,
           reason: 'Assigned reviewer can approve/reject products in review',
@@ -1351,11 +1334,13 @@ export class RolePermissions {
     // Don't cache if cache is full
     if (this.permissionCache.size >= this.maxCacheSize) {
       this.cleanupExpiredCache();
-      
+
       // If still full, remove oldest entries
       if (this.permissionCache.size >= this.maxCacheSize) {
         const oldestKey = this.permissionCache.keys().next().value;
-        this.permissionCache.delete(oldestKey);
+        if (oldestKey) {
+          this.permissionCache.delete(oldestKey);
+        }
       }
     }
 
@@ -1377,7 +1362,7 @@ export class RolePermissions {
     reason: string
   ): void {
     const actionStr = action ? action.toString() : '';
-    
+
     // Log to comprehensive audit logger
     permissionAuditLogger.logPermissionCheck(
       context,
@@ -1477,7 +1462,7 @@ export class RolePermissions {
 
     // Role-based tags
     tags.push(`role:${context.userRole}`);
-    
+
     // User-based tags
     if (context.userId) {
       tags.push(`user:${context.userId}`);
@@ -1518,7 +1503,7 @@ export class RolePermissions {
       // Admin permissions
       {
         key: 'admin:products:read',
-        result: true,
+        result: { hasPermission: true, reason: 'Admin role permission', source: 'role' as const },
         context: { userRole: UserRole.ADMIN } as Partial<PermissionCheckContext>,
         source: 'role' as const,
         priority: CachePriority.CRITICAL,
@@ -1526,17 +1511,17 @@ export class RolePermissions {
       },
       {
         key: 'admin:workflow:approve',
-        result: true,
+        result: { hasPermission: true, reason: 'Admin role permission', source: 'role' as const },
         context: { userRole: UserRole.ADMIN } as Partial<PermissionCheckContext>,
         source: 'role' as const,
         priority: CachePriority.CRITICAL,
         tags: ['role:admin', 'action:approve', 'resource:workflow'],
       },
-      
+
       // Editor permissions
       {
         key: 'editor:products:create',
-        result: true,
+        result: { hasPermission: true, reason: 'Editor role permission', source: 'role' as const },
         context: { userRole: UserRole.EDITOR } as Partial<PermissionCheckContext>,
         source: 'role' as const,
         priority: CachePriority.HIGH,
@@ -1544,17 +1529,17 @@ export class RolePermissions {
       },
       {
         key: 'editor:products:read',
-        result: true,
+        result: { hasPermission: true, reason: 'Editor hierarchy permission', source: 'hierarchy' as const },
         context: { userRole: UserRole.EDITOR } as Partial<PermissionCheckContext>,
         source: 'hierarchy' as const,
         priority: CachePriority.HIGH,
         tags: ['role:editor', 'action:read', 'resource:products'],
       },
-      
+
       // Reviewer permissions
       {
         key: 'reviewer:workflow:approve',
-        result: true,
+        result: { hasPermission: true, reason: 'Reviewer role permission', source: 'role' as const },
         context: { userRole: UserRole.REVIEWER } as Partial<PermissionCheckContext>,
         source: 'role' as const,
         priority: CachePriority.HIGH,
@@ -1562,27 +1547,27 @@ export class RolePermissions {
       },
       {
         key: 'reviewer:products:read',
-        result: true,
+        result: { hasPermission: true, reason: 'Reviewer hierarchy permission', source: 'hierarchy' as const },
         context: { userRole: UserRole.REVIEWER } as Partial<PermissionCheckContext>,
         source: 'hierarchy' as const,
         priority: CachePriority.HIGH,
         tags: ['role:reviewer', 'action:read', 'resource:products'],
       },
-      
+
       // Viewer permissions
       {
         key: 'viewer:products:read',
-        result: true,
+        result: { hasPermission: true, reason: 'Viewer role permission', source: 'role' as const },
         context: { userRole: UserRole.VIEWER } as Partial<PermissionCheckContext>,
         source: 'role' as const,
         priority: CachePriority.HIGH,
         tags: ['role:viewer', 'action:read', 'resource:products'],
       },
-      
+
       // Common denied permissions
       {
         key: 'viewer:products:create',
-        result: false,
+        result: { hasPermission: false, reason: 'Viewer denied permission', source: 'denied' as const },
         context: { userRole: UserRole.VIEWER } as Partial<PermissionCheckContext>,
         source: 'denied' as const,
         priority: CachePriority.LOW,
@@ -1663,7 +1648,7 @@ export class RolePermissions {
       reason,
       options
     );
-    
+
     // Log dynamic permission assignment
     if (result.success) {
       permissionAuditLogger.logDynamicPermissionAssigned(
@@ -1675,11 +1660,11 @@ export class RolePermissions {
         reason,
         options.metadata
       );
-      
+
       // Clear cache for this user to ensure fresh permission checks
       this.clearUserCache(userId);
     }
-    
+
     return result;
   }
 
@@ -1698,7 +1683,7 @@ export class RolePermissions {
       reason,
       metadata
     );
-    
+
     // Log dynamic permission revocation
     if (result.success && result.revocation) {
       permissionAuditLogger.logDynamicPermissionRevoked(
@@ -1710,11 +1695,11 @@ export class RolePermissions {
         reason,
         metadata
       );
-      
+
       // Clear cache for the affected user to ensure fresh permission checks
       this.clearUserCache(result.revocation.userId);
     }
-    
+
     return result;
   }
 
@@ -1733,12 +1718,12 @@ export class RolePermissions {
       reason,
       metadata
     );
-    
+
     // Clear cache for the affected user to ensure fresh permission checks
     if (results.length > 0) {
       this.clearUserCache(userId);
     }
-    
+
     return results;
   }
 
@@ -1855,7 +1840,7 @@ export async function getEffectivePermissions(
   context: PermissionCheckContext,
   includeDynamic: boolean = true
 ): Promise<string[]> {
-return rolePermissions.getEffectivePermissions(context, includeDynamic);
+  return rolePermissions.getEffectivePermissions(context, includeDynamic);
 }
 
 export function getPermissionAuditLog(filters?: {

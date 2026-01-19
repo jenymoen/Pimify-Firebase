@@ -57,7 +57,7 @@ export class ConcurrentEditingManager {
   private editingSessions: Map<string, EditingSession> = new Map();
   private editingLocks: Map<string, EditingLock> = new Map();
   private sessionTimeouts: Map<string, NodeJS.Timeout> = new Map();
-  
+
   // Configuration
   private readonly SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
   private readonly LOCK_TIMEOUT = 2 * 60 * 60 * 1000; // 2 hours
@@ -114,7 +114,7 @@ export class ConcurrentEditingManager {
       // Create new session
       const sessionId = this.generateSessionId();
       const now = new Date().toISOString();
-      
+
       const session: EditingSession = {
         productId,
         userId,
@@ -269,6 +269,25 @@ export class ConcurrentEditingManager {
   }
 
   /**
+   * Check if a product is currently being edited
+   */
+  async isProductBeingEdited(productId: string): Promise<{ userId: string; userName: string } | null> {
+    const sessions = this.getProductSessions(productId);
+    if (sessions.length > 0) {
+      const session = sessions[0];
+      return {
+        userId: session.userId,
+        userName: session.userEmail // Using email as name fall back
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Get active sessions for a user
+   */
+
+  /**
    * Get active sessions for a user
    */
   getUserSessions(userId: string): EditingSession[] {
@@ -311,7 +330,7 @@ export class ConcurrentEditingManager {
   } {
     const activeSessions = Array.from(this.editingSessions.values())
       .filter(session => session.isActive);
-    
+
     const activeLocks = Array.from(this.editingLocks.values());
 
     const sessionsByUser: Record<string, number> = {};
@@ -391,9 +410,9 @@ export class ConcurrentEditingManager {
 
   private getUserSessionForProduct(productId: string, userId: string): EditingSession | undefined {
     return Array.from(this.editingSessions.values())
-      .find(session => 
-        session.productId === productId && 
-        session.userId === userId && 
+      .find(session =>
+        session.productId === productId &&
+        session.userId === userId &&
         session.isActive
       );
   }

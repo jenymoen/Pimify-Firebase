@@ -65,6 +65,7 @@ export default function EditUserPage({ params }: { params: Promise<{ id: string 
             })
 
             if (intent === 'close') {
+                router.refresh(); // Ensure server components re-render with fresh data
                 router.push('/users')
             }
         } catch (err: any) {

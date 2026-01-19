@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import Link from 'next/link';
-import { LogIn } from 'lucide-react'; 
+import { LogIn } from 'lucide-react';
 
 export default function HomePage() {
   const router = useRouter();
@@ -18,18 +18,18 @@ export default function HomePage() {
           </svg>
           <span className="text-xl font-semibold text-primary">Pimify</span>
         </Link>
-        <Link href="/dashboard" passHref> {/* Changed from /products to /dashboard */}
-          <Button size="md">
+        <Link href="/auth/login" passHref>
+          <Button size="default">
             <LogIn className="mr-2 h-4 w-4" /> Login
           </Button>
         </Link>
       </header>
-      
+
       <main className="flex flex-1 flex-col items-center justify-center bg-gradient-to-br from-background to-muted/50 p-8 text-center">
         <div className="mb-8">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-24 w-24 text-primary mx-auto">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
-            </svg>
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+          </svg>
         </div>
         <h1 className="text-5xl font-bold text-primary mb-4">
           Welcome to Pimify
