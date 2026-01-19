@@ -16,7 +16,7 @@ interface ProductCompletenessData {
 }
 
 export default function DashboardPage() {
-  const { products } = useProductStore();
+  const { products, fetchProducts, isLoading } = useProductStore();
   const [mounted, setMounted] = useState(false);
   const [completenessData, setCompletenessData] = useState<ProductCompletenessData[]>([]);
   const [chartError, setChartError] = useState<string | null>(null);
@@ -24,6 +24,11 @@ export default function DashboardPage() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Fetch products on mount
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
 
   useEffect(() => {
     if (mounted && products.length > 0) {
@@ -35,7 +40,7 @@ export default function DashboardPage() {
           }
         });
         const incompleteCount = products.length - completeCount;
-        
+
         setCompletenessData([
           { name: 'Complete', value: completeCount, fill: '#10b981' }, // Green
           { name: 'Incomplete', value: incompleteCount, fill: '#f59e0b' }, // Yellow
@@ -53,7 +58,7 @@ export default function DashboardPage() {
 
   const productCount = products.length;
   const activeProducts = products.filter(p => p.basicInfo.status === 'active').length;
-  const averagePrice = mounted && productCount > 0 
+  const averagePrice = mounted && productCount > 0
     ? products.reduce((acc, p) => acc + (p.pricingAndStock?.standardPrice?.[0]?.amount || 0), 0) / productCount
     : 0;
 
@@ -125,7 +130,7 @@ export default function DashboardPage() {
   return (
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-bold text-primary mb-8">Dashboard</h1>
-      
+
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2"> {/* Adjusted lg:grid-cols for 2x2 layout potentially */}
         <Card className="shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -133,7 +138,7 @@ export default function DashboardPage() {
             <Package className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {mounted ? (
+            {mounted && !isLoading ? (
               <div className="text-2xl font-bold">{productCount}</div>
             ) : (
               <Skeleton className="h-8 w-16" />
@@ -150,7 +155,7 @@ export default function DashboardPage() {
             <Users className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-             {mounted ? (
+            {mounted && !isLoading ? (
               <div className="text-2xl font-bold">{activeProducts}</div>
             ) : (
               <Skeleton className="h-8 w-16" />
@@ -167,12 +172,12 @@ export default function DashboardPage() {
             <DollarSign className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {mounted && productCount > 0 ? (
-                <div className="text-2xl font-bold">
-                    NOK {averagePrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-            ) : mounted && productCount === 0 ? (
-                 <div className="text-2xl font-bold">N/A</div>
+            {mounted && !isLoading && productCount > 0 ? (
+              <div className="text-2xl font-bold">
+                NOK {averagePrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            ) : mounted && !isLoading && productCount === 0 ? (
+              <div className="text-2xl font-bold">N/A</div>
             ) : (
               <Skeleton className="h-8 w-24" />
             )}
@@ -181,7 +186,7 @@ export default function DashboardPage() {
             </p>
           </CardContent>
         </Card>
-        
+
         <Card className="shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Product Completeness</CardTitle>
