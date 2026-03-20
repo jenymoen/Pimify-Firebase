@@ -1,4 +1,8 @@
-'use client';
+import os
+
+filepath = 'C:/Utvikling/Pimify/src/app/(app)/products/[id]/page.tsx'
+
+part1 = """'use client';
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -273,8 +277,10 @@ export default function ProductDetailsPage() {
     const hash = variant.sku.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
     return (hash % 50) + 1;
   };
-  return (
-    <div className="flex flex-col -mx-6 -mt-6 h-[calc(100vh-4rem)] font-sans w-full">
+"""
+
+part2 = """  return (
+    <div className="flex flex-col -mx-6 -mt-6 h-[calc(100vh-4rem)] font-sans">
       {/* ═══ TOP HEADER BAR ═══ */}
       <header className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#eaf0f0] bg-white dark:bg-[#1c1f22] px-8 py-3 shrink-0 gap-4">
         <div className="flex flex-col">
@@ -302,17 +308,16 @@ export default function ProductDetailsPage() {
             Publish
           </button>
           <Link href={`/products/${product.id}/edit`}>
-            <button className="flex items-center justify-center gap-2 rounded-lg px-4 py-2 bg-[#2f7979] text-white text-sm font-bold hover:opacity-90 transition-opacity">
-              <Edit className="w-4 h-4" />
-              Edit Product
+            <button className="flex items-center justify-center rounded-lg px-4 py-2 bg-[#2f7979] text-white text-sm font-bold hover:opacity-90 transition-opacity">
+              Save Changes
             </button>
           </Link>
         </div>
       </header>
 
       {/* Scrollable Product Content */}
-      <div className="flex-1 overflow-y-auto bg-[#fafafa] dark:bg-[#1c1f22] p-8 custom-scrollbar w-full">
-        <div className="w-full mx-auto flex flex-col gap-8">
+      <div className="flex-1 overflow-y-auto bg-[#fafafa] dark:bg-[#1c1f22] p-8 custom-scrollbar">
+        <div className="max-w-6xl mx-auto flex flex-col gap-8">
           {/* Product Quick Info Bar */}
           <div className="bg-white dark:bg-[#1c1f22] border border-[#eaf0f0] rounded-xl p-6 flex items-center justify-between shadow-sm flex-wrap gap-4">
             <div className="flex gap-6 items-center">
@@ -472,9 +477,7 @@ export default function ProductDetailsPage() {
                                 {inv > 5 ? (
                                   <CheckCircle className="text-emerald-500 w-4 h-4" />
                                 ) : (
-                                  <span title="Low Stock">
-                                    <AlertTriangle className="text-[#E6BF6B] w-4 h-4" />
-                                  </span>
+                                  <AlertTriangle className="text-[#E6BF6B] w-4 h-4" title="Low Stock" />
                                 )}
                               </div>
                             </td>
@@ -582,43 +585,14 @@ export default function ProductDetailsPage() {
             </TabsContent>
 
             {/* BASIC INFO TAB */}
-            <TabsContent value="basic-info" className="mt-2 space-y-6">
+            <TabsContent value="basic-info" className="mt-2">
               <div className="bg-white border border-[#eaf0f0] rounded-xl p-6 shadow-sm">
-                <h3 className="text-lg font-bold mb-4 text-[#111818]">Basic Information</h3>
+                <h3 className="text-lg font-bold mb-4">Basic Information</h3>
                 <div className="space-y-4">
                   <MultilingualTextDisplay label="Product Name" data={basicInfo.name} />
                   <MultilingualTextDisplay label="Short Description" data={basicInfo.descriptionShort} />
                   <MultilingualTextDisplay label="Long Description" data={basicInfo.descriptionLong} />
                 </div>
-              </div>
-
-              {/* Workflow */}
-              <div className="bg-white border border-[#eaf0f0] rounded-xl p-6 shadow-sm">
-                <h3 className="text-lg font-bold mb-4 text-[#111818]">Product Workflow & Approvals</h3>
-                <Tabs defaultValue="workflow" className="w-full">
-                  <TabsList className="grid w-full grid-cols-3 bg-[#f3f7f7] rounded-lg p-1">
-                    <TabsTrigger value="workflow" className="data-[state=active]:bg-white data-[state=active]:text-[#2f7979] text-[#5e8787] font-semibold"><GitBranch className="mr-2 h-4 w-4" /> Workflow</TabsTrigger>
-                    <TabsTrigger value="audit" className="data-[state=active]:bg-white data-[state=active]:text-[#2f7979] text-[#5e8787] font-semibold"><History className="mr-2 h-4 w-4" /> Audit Trail</TabsTrigger>
-                    <TabsTrigger value="reviewer" className="data-[state=active]:bg-white data-[state=active]:text-[#2f7979] text-[#5e8787] font-semibold"><UserPlus className="mr-2 h-4 w-4" /> Reviewer</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="workflow" className="mt-6 space-y-4">
-                    <WorkflowProgressIndicator currentState={workflowState} workflowHistory={product.workflowHistory} size="lg" />
-                    <StateTransitionButtons
-                      currentState={workflowState} userRole={currentUserRole} productId={product.id}
-                      onStateTransition={handleWorkflowAction} onAssignReviewer={handleReviewerAssign}
-                      availableReviewers={reviewers} size="md"
-                    />
-                  </TabsContent>
-                  <TabsContent value="audit" className="mt-6">
-                    <AuditTrailViewer productId={product.id} userRole={currentUserRole} enableExport={true} />
-                  </TabsContent>
-                  <TabsContent value="reviewer" className="mt-6">
-                    <ReviewerAssignment
-                      productId={product.id} productName={productName} userRole={currentUserRole}
-                      onAssign={(a) => handleReviewerAssign(a.reviewerId)} showReviewerDetails={true}
-                    />
-                  </TabsContent>
-                </Tabs>
               </div>
             </TabsContent>
 
@@ -657,3 +631,8 @@ export default function ProductDetailsPage() {
     </div>
   );
 }
+"""
+
+with open(filepath, 'w', encoding='utf-8') as f:
+    f.write(part1)
+    f.write(part2)

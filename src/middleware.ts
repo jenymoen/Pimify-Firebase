@@ -26,9 +26,11 @@ export function middleware(request: NextRequest) {
 
   // Check for authentication token on protected routes
   // We skip auth check for public paths: /auth/*, /api/* (handled by api-middleware), /_next/*, etc.
-  const isPublicPath = request.nextUrl.pathname.startsWith('/auth') ||
+  const isPublicPath = request.nextUrl.pathname === '/' ||
+    request.nextUrl.pathname.startsWith('/auth') ||
     request.nextUrl.pathname.startsWith('/api') ||
     request.nextUrl.pathname.startsWith('/_next') ||
+    request.nextUrl.pathname.startsWith('/invitations') ||
     request.nextUrl.pathname.includes('favicon.ico');
 
   if (!isPublicPath) {

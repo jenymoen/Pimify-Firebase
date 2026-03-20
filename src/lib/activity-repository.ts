@@ -1,88 +1,60 @@
-import {
-    collection,
-    doc,
-    setDoc,
-    updateDoc,
-    deleteDoc,
-    getDocs,
-    query,
-    where,
-    orderBy,
-    limit,
-    Timestamp,
-    type DocumentData,
-    type QueryConstraint
-} from 'firebase/firestore';
-import { db } from './firebase';
+import { adminDb } from './firebase-admin';
 import { ActivityLogEntry, ActivityLogQuery } from './user-activity-logger';
+import { Timestamp } from 'firebase-admin/firestore';
 
 const ACTIVITIES_COLLECTION = 'activity_logs';
 
-const activityConverter = {
-    toFirestore(entry: ActivityLogEntry): DocumentData {
-        return {
+export class FirestoreActivityStore {
+    async save(entry: ActivityLogEntry): Promise<void> {
+        const data = {
             ...entry,
             timestamp: Timestamp.fromDate(new Date(entry.timestamp)),
         };
-    },
-    fromFirestore(snapshot: any): ActivityLogEntry {
-        const data = snapshot.data();
-        return {
-            ...data,
-            timestamp: data.timestamp?.toDate() || new Date(),
-        };
-    }
-};
-
-export class FirestoreActivityStore {
-    private collectionRef = collection(db, ACTIVITIES_COLLECTION).withConverter(activityConverter);
-
-    async save(entry: ActivityLogEntry): Promise<void> {
-        const docRef = doc(this.collectionRef, entry.id);
-        await setDoc(docRef, entry);
+        await adminDb.collection(ACTIVITIES_COLLECTION).doc(entry.id).set(data);
     }
 
     async query(filters: ActivityLogQuery): Promise<{ items: ActivityLogEntry[]; total: number }> {
-        const constraints: QueryConstraint[] = [];
+        let queryRef: FirebaseFirestore.Query = adminDb.collection(ACTIVITIES_COLLECTION);
 
         if (filters.userId) {
-            constraints.push(where('userId', '==', filters.userId));
+            queryRef = queryRef.where('userId', '==', filters.userId);
         }
 
         if (filters.actions && filters.actions.length > 0) {
-            constraints.push(where('action', 'in', filters.actions));
+            queryRef = queryRef.where('action', 'in', filters.actions);
         }
 
         if (filters.dateFrom) {
-            constraints.push(where('timestamp', '>=', Timestamp.fromDate(filters.dateFrom)));
+            queryRef = queryRef.where('timestamp', '>=', Timestamp.fromDate(filters.dateFrom));
         }
 
         if (filters.dateTo) {
-            constraints.push(where('timestamp', '<=', Timestamp.fromDate(filters.dateTo)));
+            queryRef = queryRef.where('timestamp', '<=', Timestamp.fromDate(filters.dateTo));
         }
 
         if (filters.resourceType) {
-            constraints.push(where('resourceType', '==', filters.resourceType));
+            queryRef = queryRef.where('resourceType', '==', filters.resourceType);
         }
 
         if (filters.resourceId) {
-            constraints.push(where('resourceId', '==', filters.resourceId));
+            queryRef = queryRef.where('resourceId', '==', filters.resourceId);
         }
 
-        constraints.push(orderBy('timestamp', filters.sortOrder || 'desc'));
+        queryRef = queryRef.orderBy('timestamp', filters.sortOrder || 'desc');
 
         if (filters.limit) {
-            constraints.push(limit(filters.limit));
+            queryRef = queryRef.limit(filters.limit);
         }
 
-        // Offset in Firestore is usually handled by startAfter (cursor)
-        // For now we'll fetch and handle offset in memory if needed, 
-        // but the previous implementation was limited anyway.
+        const snapshot = await queryRef.get();
 
-        const q = query(this.collectionRef, ...constraints);
-        const querySnapshot = await getDocs(q);
-
-        let items = querySnapshot.docs.map(doc => doc.data());
+        let items = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                ...data,
+                timestamp: data.timestamp?.toDate() || new Date(),
+            } as ActivityLogEntry;
+        });
 
         // Manual search filter if needed
         if (filters.search) {
@@ -101,8 +73,8 @@ export class FirestoreActivityStore {
     }
 
     async clear(): Promise<void> {
-        const querySnapshot = await getDocs(this.collectionRef);
-        const deletions = querySnapshot.docs.map(d => deleteDoc(d.ref));
+        const snapshot = await adminDb.collection(ACTIVITIES_COLLECTION).get();
+        const deletions = snapshot.docs.map(d => d.ref.delete());
         await Promise.all(deletions);
     }
 }

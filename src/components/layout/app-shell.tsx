@@ -1,9 +1,9 @@
 "use client";
 
-import { type ReactNode, useEffect } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation'; // Added useRouter
-import { LayoutDashboard, PackagePlus, Package, UploadCloud, Settings, Menu, LogOut, TrendingUp, PanelLeft, Users, Mail, ListChecks, UserCheck, Shield, Key, Network } from 'lucide-react'; // Added LogOut
+import { usePathname, useRouter } from 'next/navigation';
+import { LayoutDashboard, PackagePlus, Package, UploadCloud, Settings, Menu, LogOut, TrendingUp, PanelLeft, Users, Mail, ListChecks, UserCheck, Shield, Key, Network, ChevronDown } from 'lucide-react';
 import {
   SidebarProvider,
   Sidebar,
@@ -20,12 +20,13 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/context/auth-context';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface NavItem {
   href: string;
   label: string;
   icon: React.ElementType;
-  action?: () => void; // Optional action for items like logout
+  action?: () => void;
 }
 
 interface AppShellProps {
@@ -36,13 +37,22 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const isMobile = useIsMobile();
-  const { isAuthenticated, isLoading } = useAuth(); // Create this hook usage
+  const { isAuthenticated, isLoading, user } = useAuth();
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.push('/auth/login');
     }
   }, [isLoading, isAuthenticated, router]);
+
+  // Auto-open settings section if user is on a settings/admin page
+  useEffect(() => {
+    const settingsPaths = ['/users', '/reviewers', '/settings'];
+    if (settingsPaths.some(p => pathname.startsWith(p))) {
+      setSettingsOpen(true);
+    }
+  }, [pathname]);
 
   // Show loading state authentication or determining mobile state
   if (isLoading || isMobile === undefined) {
@@ -58,10 +68,12 @@ export function AppShell({ children }: AppShellProps) {
     router.push('/');
   };
 
-  // Simple role-based visibility using localStorage (replace with real auth context)
-  const role = (typeof window !== 'undefined' && (localStorage.getItem('currentUserRole') || 'VIEWER')) as 'ADMIN' | 'EDITOR' | 'REVIEWER' | 'VIEWER';
+  const role = user?.role?.toLowerCase() || 'viewer';
+  const isAdmin = role === 'admin';
+  const isEditorOrAbove = isAdmin || role === 'editor';
 
-  const base: NavItem[] = [
+  // Main navigation items (visible to all roles)
+  const mainNavItems: NavItem[] = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/products', label: 'Products', icon: Package },
     { href: '/products/new', label: 'Add Product', icon: PackagePlus },
@@ -69,20 +81,26 @@ export function AppShell({ children }: AppShellProps) {
     { href: '/import-export', label: 'Import/Export', icon: UploadCloud },
   ];
 
-  // User management links
-  if (role === 'ADMIN' || role === 'EDITOR') {
-    base.push({ href: '/users', label: 'Users', icon: Users });
-    base.push({ href: '/reviewers', label: 'Reviewers', icon: UserCheck });
+  // Settings sub-items (admin-only)
+  const settingsNavItems: NavItem[] = [];
+  if (isEditorOrAbove) {
+    settingsNavItems.push({ href: '/users', label: 'Users', icon: Users });
+    settingsNavItems.push({ href: '/reviewers', label: 'Reviewers', icon: UserCheck });
   }
-  if (role === 'ADMIN') {
-    base.push({ href: '/users/invitations', label: 'Invitations', icon: Mail });
-    base.push({ href: '/users/registration-requests', label: 'Registration Requests', icon: ListChecks });
-    base.push({ href: '/settings/security', label: 'Security Settings', icon: Shield });
-    base.push({ href: '/settings/sso', label: 'SSO Configuration', icon: Key });
-    base.push({ href: '/settings/ldap', label: 'LDAP Configuration', icon: Network });
+  if (isAdmin) {
+    settingsNavItems.push({ href: '/users/invitations', label: 'Invitations', icon: Mail });
+    settingsNavItems.push({ href: '/users/registration-requests', label: 'Registrations', icon: ListChecks });
+    settingsNavItems.push({ href: '/settings/security', label: 'Security', icon: Shield });
+    settingsNavItems.push({ href: '/settings/sso', label: 'SSO Configuration', icon: Key });
+    settingsNavItems.push({ href: '/settings/ldap', label: 'LDAP Configuration', icon: Network });
   }
 
-  const navItems: NavItem[] = base;
+  const isActive = (href: string) => {
+    if (href === '/dashboard') return pathname === '/dashboard';
+    if (href === '/quality') return pathname === '/quality';
+    if (href === '/products') return pathname === '/products';
+    return pathname === href || pathname.startsWith(href + '/');
+  };
 
   const sidebarContent = (
     <>
@@ -96,10 +114,10 @@ export function AppShell({ children }: AppShellProps) {
       </SidebarHeader>
       <SidebarContent className="flex-grow">
         <SidebarMenu>
-          {navItems.map((item) => (
+          {mainNavItems.map((item) => (
             <SidebarMenuItem key={item.label}>
               <SidebarMenuButton
-                isActive={pathname === item.href || (item.href !== '/products' && item.href !== '/dashboard' && item.href !== '/quality' && pathname.startsWith(item.href)) || (item.href === '/dashboard' && pathname === '/dashboard') || (item.href === '/quality' && pathname === '/quality')}
+                isActive={isActive(item.href)}
                 asChild
                 tooltip={item.label}
               >
@@ -112,7 +130,47 @@ export function AppShell({ children }: AppShellProps) {
           ))}
         </SidebarMenu>
       </SidebarContent>
-      <SidebarFooter className="p-2 border-t border-sidebar-border mt-auto">
+      <SidebarFooter className="p-2 border-t border-sidebar-border mt-auto flex flex-col gap-2">
+        {/* Settings section — admin only */}
+        {settingsNavItems.length > 0 && (
+          <>
+            <Collapsible open={settingsOpen} onOpenChange={setSettingsOpen}>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton
+                      tooltip="Settings"
+                      isActive={settingsNavItems.some(item => isActive(item.href))}
+                    >
+                      <Settings />
+                      <span className="flex-1">Settings</span>
+                      <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${settingsOpen ? 'rotate-180' : ''}`} />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                </SidebarMenuItem>
+              </SidebarMenu>
+              <CollapsibleContent>
+                <SidebarMenu className="ml-4 border-l border-sidebar-border pl-2 mt-1 mb-1">
+                  {settingsNavItems.map((item) => (
+                    <SidebarMenuItem key={item.label}>
+                      <SidebarMenuButton
+                        isActive={isActive(item.href)}
+                        asChild
+                        tooltip={item.label}
+                      >
+                        <Link href={item.href}>
+                          <item.icon className="h-4 w-4" />
+                          <span className="text-sm">{item.label}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </CollapsibleContent>
+            </Collapsible>
+            <div className="h-px bg-sidebar-border w-full opacity-50 my-1" />
+          </>
+        )}
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
@@ -129,11 +187,6 @@ export function AppShell({ children }: AppShellProps) {
       </SidebarFooter>
     </>
   );
-
-  // Show loading state while determining mobile state
-  if (isMobile === undefined) {
-    return <div className="flex h-screen items-center justify-center"><p>Loading...</p></div>;
-  }
 
   return (
     <SidebarProvider defaultOpen={!isMobile}>

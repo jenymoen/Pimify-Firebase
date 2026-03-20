@@ -2,6 +2,7 @@
 import React from 'react'
 import { useRouter } from 'next/navigation'
 import SSOConfiguration from '@/components/users/sso-configuration'
+import { Breadcrumb } from '@/components/ui/breadcrumb'
 import { useToast } from '@/hooks/use-toast'
 import type { SSOProviderConfig, SSOUsageStats } from '@/components/users/sso-configuration'
 

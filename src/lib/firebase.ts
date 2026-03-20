@@ -28,9 +28,15 @@ const auth: Auth = getAuth(app);
 
 // Firestore - for database operations
 // Use initializeFirestore to set settings like ignoreUndefinedProperties
-const db: Firestore = initializeFirestore(app, {
-    ignoreUndefinedProperties: true
-});
+// Fall back to getFirestore if already initialized (e.g. Next.js hot reload)
+let db: Firestore;
+try {
+    db = initializeFirestore(app, {
+        ignoreUndefinedProperties: true
+    });
+} catch (e) {
+    db = getFirestore(app);
+}
 
 // Storage - for file uploads (images, documents, etc.)
 const storage: FirebaseStorage = getStorage(app);

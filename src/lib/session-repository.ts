@@ -1,77 +1,62 @@
-import {
-    collection,
-    doc,
-    getDoc,
-    setDoc,
-    updateDoc,
-    deleteDoc,
-    getDocs,
-    query,
-    where,
-    orderBy,
-    Timestamp,
-    type DocumentData,
-    type QueryConstraint
-} from 'firebase/firestore';
-import { db } from './firebase';
+import { adminDb } from './firebase-admin';
 import { UserSessionsTable } from './database-schema';
+import { Timestamp } from 'firebase-admin/firestore';
 
 const SESSIONS_COLLECTION = 'sessions';
 
-const sessionConverter = {
-    toFirestore(session: UserSessionsTable): DocumentData {
-        return {
-            ...session,
-            created_at: session.created_at ? Timestamp.fromDate(new Date(session.created_at)) : null,
-            last_activity: session.last_activity ? Timestamp.fromDate(new Date(session.last_activity)) : null,
-            expires_at: session.expires_at ? Timestamp.fromDate(new Date(session.expires_at)) : null,
-        };
-    },
-    fromFirestore(snapshot: any): UserSessionsTable {
-        const data = snapshot.data();
-        return {
-            ...data,
-            created_at: data.created_at?.toDate() || null,
-            last_activity: data.last_activity?.toDate() || null,
-            expires_at: data.expires_at?.toDate() || null,
-        };
-    }
-};
+function sessionToFirestore(session: UserSessionsTable): any {
+    return {
+        ...session,
+        created_at: session.created_at ? Timestamp.fromDate(new Date(session.created_at)) : null,
+        last_activity: session.last_activity ? Timestamp.fromDate(new Date(session.last_activity)) : null,
+        expires_at: session.expires_at ? Timestamp.fromDate(new Date(session.expires_at)) : null,
+    };
+}
+
+function sessionFromFirestore(data: any): UserSessionsTable {
+    return {
+        ...data,
+        created_at: data.created_at?.toDate() || null,
+        last_activity: data.last_activity?.toDate() || null,
+        expires_at: data.expires_at?.toDate() || null,
+    };
+}
 
 export class FirestoreSessionStore {
-    private collectionRef = collection(db, SESSIONS_COLLECTION).withConverter(sessionConverter);
-
     async getById(sessionId: string): Promise<UserSessionsTable | null> {
-        const docRef = doc(this.collectionRef, sessionId);
-        const docSnap = await getDoc(docRef);
-        return docSnap.exists() ? docSnap.data() : null;
+        const docSnap = await adminDb.collection(SESSIONS_COLLECTION).doc(sessionId).get();
+        return docSnap.exists ? sessionFromFirestore(docSnap.data()) : null;
     }
 
     async getByToken(token: string): Promise<UserSessionsTable | null> {
-        const q = query(this.collectionRef, where('token', '==', token));
-        const querySnapshot = await getDocs(q);
-        return querySnapshot.empty ? null : querySnapshot.docs[0].data();
+        const snapshot = await adminDb.collection(SESSIONS_COLLECTION)
+            .where('token', '==', token)
+            .get();
+        return snapshot.empty ? null : sessionFromFirestore(snapshot.docs[0].data());
     }
 
     async getByUserId(userId: string): Promise<UserSessionsTable[]> {
-        const q = query(this.collectionRef, where('userId', '==', userId));
-        const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => doc.data());
+        const snapshot = await adminDb.collection(SESSIONS_COLLECTION)
+            .where('userId', '==', userId)
+            .get();
+        return snapshot.docs.map(doc => sessionFromFirestore(doc.data()));
     }
 
     async save(session: UserSessionsTable): Promise<void> {
-        const docRef = doc(this.collectionRef, session.id);
-        await setDoc(docRef, session);
+        const data = sessionToFirestore(session);
+        await adminDb.collection(SESSIONS_COLLECTION).doc(session.id).set(data);
     }
 
     async update(sessionId: string, data: Partial<UserSessionsTable>): Promise<void> {
-        const docRef = doc(this.collectionRef, sessionId);
-        await updateDoc(docRef, data as any);
+        const updatePayload: any = { ...data };
+        if (updatePayload.created_at) updatePayload.created_at = Timestamp.fromDate(new Date(updatePayload.created_at));
+        if (updatePayload.last_activity) updatePayload.last_activity = Timestamp.fromDate(new Date(updatePayload.last_activity));
+        if (updatePayload.expires_at) updatePayload.expires_at = Timestamp.fromDate(new Date(updatePayload.expires_at));
+        await adminDb.collection(SESSIONS_COLLECTION).doc(sessionId).update(updatePayload);
     }
 
     async delete(sessionId: string): Promise<void> {
-        const docRef = doc(this.collectionRef, sessionId);
-        await deleteDoc(docRef);
+        await adminDb.collection(SESSIONS_COLLECTION).doc(sessionId).delete();
     }
 
     async deleteUserSessions(userId: string): Promise<void> {
@@ -81,16 +66,17 @@ export class FirestoreSessionStore {
     }
 
     async cleanupExpired(now: Date): Promise<number> {
-        const q = query(this.collectionRef, where('expires_at', '<', Timestamp.fromDate(now)));
-        const querySnapshot = await getDocs(q);
-        const deletions = querySnapshot.docs.map(d => deleteDoc(d.ref));
+        const snapshot = await adminDb.collection(SESSIONS_COLLECTION)
+            .where('expires_at', '<', Timestamp.fromDate(now))
+            .get();
+        const deletions = snapshot.docs.map(d => d.ref.delete());
         await Promise.all(deletions);
-        return querySnapshot.size;
+        return snapshot.size;
     }
 
     async getAll(): Promise<UserSessionsTable[]> {
-        const querySnapshot = await getDocs(this.collectionRef);
-        return querySnapshot.docs.map(doc => doc.data());
+        const snapshot = await adminDb.collection(SESSIONS_COLLECTION).get();
+        return snapshot.docs.map(doc => sessionFromFirestore(doc.data()));
     }
 }
 

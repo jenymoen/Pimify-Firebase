@@ -20,6 +20,7 @@ import {
 } from './database-schema';
 import { firestoreUserStore } from './firestore-user-repository';
 import { auth } from './firebase';
+import { adminDb } from './firebase-admin';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 
 /**
@@ -260,7 +261,8 @@ export class UserService {
       }
 
       // Store user in Firestore
-      await firestoreUserStore.save(user);
+      // Use Admin SDK to bypass client-side security rules
+      await adminDb.collection('users').doc(user.id).set(user);
 
       return {
         success: true,
@@ -406,7 +408,8 @@ export class UserService {
         deleted_by: null,
       };
 
-      await firestoreUserStore.save(user);
+      // Use Admin SDK to bypass client-side security rules
+      await adminDb.collection('users').doc(user.id).set(user);
       console.log(`[Firestore] Default admin user created successfully: ${adminEmail}`);
 
     } catch (error) {

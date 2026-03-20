@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Product Details &amp; Variants Manager</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&amp;family=Noto+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#2f7979",
+                        "background-light": "#fafafa",
+                        "background-dark": "#1c1f22",
+                    },
+                    fontFamily: {
+                        "display": ["Manrope", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Manrope', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #2f7979; }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-[#111818] font-display min-h-screen">
+<div class="flex h-screen overflow-hidden">
+<!-- Side Navigation -->
+<aside class="w-64 border-r border-[#eaf0f0] bg-white dark:bg-background-dark flex flex-col">
+<div class="p-6 flex flex-col gap-8 h-full">
+<div class="flex items-center gap-3">
+<div class="size-10 rounded-lg bg-primary flex items-center justify-center text-white">
+<span class="material-symbols-outlined">layers</span>
+</div>
+<div class="flex flex-col">
+<h1 class="text-[#111818] dark:text-white text-base font-bold leading-tight">PIM Manager</h1>
+<p class="text-[#5e8787] text-xs font-normal">Global Inventory</p>
+</div>
+</div>
+<nav class="flex flex-col gap-1 grow">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-[#5e8787] hover:bg-[#eaf0f0] transition-colors" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<p class="text-sm font-medium">Dashboard</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-[#5e8787] hover:bg-[#eaf0f0] transition-colors" href="#">
+<span class="material-symbols-outlined">database</span>
+<p class="text-sm font-medium">Catalog</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1">directions_bike</span>
+<p class="text-sm font-bold">Products</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-[#5e8787] hover:bg-[#eaf0f0] transition-colors" href="#">
+<span class="material-symbols-outlined">inventory_2</span>
+<p class="text-sm font-medium">Inventory</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-[#5e8787] hover:bg-[#eaf0f0] transition-colors" href="#">
+<span class="material-symbols-outlined">shopping_cart</span>
+<p class="text-sm font-medium">Orders</p>
+</a>
+</nav>
+<div class="mt-auto flex flex-col gap-1 border-t border-[#eaf0f0] pt-4">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-[#5e8787] hover:bg-[#eaf0f0] transition-colors" href="#">
+<span class="material-symbols-outlined">settings</span>
+<p class="text-sm font-medium">Settings</p>
+</a>
+<div class="flex items-center gap-3 px-3 py-4">
+<div class="size-8 rounded-full bg-cover bg-center" data-alt="User profile avatar" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBXw95VtEsEB5tiqeeKs7bd_u_-MHRLcH-wt9QB7pO40w6f3ooPwF1kHFd12mDtLkVF1PX21464gph-a7vQE-dUEtH5IinQWBkb5ZU3kaDSKV_sc_WIiDqyYjdLKCROtQh1ddwEecHV1RLhStifHEuBs3n1JBAYjk5LwlhTXE_x0chhAG3jRxiJM3aqpvWCb5vQXjyJuqtSY5UuSKGmOilexaFj3udUGseTZYHQkjWYCrdhijBbiqay4aa9JTLEjzlv_JiYYI4hvkh3')"></div>
+<div class="flex flex-col overflow-hidden">
+<p class="text-sm font-bold text-[#111818] dark:text-white truncate">Alex Rivera</p>
+<p class="text-xs text-[#5e8787] truncate">Admin</p>
+</div>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col overflow-hidden">
+<!-- Top Navigation / Header -->
+<header class="flex items-center justify-between border-b border-[#eaf0f0] bg-white dark:bg-background-dark px-8 py-3 shrink-0">
+<div class="flex flex-col">
+<div class="flex items-center gap-2 mb-1">
+<a class="text-[#5e8787] text-xs font-medium hover:text-primary transition-colors" href="#">Products</a>
+<span class="text-[#5e8787] text-xs">/</span>
+<span class="text-[#111818] dark:text-white text-xs font-semibold">Mountain Bike</span>
+</div>
+<div class="flex items-center gap-3">
+<h2 class="text-[#111818] dark:text-white text-xl font-bold tracking-tight">Mountain Bike</h2>
+<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold uppercase tracking-wider">Published</span>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative w-64 group">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#5e8787] text-xl">search</span>
+<input class="w-full bg-[#f3f7f7] border-none rounded-lg pl-10 pr-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 placeholder:text-[#5e8787]" placeholder="Search attributes..." type="text"/>
+</div>
+<div class="h-6 w-[1px] bg-[#eaf0f0]"></div>
+<button class="flex items-center justify-center rounded-lg px-4 py-2 bg-[#eaf0f0] text-[#111818] text-sm font-bold hover:bg-[#dfe9e9] transition-colors">
+                        Publish
+                    </button>
+<button class="flex items-center justify-center rounded-lg px-4 py-2 bg-primary text-white text-sm font-bold hover:opacity-90 transition-opacity">
+                        Save Changes
+                    </button>
+</div>
+</header>
+<!-- Scrollable Product Content -->
+<div class="flex-1 overflow-y-auto custom-scrollbar bg-background-light dark:bg-background-dark p-8">
+<div class="max-w-6xl mx-auto flex flex-col gap-8">
+<!-- Product Quick Info Bar -->
+<div class="bg-white dark:bg-background-dark border border-[#eaf0f0] rounded-xl p-6 flex items-center justify-between shadow-sm">
+<div class="flex gap-6 items-center">
+<div class="size-20 rounded-lg bg-cover bg-center border border-[#eaf0f0]" data-alt="Main product image of a mountain bike" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCYttgv9Ki0bpwRO0oUmmgM9Iz5UmtwSx5p10S7WBJvlKaQJxEtkqDQOvRtghECT2XDM9VnGmruyAWlbpSabBsRkGXAy27KJ9otrse70J_UCheDBycVG5Z7zIfuFWkNbupAMfPw51vVDD2CIOUfczGXG9NvyV7Kb32JjU66v-sOITu68AsuIdCNFAkhra7R9iy_QyZqFL60CooHHZFo8bxFShKuynUMstiAEqZcS2RrYD12RhyiiLnGJ6qYwCQDFINQENBbfV5CGSuw')"></div>
+<div class="flex flex-col gap-1">
+<p class="text-[#5e8787] text-xs font-semibold uppercase tracking-wider">Base SKU</p>
+<p class="text-[#111818] dark:text-white text-lg font-bold">MTB-2024-001</p>
+<div class="flex gap-4 mt-1">
+<div class="flex items-center gap-1.5 text-xs text-[#5e8787]">
+<span class="material-symbols-outlined text-sm">category</span>
+                                        Mountain Bikes
+                                    </div>
+<div class="flex items-center gap-1.5 text-xs text-[#5e8787]">
+<span class="material-symbols-outlined text-sm">sell</span>
+                                        9 Variants Active
+                                    </div>
+</div>
+</div>
+</div>
+<div class="flex gap-3">
+<button class="flex items-center gap-2 border border-[#eaf0f0] px-4 py-2 rounded-lg text-sm font-semibold text-[#5e8787] hover:bg-[#fafafa]">
+<span class="material-symbols-outlined text-sm">content_copy</span> Duplicate
+                            </button>
+<button class="flex items-center gap-2 border border-red-100 px-4 py-2 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50">
+<span class="material-symbols-outlined text-sm text-red-600">delete</span> Archive
+                            </button>
+</div>
+</div>
+<!-- Tabs Section -->
+<div class="flex flex-col gap-6">
+<div class="flex border-b border-[#eaf0f0] gap-8">
+<a class="flex flex-col items-center border-b-2 border-transparent text-[#5e8787] pb-4 pt-2 group" href="#">
+<p class="text-sm font-bold group-hover:text-[#111818]">Basic Info</p>
+</a>
+<a class="flex flex-col items-center border-b-2 border-transparent text-[#5e8787] pb-4 pt-2 group" href="#">
+<p class="text-sm font-bold group-hover:text-[#111818]">Media</p>
+</a>
+<a class="flex flex-col items-center border-b-2 border-primary text-primary pb-4 pt-2" href="#">
+<p class="text-sm font-bold">Variants</p>
+</a>
+<a class="flex flex-col items-center border-b-2 border-transparent text-[#5e8787] pb-4 pt-2 group" href="#">
+<p class="text-sm font-bold group-hover:text-[#111818]">SEO</p>
+</a>
+</div>
+<!-- Variants Tab Content -->
+<div class="flex flex-col gap-4">
+<!-- Variant Table Toolbar -->
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<h3 class="text-lg font-bold text-[#111818] dark:text-white">Product Variants</h3>
+<span class="bg-[#eaf0f0] text-[#5e8787] px-2 py-0.5 rounded-full text-xs font-bold">9 items</span>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-2 rounded-lg border border-[#eaf0f0] text-[#5e8787] hover:bg-white hover:shadow-sm">
+<span class="material-symbols-outlined">filter_list</span>
+</button>
+<button class="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm hover:opacity-90">
+<span class="material-symbols-outlined text-sm">add</span> Add Variant
+                                    </button>
+</div>
+</div>
+<!-- Variants Table -->
+<div class="bg-white dark:bg-background-dark border border-[#eaf0f0] rounded-xl overflow-hidden shadow-sm">
+<div class="overflow-x-auto custom-scrollbar">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-[#f9fbfb] border-b border-[#eaf0f0]">
+<th class="px-6 py-4 text-[11px] font-bold text-[#5e8787] uppercase tracking-widest w-12">
+<input class="rounded border-[#d1d5db] text-primary focus:ring-primary/20" type="checkbox"/>
+</th>
+<th class="px-6 py-4 text-[11px] font-bold text-[#5e8787] uppercase tracking-widest">Variant Name</th>
+<th class="px-6 py-4 text-[11px] font-bold text-[#5e8787] uppercase tracking-widest">SKU</th>
+<th class="px-6 py-4 text-[11px] font-bold text-[#5e8787] uppercase tracking-widest">Size</th>
+<th class="px-6 py-4 text-[11px] font-bold text-[#5e8787] uppercase tracking-widest">Color</th>
+<th class="px-6 py-4 text-[11px] font-bold text-[#5e8787] uppercase tracking-widest">Inventory</th>
+<th class="px-6 py-4 text-[11px] font-bold text-[#5e8787] uppercase tracking-widest text-right">Price</th>
+<th class="px-6 py-4 text-[11px] font-bold text-[#5e8787] uppercase tracking-widest w-10"></th>
+</tr>
+</thead>
+<tbody class="divide-y divide-[#eaf0f0]">
+<!-- Variant Row 1 -->
+<tr class="hover:bg-[#fcfdfd] transition-colors group">
+<td class="px-6 py-4">
+<input class="rounded border-[#d1d5db] text-primary focus:ring-primary/20" type="checkbox"/>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="size-8 rounded bg-cover bg-center border border-[#eaf0f0]" data-alt="Thumbnail for red variant bike" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBN5GJ0akdXlcgfN3gjYlwacP-wts-fTurQuBEjOVz6dWQwExiUsm5b26FLnyH-GR2qLRichqGXVlmoDpow9NYoURL2tbNz9F6hXT7n5Q-u4GrZ-OiqINScBVXS3XquyHVodgZltYJqBJFkcAZDxZHSqNnaBBDPulnvqxk14jOLmFzi6aO1s_61JYiAGwtbG3QENOaQGjB8f4pkDT4GAupg3XccE5sp-frPzoEl9c2_t5DPiZFqJ3Jzq2G_3gwBpfOwzrvGKazxkFN_')"></div>
+<span class="text-sm font-semibold text-[#111818] dark:text-white">MTB - Small / Red</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="text-sm font-mono text-[#5e8787]">MTB-24-S-RD</span>
+</td>
+<td class="px-6 py-4">
+<span class="px-2 py-1 rounded bg-[#eaf0f0] text-[11px] font-bold">S</span>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<div class="size-3 rounded-full bg-red-500"></div>
+<span class="text-sm">Red</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<input class="w-16 border-[#eaf0f0] rounded px-2 py-1 text-sm focus:ring-primary/20 focus:border-primary" type="number" value="12"/>
+<span class="material-symbols-outlined text-emerald-500 text-sm">check_circle</span>
+</div>
+</td>
+<td class="px-6 py-4 text-right">
+<div class="flex items-center justify-end gap-1">
+<span class="text-sm text-[#5e8787]">$</span>
+<input class="w-24 text-right border-none bg-transparent hover:bg-[#f3f7f7] rounded px-2 py-1 text-sm font-bold focus:ring-0" type="text" value="849.00"/>
+</div>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="text-[#5e8787] hover:text-[#111818]">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</td>
+</tr>
+<!-- Variant Row 2 -->
+<tr class="hover:bg-[#fcfdfd] transition-colors group">
+<td class="px-6 py-4">
+<input class="rounded border-[#d1d5db] text-primary focus:ring-primary/20" type="checkbox"/>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="size-8 rounded bg-cover bg-center border border-[#eaf0f0]" data-alt="Thumbnail for blue variant bike" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDs7NBb2fv95Hb2leL0zXT1Rg-8LIs_ybq7fe4GtEHSVEg8AuPN68GXIiKrDboA5yShitjS-rwTdPHE0DKGJTlt8_gBykAIDe5EQdBw-aPq_24RqAUpKccGoUhIRxCBn6PSFbe94C-tC4MgpSMHPMuSQ5_h2Zzg-XKTrU9B0qVib-_qpgpIB78qe_YE23xDexJihl-l3oA54txVTWrdfEOPTkVlGRO9td6C6g6NJijMU6lMaS_ZdloWRCwe2KQPcee5N-xd7PWujGm_')"></div>
+<span class="text-sm font-semibold text-[#111818] dark:text-white">MTB - Medium / Blue</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="text-sm font-mono text-[#5e8787]">MTB-24-M-BL</span>
+</td>
+<td class="px-6 py-4">
+<span class="px-2 py-1 rounded bg-[#eaf0f0] text-[11px] font-bold">M</span>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<div class="size-3 rounded-full bg-blue-500"></div>
+<span class="text-sm">Blue</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<input class="w-16 border-orange-200 bg-orange-50/50 rounded px-2 py-1 text-sm focus:ring-primary/20 focus:border-primary" type="number" value="2"/>
+<span class="material-symbols-outlined text-[#E6BF6B] text-sm" title="Low Stock">warning</span>
+</div>
+</td>
+<td class="px-6 py-4 text-right">
+<div class="flex items-center justify-end gap-1">
+<span class="text-sm text-[#5e8787]">$</span>
+<input class="w-24 text-right border-none bg-transparent hover:bg-[#f3f7f7] rounded px-2 py-1 text-sm font-bold focus:ring-0" type="text" value="899.00"/>
+</div>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="text-[#5e8787] hover:text-[#111818]">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</td>
+</tr>
+<!-- Variant Row 3 -->
+<tr class="hover:bg-[#fcfdfd] transition-colors group">
+<td class="px-6 py-4">
+<input class="rounded border-[#d1d5db] text-primary focus:ring-primary/20" type="checkbox"/>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="size-8 rounded bg-cover bg-center border border-[#eaf0f0]" data-alt="Thumbnail for black variant bike" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBJYVJwXHJJ4td2ZU-PAIpRJJ6m8MRLh5NV4-mpLWt4vBqmrocCy8r9PwT8HjJAxnAom_ispoegaPDsViyjC3zRcwNA2GNB98rrWZ6K-ysu2VJoTzYCFViQRN0ALja-6TcuKVlxh1dOTY2ZkrO3_HO9IzEoQLh6ng1cmUeNmhDXTajjbzjvnaNVjhCqkeXvmLLLtYhzQ4H4nwKvV0bmCACWMq0qT9b08jAtiJE_uo_m9WbOsKzz9ughjaoFW2GQ-yVpU-8TeLtehJC4')"></div>
+<span class="text-sm font-semibold text-[#111818] dark:text-white">MTB - Large / Black</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="text-sm font-mono text-[#5e8787]">MTB-24-L-BK</span>
+</td>
+<td class="px-6 py-4">
+<span class="px-2 py-1 rounded bg-[#eaf0f0] text-[11px] font-bold">L</span>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<div class="size-3 rounded-full bg-slate-900"></div>
+<span class="text-sm">Black</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<input class="w-16 border-[#eaf0f0] rounded px-2 py-1 text-sm focus:ring-primary/20 focus:border-primary" type="number" value="45"/>
+<span class="material-symbols-outlined text-emerald-500 text-sm">check_circle</span>
+</div>
+</td>
+<td class="px-6 py-4 text-right">
+<div class="flex items-center justify-end gap-1">
+<span class="text-sm text-[#5e8787]">$</span>
+<input class="w-24 text-right border-none bg-transparent hover:bg-[#f3f7f7] rounded px-2 py-1 text-sm font-bold focus:ring-0" type="text" value="949.00"/>
+</div>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="text-[#5e8787] hover:text-[#111818]">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Table Footer / Bulk Actions -->
+<div class="px-6 py-3 bg-[#f9fbfb] border-t border-[#eaf0f0] flex items-center justify-between">
+<div class="flex gap-4">
+<p class="text-xs text-[#5e8787] font-medium flex items-center">3 variants selected</p>
+<button class="text-xs font-bold text-primary hover:underline">Apply Price Adjustment</button>
+<button class="text-xs font-bold text-primary hover:underline">Sync Inventory</button>
+</div>
+<div class="flex items-center gap-4">
+<p class="text-xs text-[#5e8787]">Showing 1-9 of 9</p>
+<div class="flex gap-1">
+<button class="p-1 rounded border border-[#eaf0f0] bg-white opacity-50 cursor-not-allowed">
+<span class="material-symbols-outlined text-sm">chevron_left</span>
+</button>
+<button class="p-1 rounded border border-[#eaf0f0] bg-white">
+<span class="material-symbols-outlined text-sm">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Side-by-Side Detail Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<!-- Attributes Config -->
+<div class="bg-white dark:bg-background-dark border border-[#eaf0f0] rounded-xl p-6 shadow-sm">
+<h4 class="text-sm font-bold mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-lg">tune</span>
+                                Variant Attributes
+                            </h4>
+<div class="flex flex-col gap-4">
+<div class="flex items-center justify-between p-3 rounded-lg bg-[#f3f7f7]">
+<div class="flex flex-col">
+<p class="text-sm font-bold">Size</p>
+<p class="text-xs text-[#5e8787]">3 options: S, M, L</p>
+</div>
+<button class="material-symbols-outlined text-[#5e8787] hover:text-primary">edit</button>
+</div>
+<div class="flex items-center justify-between p-3 rounded-lg bg-[#f3f7f7]">
+<div class="flex flex-col">
+<p class="text-sm font-bold">Color</p>
+<p class="text-xs text-[#5e8787]">3 options: Red, Blue, Black</p>
+</div>
+<button class="material-symbols-outlined text-[#5e8787] hover:text-primary">edit</button>
+</div>
+<button class="mt-2 text-primary text-xs font-bold flex items-center gap-1 hover:underline">
+<span class="material-symbols-outlined text-xs">add_circle</span> Add another attribute
+                                </button>
+</div>
+</div>
+<!-- Bulk Updater -->
+<div class="bg-white dark:bg-background-dark border border-[#eaf0f0] rounded-xl p-6 shadow-sm">
+<h4 class="text-sm font-bold mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-lg">bolt</span>
+                                Quick Updates
+                            </h4>
+<p class="text-xs text-[#5e8787] mb-4 leading-relaxed">Modify pricing or stock across all active variants for this product series.</p>
+<div class="flex gap-3">
+<div class="flex-1">
+<label class="block text-[10px] font-bold text-[#5e8787] uppercase mb-1">Set Global Price</label>
+<div class="relative">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#5e8787]">$</span>
+<input class="w-full pl-7 pr-3 py-2 text-sm border-[#eaf0f0] rounded-lg focus:ring-primary/20 focus:border-primary" placeholder="0.00" type="text"/>
+</div>
+</div>
+<button class="self-end px-4 py-2 bg-[#eaf0f0] text-[#111818] text-sm font-bold rounded-lg hover:bg-[#dfe9e9] transition-colors h-[38px]">
+                                    Apply All
+                                </button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

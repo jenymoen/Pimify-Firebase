@@ -100,13 +100,15 @@ export function ProductCard({
     <Card className="group flex flex-col overflow-hidden border-border/50 bg-card transition-all hover:shadow-md hover:border-border">
       {/* Image Section with Overlay Badges */}
       <div className="relative aspect-[4/3] w-full bg-muted/30 overflow-hidden">
-        <Image
-          src={firstImage}
-          alt={imageAlt}
-          fill
-          className="object-contain p-4 transition-transform duration-500 group-hover:scale-105"
-          data-ai-hint="product item"
-        />
+        <Link href={`/products/${product.id}`}>
+          <Image
+            src={firstImage}
+            alt={imageAlt}
+            fill
+            className="object-contain p-4 transition-transform duration-500 group-hover:scale-105 cursor-pointer"
+            data-ai-hint="product item"
+          />
+        </Link>
 
         {/* Top Floating Badges */}
         <div className="absolute top-3 left-3 flex flex-col gap-2">
@@ -218,13 +220,6 @@ export function ProductCard({
         )}
 
         <div className="flex items-center gap-2 pt-2 border-t">
-          <Link href={`/products/${product.id}`} passHref className="flex-1">
-            <Button variant="outline" size="sm" className="w-full h-8 text-xs">
-              <Eye className="mr-1.5 h-3.5 w-3.5" />
-              View
-            </Button>
-          </Link>
-
           <Link href={`/products/${product.id}/edit`} passHref className="flex-1">
             <Button variant="outline" size="sm" className="w-full h-8 text-xs">
               <Edit className="mr-1.5 h-3.5 w-3.5" />

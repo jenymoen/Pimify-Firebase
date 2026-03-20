@@ -13,6 +13,7 @@ import { passwordService } from './password-service';
 import { UserStatus, UsersTable } from './database-schema';
 import { UserRole } from '@/types/workflow';
 import { auth } from './firebase';
+import { adminDb } from './firebase-admin';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { firestoreUserStore } from './firestore-user-repository';
 
@@ -131,22 +132,36 @@ export class AuthService {
 
           console.log(`[AuthService] User ${email} found in Auth but not Firestore. Provisioning...`);
 
-          // Create missing Firestore profile
-          const newUser: UsersTable = {
+          // Determine role: first user in the system gets Admin, otherwise Viewer
+          let assignedRole = UserRole.VIEWER;
+          try {
+            const existingUsersSnap = await adminDb.collection('users').limit(1).get();
+            if (existingUsersSnap.empty) {
+              assignedRole = UserRole.ADMIN;
+              console.log(`[AuthService] No existing users found. Assigning Admin role to first user: ${email}`);
+            }
+          } catch (countErr) {
+            console.warn('[AuthService] Could not check user count for first-user-admin logic:', countErr);
+          }
+
+          // Create missing Firestore profile using Admin SDK Timestamp for date fields
+          const { Timestamp: AdminTimestamp } = await import('firebase-admin/firestore');
+          const now = AdminTimestamp.now();
+
+          const newUserData = {
             id: firebaseUser.uid,
             email: firebaseUser.email!,
             password_hash: null, // Managed by Auth
             name: firebaseUser.displayName || email.split('@')[0],
-            role: email === 'admin@example.com' ? UserRole.ADMIN : UserRole.VIEWER, // Default role
+            role: assignedRole,
             status: UserStatus.ACTIVE,
             job_title: null,
             department: null,
             bio: 'Provisioned from Firebase Auth',
-            created_at: new Date(),
-            updated_at: new Date(),
+            created_at: now,
+            updated_at: now,
             failed_login_attempts: 0,
             two_factor_enabled: false,
-            // ... (rest initialized as null/default)
             avatar_url: firebaseUser.photoURL || null,
             location: null,
             timezone: null,
@@ -165,9 +180,9 @@ export class AuthService {
             last_password_change: null,
             password_history: null,
             locked_until: null,
-            last_login_at: new Date(),
+            last_login_at: now,
             last_login_ip: ipAddress || null,
-            last_active_at: new Date(),
+            last_active_at: now,
             sso_provider: null,
             sso_id: null,
             sso_linked_at: null,
@@ -177,12 +192,22 @@ export class AuthService {
             deleted_by: null,
           };
 
-          await firestoreUserStore.save(newUser);
-          user = newUser;
+          // Use Admin SDK to bypass client-side Firestore security rules
+          await adminDb.collection('users').doc(newUserData.id).set(newUserData);
+          
+          // Map back to UsersTable type for the rest of the login flow
+          user = {
+            ...newUserData,
+            created_at: new Date(),
+            updated_at: new Date(),
+            last_login_at: new Date(),
+            last_active_at: new Date(),
+          } as UsersTable;
 
           // Resume normal flow
         } catch (authError: any) {
-          // Auth also failed, so truly invalid
+          // Auth also failed, or Admin SDK failed during provisioning
+          console.error('[AuthService] JIT Provisioning error:', authError);
           return {
             success: false,
             error: 'Invalid email or password',

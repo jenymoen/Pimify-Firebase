@@ -1,7 +1,7 @@
 // src/components/dashboard/quality-widget.tsx
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -26,17 +26,31 @@ import {
   validateProduct 
 } from "@/lib/product-quality";
 import type { ProductStatus } from "@/types/product";
-import type { QualityIssue } from "@/types/quality";
+import type { LucideIcon } from "lucide-react";
+
+interface ComponentQualityIssue {
+  issueType: string;
+  label: string;
+  count: number;
+  icon: LucideIcon;
+  color: string;
+}
 
 export function QualityWidget() {
-  const { products, recalculateAllQuality } = useProductStore();
+  const { products, fetchProducts, recalculateAllQuality } = useProductStore();
+  
+  // Ensure we fetch products, but only once on mount to prevent loops
+  useEffect(() => {
+    fetchProducts();
+  }, []); // Remove `fetchProducts` from deps to prevent strict-mode double fetch issues if its reference changes
+
   const router = useRouter();
   const searchParams = useSearchParams();
   const [selectedStatuses, setSelectedStatuses] = useState<ProductStatus[]>([
     'active', 'development', 'inactive'
   ]);
   const [isCalculating, setIsCalculating] = useState(false);
-  const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Parse URL parameters on mount to restore filter state
   useEffect(() => {
@@ -60,20 +74,18 @@ export function QualityWidget() {
     router.replace(newUrl);
   }, [selectedStatuses, router, searchParams]);
 
-  // Debounced recalculation function
+  // Debounced recalculation function (stable reference)
   const debouncedRecalculate = useCallback(() => {
-    if (debounceTimer) {
-      clearTimeout(debounceTimer);
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
     }
     
-    const timer = setTimeout(() => {
+    debounceTimerRef.current = setTimeout(() => {
       setIsCalculating(true);
       recalculateAllQuality();
       setTimeout(() => setIsCalculating(false), 100); // Brief loading state
     }, 300);
-    
-    setDebounceTimer(timer);
-  }, [debounceTimer, recalculateAllQuality]);
+  }, [recalculateAllQuality]);
 
   // Real-time updates: ensure quality metrics are up-to-date when products change
   useEffect(() => {
@@ -87,11 +99,11 @@ export function QualityWidget() {
   // Cleanup debounce timer on unmount
   useEffect(() => {
     return () => {
-      if (debounceTimer) {
-        clearTimeout(debounceTimer);
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [debounceTimer]);
+  }, []);
 
   // Filter products based on selected statuses
   const filteredProducts = useMemo(() => {
@@ -107,7 +119,7 @@ export function QualityWidget() {
         incompleteCount: 0,
         totalMissingFields: 0,
         totalValidationErrors: 0,
-        issues: [] as QualityIssue[],
+        issues: [] as ComponentQualityIssue[],
       };
     }
 
@@ -116,7 +128,7 @@ export function QualityWidget() {
       product.qualityMetrics || calculateQualityMetrics(product)
     );
     const averageCompleteness = Math.round(
-      metrics.reduce((sum, metric) => sum + metric.completenessScore, 0) / metrics.length
+      metrics.reduce((sum, metric) => sum + metric.completenessScore, 0) / Math.max(metrics.length, 1)
     );
     
     const completeCount = metrics.filter(m => m.completenessScore >= 70).length;
@@ -126,7 +138,7 @@ export function QualityWidget() {
     const totalValidationErrors = metrics.reduce((sum, m) => sum + m.validationErrors.length, 0);
 
     // Generate quality issues
-    const issues: QualityIssue[] = [];
+    const issues: ComponentQualityIssue[] = [];
     
     // Missing images issue
     const missingImagesCount = filteredProducts.filter(checkMissingImages).length;

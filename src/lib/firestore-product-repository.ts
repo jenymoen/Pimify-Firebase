@@ -1,21 +1,4 @@
-import {
-    collection,
-    doc,
-    getDoc,
-    getDocs,
-    setDoc,
-    updateDoc,
-    deleteDoc,
-    query,
-    where,
-    orderBy,
-    limit,
-    startAfter,
-    DocumentSnapshot,
-    QueryConstraint,
-    Timestamp
-} from 'firebase/firestore';
-import { db } from './firebase';
+import { adminDb } from './firebase-admin';
 import { ProductsTable } from './database-schema';
 import { WorkflowState } from '@/types/workflow';
 
@@ -26,18 +9,18 @@ export class FirestoreProductRepository {
      * Create or overwrite a product
      */
     async save(product: ProductsTable): Promise<void> {
-        const docRef = doc(db, this.collectionName, product.id);
-        await setDoc(docRef, product);
+        const docRef = adminDb.collection(this.collectionName).doc(product.id);
+        await docRef.set(product);
     }
 
     /**
      * Get product by ID
      */
     async getById(id: string): Promise<ProductsTable | null> {
-        const docRef = doc(db, this.collectionName, id);
-        const docSnap = await getDoc(docRef);
+        const docRef = adminDb.collection(this.collectionName).doc(id);
+        const docSnap = await docRef.get();
 
-        if (docSnap.exists()) {
+        if (docSnap.exists) {
             return docSnap.data() as ProductsTable;
         }
         return null;
@@ -47,21 +30,20 @@ export class FirestoreProductRepository {
      * Update a product (partial update)
      */
     async update(id: string, data: Partial<ProductsTable>): Promise<void> {
-        const docRef = doc(db, this.collectionName, id);
-        // Add updated_at if not present
+        const docRef = adminDb.collection(this.collectionName).doc(id);
         const updateData = {
             ...data,
             updated_at: new Date().toISOString()
         };
-        await updateDoc(docRef, updateData);
+        await docRef.update(updateData);
     }
 
     /**
      * Delete a product
      */
     async delete(id: string): Promise<void> {
-        const docRef = doc(db, this.collectionName, id);
-        await deleteDoc(docRef);
+        const docRef = adminDb.collection(this.collectionName).doc(id);
+        await docRef.delete();
     }
 
     /**
@@ -73,42 +55,35 @@ export class FirestoreProductRepository {
         status?: string;
         search?: string;
         limit?: number;
-        lastDoc?: DocumentSnapshot;
-    }): Promise<{ products: ProductsTable[], lastDoc: DocumentSnapshot | null }> {
-        const constraints: QueryConstraint[] = [];
-        const productsRef = collection(db, this.collectionName);
+        lastDoc?: FirebaseFirestore.DocumentSnapshot;
+    }): Promise<{ products: ProductsTable[], lastDoc: FirebaseFirestore.DocumentSnapshot | null }> {
+        let queryRef: FirebaseFirestore.Query = adminDb.collection(this.collectionName);
 
         // Apply filters
         if (params.workflowState) {
-            constraints.push(where('workflow_state', '==', params.workflowState));
+            queryRef = queryRef.where('workflow_state', '==', params.workflowState);
         }
 
         if (params.assignedReviewerId) {
-            constraints.push(where('assigned_reviewer_id', '==', params.assignedReviewerId));
+            queryRef = queryRef.where('assigned_reviewer_id', '==', params.assignedReviewerId);
         }
 
         if (params.status) {
-            constraints.push(where('status', '==', params.status));
+            queryRef = queryRef.where('status', '==', params.status);
         }
 
-        // Note: Firestore doesn't support native full-text search. 
-        // Ideally use Algolia or Typesense. For now, we do client-side filtering 
-        // or simple prefix matching if needed, but extensive search requires dedicated service.
-        // We will omit search constraint here and rely on basic filters + ordering.
-
         // Order by updated_at desc by default
-        constraints.push(orderBy('updated_at', 'desc'));
+        queryRef = queryRef.orderBy('updated_at', 'desc');
 
         if (params.limit) {
-            constraints.push(limit(params.limit));
+            queryRef = queryRef.limit(params.limit);
         }
 
         if (params.lastDoc) {
-            constraints.push(startAfter(params.lastDoc));
+            queryRef = queryRef.startAfter(params.lastDoc);
         }
 
-        const q = query(productsRef, ...constraints);
-        const snapshot = await getDocs(q);
+        const snapshot = await queryRef.get();
 
         const products: ProductsTable[] = [];
         snapshot.forEach((doc) => {
@@ -125,8 +100,7 @@ export class FirestoreProductRepository {
      * Get all products (use with caution)
      */
     async getAll(): Promise<ProductsTable[]> {
-        const q = query(collection(db, this.collectionName));
-        const snapshot = await getDocs(q);
+        const snapshot = await adminDb.collection(this.collectionName).get();
         return snapshot.docs.map(doc => doc.data() as ProductsTable);
     }
 }

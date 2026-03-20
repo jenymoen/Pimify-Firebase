@@ -2,6 +2,7 @@
 import React from 'react'
 import { useRouter } from 'next/navigation'
 import LDAPConfiguration from '@/components/users/ldap-configuration'
+import { Breadcrumb } from '@/components/ui/breadcrumb'
 import { useToast } from '@/hooks/use-toast'
 import type { LDAPConfig, LDAPSyncStatus, LDAPSyncLog } from '@/components/users/ldap-configuration'
 
