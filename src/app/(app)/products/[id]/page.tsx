@@ -274,7 +274,7 @@ export default function ProductDetailsPage() {
     return (hash % 50) + 1;
   };
   return (
-    <div className="flex flex-col -mx-6 -mt-6 h-[calc(100vh-4rem)] font-sans w-full">
+    <div className="flex flex-col -mx-6 -mt-6 h-[calc(100vh-4rem)] font-sans">
       {/* ═══ TOP HEADER BAR ═══ */}
       <header className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#eaf0f0] bg-white dark:bg-[#1c1f22] px-8 py-3 shrink-0 gap-4">
         <div className="flex flex-col">

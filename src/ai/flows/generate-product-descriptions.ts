@@ -16,8 +16,23 @@ const GenerateProductDescriptionsInputSchema = z.object({
 export type GenerateProductDescriptionsInput = z.infer<typeof GenerateProductDescriptionsInputSchema>;
 
 const GenerateProductDescriptionsOutputSchema = z.object({
-    shortDescription: z.string().describe('A compelling short description (1-2 sentences) for overview pages.'),
-    longDescription: z.string().describe('A detailed long description (1-3 paragraphs) highlighting features and benefits.'),
+    shortDescription: z.object({
+        en: z.string().describe('A compelling short description (1-2 sentences) in English.'),
+        no: z.string().describe('A compelling short description (1-2 sentences) translated to Norwegian.'),
+    }),
+    longDescription: z.object({
+        en: z.string().describe('A detailed long description (1-3 paragraphs) in English.'),
+        no: z.string().describe('A detailed long description (1-3 paragraphs) translated to Norwegian.'),
+    }),
+    categories: z.array(z.string()).describe('List of 2-4 suitable product categories (e.g. Electronics, Headphones).'),
+    properties: z.array(z.object({
+        key: z.string(),
+        value: z.string()
+    })).describe('List of general product properties (e.g. key: Material, value: Plastic).'),
+    technicalSpecs: z.array(z.object({
+        key: z.string(),
+        value: z.string()
+    })).describe('List of technical specifications (e.g. key: Weight, value: 250g).'),
 });
 
 export type GenerateProductDescriptionsOutput = z.infer<typeof GenerateProductDescriptionsOutputSchema>;
@@ -46,11 +61,13 @@ Image: {{{this}}}
 {{/if}}
 
 Please generate:
-1. **Short Description**: A catchy, 1-2 sentence overview suitable for card views.
-2. **Long Description**: A detailed, 1-3 paragraph description that sells the product, highlights key features, and explains benefits to the customer.
+1. **Short Description**: A catchy, 1-2 sentence overview suitable for card views. Provide this in both English and Norwegian.
+2. **Long Description**: A detailed, 1-3 paragraph description that sells the product, highlights key features, and explains benefits to the customer. Provide this in both English and Norwegian.
+3. **Categories**: Suggest 2 to 4 broader product categories this fits into.
+4. **Properties**: Suggest general properties (like Material, Fit, Style, Brand origin).
+5. **Technical Specs**: Suggest technical specifications (like Dimensions, Weight, Battery Life, Connectivity).
 
-Tone: Professional, persuasive, and descriptive.
-Language: English.`,
+Tone: Professional, persuasive, and descriptive.`,
 });
 
 const generateProductDescriptionsFlow = ai.defineFlow(

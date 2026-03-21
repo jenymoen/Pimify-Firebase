@@ -478,12 +478,23 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
 
       if (result) {
         if (result.shortDescription) {
-          form.setValue("basicInfo.descriptionShort.en", result.shortDescription, { shouldValidate: true, shouldDirty: true });
+          if (result.shortDescription.en) form.setValue("basicInfo.descriptionShort.en", result.shortDescription.en, { shouldValidate: true, shouldDirty: true });
+          if (result.shortDescription.no) form.setValue("basicInfo.descriptionShort.no", result.shortDescription.no, { shouldValidate: true, shouldDirty: true });
         }
         if (result.longDescription) {
-          form.setValue("basicInfo.descriptionLong.en", result.longDescription, { shouldValidate: true, shouldDirty: true });
+          if (result.longDescription.en) form.setValue("basicInfo.descriptionLong.en", result.longDescription.en, { shouldValidate: true, shouldDirty: true });
+          if (result.longDescription.no) form.setValue("basicInfo.descriptionLong.no", result.longDescription.no, { shouldValidate: true, shouldDirty: true });
         }
-        toast({ title: "Descriptions Generated", description: "AI has populated the English descriptions." });
+        if (result.categories && result.categories.length > 0) {
+          form.setValue("attributesAndSpecs.categories", result.categories, { shouldValidate: true, shouldDirty: true });
+        }
+        if (result.properties && result.properties.length > 0) {
+          form.setValue("attributesAndSpecs.properties", result.properties.map(p => ({ ...p, id: uuidv4() })), { shouldValidate: true, shouldDirty: true });
+        }
+        if (result.technicalSpecs && result.technicalSpecs.length > 0) {
+          form.setValue("attributesAndSpecs.technicalSpecs", result.technicalSpecs.map(p => ({ ...p, id: uuidv4() })), { shouldValidate: true, shouldDirty: true });
+        }
+        toast({ title: "Product Data Generated", description: "AI has populated descriptions, categories, properties, and specs." });
       }
     } catch (error) {
       console.error("Description generation error:", error);
@@ -611,7 +622,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
 
 
   return (
-    <div className="flex flex-col -mx-6 -mt-6 h-[calc(100vh-4rem)] font-sans w-full">
+    <div className="flex flex-col -mx-6 -mt-6 h-[calc(100vh-4rem)] font-sans">
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit, onError)} className="flex flex-col h-full overflow-hidden w-full">
           {/* TOP HEADER BAR */}
