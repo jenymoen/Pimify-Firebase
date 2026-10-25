@@ -307,6 +307,14 @@ export const defaultWorkflowConfig: WorkflowConfig = {
       isAutomatic: false,
     },
     {
+      // Reject: send back to draft with a mandatory comment
+      from: WorkflowState.REVIEW,
+      to: WorkflowState.DRAFT,
+      requiredRole: UserRole.REVIEWER,
+      requiredPermissions: ['workflow:reject'],
+      isAutomatic: false,
+    },
+    {
       from: WorkflowState.APPROVED,
       to: WorkflowState.PUBLISHED,
       requiredRole: UserRole.ADMIN,

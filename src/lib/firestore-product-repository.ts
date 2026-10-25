@@ -39,11 +39,26 @@ export class FirestoreProductRepository {
     }
 
     /**
+     * Set fields without bumping updated_at (for bookkeeping such as external ids)
+     */
+    async setFields(id: string, data: Partial<ProductsTable>): Promise<void> {
+        await adminDb.collection(this.collectionName).doc(id).update(data);
+    }
+
+    /**
      * Delete a product
      */
     async delete(id: string): Promise<void> {
         const docRef = adminDb.collection(this.collectionName).doc(id);
         await docRef.delete();
+    }
+
+    /**
+     * All products in a workflow state. No orderBy, so no composite index is needed.
+     */
+    async getByWorkflowState(state: WorkflowState): Promise<ProductsTable[]> {
+        const snapshot = await adminDb.collection(this.collectionName).where('workflow_state', '==', state).get();
+        return snapshot.docs.map(doc => doc.data() as ProductsTable);
     }
 
     /**

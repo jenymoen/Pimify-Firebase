@@ -118,11 +118,11 @@ const TRANSITION_CONFIG: Partial<Record<WorkflowAction, TransitionConfigItem>> =
   },
   [WorkflowAction.REJECT]: {
     label: 'Reject',
-    description: 'Reject product and return to draft',
+    description: 'Reject product and return it to draft with a comment',
     icon: X,
     color: 'bg-red-500 hover:bg-red-600',
     textColor: 'text-white',
-    nextState: WorkflowState.REJECTED,
+    nextState: WorkflowState.DRAFT,
     requiredRole: UserRole.REVIEWER,
     requiresAssignment: true,
     requiresReason: true,
@@ -243,8 +243,8 @@ export const StateTransitionButtons: React.FC<StateTransitionButtonsProps> = ({
       return false;
     }
 
-    // Check assignment requirement
-    if (config.requiresAssignment && !isAssigned) {
+    // Check assignment requirement (admins may act on any product)
+    if (config.requiresAssignment && !isAssigned && userRole !== UserRole.ADMIN) {
       return false;
     }
 
@@ -286,9 +286,7 @@ export const StateTransitionButtons: React.FC<StateTransitionButtonsProps> = ({
         if (hasPermission(WorkflowAction.ADD_COMMENT)) {
           actions.push(WorkflowAction.ADD_COMMENT);
         }
-        if (hasPermission(WorkflowAction.ASSIGN_REVIEWER)) {
-          actions.push(WorkflowAction.ASSIGN_REVIEWER);
-        }
+        // Reassigning a reviewer during review is done from the Reviewer tab
         break;
 
       case WorkflowState.APPROVED:
@@ -519,6 +517,11 @@ export const StateTransitionButtons: React.FC<StateTransitionButtonsProps> = ({
             {pendingAction === WorkflowAction.ASSIGN_REVIEWER ? (
               <div className="mb-4">
                 <p className="text-gray-600 mb-2">Select a reviewer:</p>
+                {availableReviewers.length === 0 && (
+                  <p className="text-sm text-amber-700 mb-2">
+                    No active users with the Reviewer or Admin role were found. Give a user one of these roles under Users.
+                  </p>
+                )}
                 <select
                   className="w-full p-2 border border-gray-300 rounded-md"
                   value={selectedReviewer}
@@ -535,12 +538,14 @@ export const StateTransitionButtons: React.FC<StateTransitionButtonsProps> = ({
             ) : (
               <>
                 <p className="text-gray-600 mb-4">
-                  Please provide a reason for this action:
+                  {pendingAction === WorkflowAction.REJECT
+                    ? 'Comment (required) — explain what must be fixed. The product goes back to Draft:'
+                    : 'Please provide a reason for this action:'}
                 </p>
                 <textarea
                   value={reasonText}
                   onChange={(e) => setReasonText(e.target.value)}
-                  placeholder="Enter reason..."
+                  placeholder={pendingAction === WorkflowAction.REJECT ? 'Write a comment...' : 'Enter reason...'}
                   className="w-full p-3 border border-gray-300 rounded-md resize-none h-24"
                   autoFocus
                 />

@@ -1,6 +1,6 @@
 // src/lib/csv-utils.ts
 
-import type { Product } from '@/types/product';
+import type { Product, ProductStatus } from '@/types/product';
 
 /**
  * CSV Export/Import utilities for product data
@@ -39,6 +39,19 @@ export interface CSVProductRow {
   quality_score: string;
   created_at: string;
   updated_at: string;
+  // Variant columns (optional). One row per variant; rows sharing the same `id`
+  // belong to one product. Only the first row of a product needs the product columns.
+  variant_sku?: string;
+  variant_gtin?: string;
+  option1_name?: string;
+  option1_value?: string;
+  option2_name?: string;
+  option2_value?: string;
+  option3_name?: string;
+  option3_value?: string;
+  variant_price_amount?: string;
+  variant_sale_price_amount?: string;
+  variant_cost_price_amount?: string;
 }
 
 /**
@@ -110,28 +123,14 @@ export function csvRowToProduct(row: CSVProductRow): Partial<Product> {
         no: row.description_long_no || '',
       },
       brand: row.brand || '',
-      status: (row.status as any) || 'development',
+      status: normalizeStatus(row.status) as ProductStatus,
       launchDate: row.launch_date || undefined,
       endDate: row.end_date || undefined,
     },
     attributesAndSpecs: {
       categories: row.categories ? row.categories.split('; ').filter(Boolean) : [],
-      properties: row.properties ? row.properties.split('; ').map(prop => {
-        const [key, ...valueParts] = prop.split(': ');
-        return {
-          id: `prop-${Math.random().toString(36).substr(2, 9)}`,
-          key: key || '',
-          value: valueParts.join(': ') || '',
-        };
-      }) : [],
-      technicalSpecs: row.technical_specs ? row.technical_specs.split('; ').map(spec => {
-        const [key, ...valueParts] = spec.split(': ');
-        return {
-          id: `spec-${Math.random().toString(36).substr(2, 9)}`,
-          key: key || '',
-          value: valueParts.join(': ') || '',
-        };
-      }) : [],
+      properties: parseKeyValueList(row.properties, 'prop', 'Property'),
+      technicalSpecs: parseKeyValueList(row.technical_specs, 'spec', 'Feature'),
       countryOfOrigin: row.country_of_origin || undefined,
     },
     media: {
@@ -223,7 +222,153 @@ export function getCSVHeaders(): string[] {
     'quality_score',
     'created_at',
     'updated_at',
+    ...VARIANT_HEADERS,
   ];
+}
+
+const VARIANT_HEADERS = [
+  'variant_sku',
+  'variant_gtin',
+  'option1_name',
+  'option1_value',
+  'option2_name',
+  'option2_value',
+  'option3_name',
+  'option3_value',
+  'variant_price_amount',
+  'variant_sale_price_amount',
+  'variant_cost_price_amount',
+] as const;
+
+const OPTION_SLOTS = [1, 2, 3] as const;
+
+function optionPairs(row: CSVProductRow): Array<{ name: string; value: string }> {
+  return OPTION_SLOTS
+    .map(n => ({
+      name: (row[`option${n}_name` as keyof CSVProductRow] || '').trim(),
+      value: (row[`option${n}_value` as keyof CSVProductRow] || '').trim(),
+    }))
+    .filter(pair => pair.name && pair.value);
+}
+
+/** True if the row describes a variant (has a variant SKU or at least one option value) */
+export function rowHasVariant(row: CSVProductRow): boolean {
+  return !!(row.variant_sku || '').trim() || optionPairs(row).length > 0;
+}
+
+/**
+ * Groups parsed rows into products. Rows with the same `id` form one product
+ * (first row = product data, every row may describe a variant). Rows without
+ * an id are always their own product. Original row numbers are kept for errors.
+ */
+export function groupCSVRows(rows: CSVProductRow[]): Array<{ rows: CSVProductRow[]; rowNumbers: number[] }> {
+  const groups: Array<{ rows: CSVProductRow[]; rowNumbers: number[] }> = [];
+  const byId = new Map<string, { rows: CSVProductRow[]; rowNumbers: number[] }>();
+  rows.forEach((row, index) => {
+    const rowNumber = index + 2; // header is row 1
+    const id = (row.id || '').trim();
+    const existing = id ? byId.get(id) : undefined;
+    if (existing) {
+      existing.rows.push(row);
+      existing.rowNumbers.push(rowNumber);
+      return;
+    }
+    const group = { rows: [row], rowNumbers: [rowNumber] };
+    groups.push(group);
+    if (id) byId.set(id, group);
+  });
+  return groups;
+}
+
+/**
+ * Builds one product from a group of rows: product data from the first row,
+ * options and variants from every row that carries variant columns.
+ */
+export function csvGroupToProduct(rows: CSVProductRow[]): Partial<Product> {
+  const product = csvRowToProduct(rows[0]);
+  const variantRows = rows.filter(rowHasVariant);
+  if (variantRows.length === 0) return product;
+
+  const currency = rows[0].standard_price_currency || 'NOK';
+  const baseSku = product.basicInfo?.sku || '';
+  const options: Array<{ id: string; name: string; values: string[] }> = [];
+
+  const variants = variantRows.map(row => {
+    const optionValues: Record<string, string> = {};
+    for (const { name, value } of optionPairs(row)) {
+      optionValues[name] = value;
+      let option = options.find(o => o.name === name);
+      if (!option) {
+        option = { id: `opt-${Math.random().toString(36).substr(2, 9)}`, name, values: [] };
+        options.push(option);
+      }
+      if (!option.values.includes(value)) option.values.push(value);
+    }
+    // Same convention as the product form's variant generator: BASE-SKU-VALUE1-VALUE2
+    const suffix = Object.values(optionValues).join('-').toUpperCase().replace(/[^A-Z0-9-]/g, '');
+    const price = (amount: string | undefined, prefix: string) =>
+      amount && amount.trim() ? [{ id: `${prefix}-${Math.random().toString(36).substr(2, 9)}`, amount: parseFloat(amount) || 0, currency }] : undefined;
+
+    return {
+      id: `var-${Math.random().toString(36).substr(2, 9)}`,
+      sku: (row.variant_sku || '').trim() || (baseSku && suffix ? `${baseSku}-${suffix}` : baseSku),
+      gtin: (row.variant_gtin || '').trim() || undefined,
+      optionValues,
+      standardPrice: price(row.variant_price_amount, 'vprice'),
+      salePrice: price(row.variant_sale_price_amount, 'vsale'),
+      costPrice: price(row.variant_cost_price_amount, 'vcost'),
+    };
+  });
+
+  return { ...product, options: options.slice(0, 3), variants };
+}
+
+/** Product → CSV rows: one row per variant (product columns on the first row only) */
+export function productToCSVRows(product: Product): CSVProductRow[] {
+  const base = productToCSVRow(product);
+  const variants = product.variants || [];
+  if (variants.length === 0) return [base];
+
+  return variants.map((variant, index) => {
+    const row: CSVProductRow = index === 0
+      ? { ...base }
+      : ({ id: base.id } as CSVProductRow);
+    Object.entries(variant.optionValues || {}).slice(0, 3).forEach(([name, value], i) => {
+      (row as any)[`option${i + 1}_name`] = name;
+      (row as any)[`option${i + 1}_value`] = value;
+    });
+    row.variant_sku = variant.sku || '';
+    row.variant_gtin = variant.gtin || '';
+    row.variant_price_amount = variant.standardPrice?.[0]?.amount?.toString() || '';
+    row.variant_sale_price_amount = variant.salePrice?.[0]?.amount?.toString() || '';
+    row.variant_cost_price_amount = variant.costPrice?.[0]?.amount?.toString() || '';
+    return row;
+  });
+}
+
+/**
+ * Parses "Key: value; Key – value; free text" into key/value entries.
+ * Accepts ":" or a spaced dash (–, —, -) as separator. Entries without a
+ * separator (plain feature bullets) get a numbered key so the value is never lost.
+ */
+export function parseKeyValueList(
+  text: string | undefined,
+  idPrefix: string,
+  fallbackKey: string
+): Array<{ id: string; key: string; value: string }> {
+  if (!text) return [];
+  return text
+    .split(';')
+    .map(part => part.trim())
+    .filter(Boolean)
+    .map((part, index) => {
+      const match = part.match(/^(.+?)(?::\s+|\s+[–—-]\s+)(.+)$/);
+      return {
+        id: `${idPrefix}-${Math.random().toString(36).substr(2, 9)}`,
+        key: match ? match[1].trim() : `${fallbackKey} ${index + 1}`,
+        value: match ? match[2].trim() : part,
+      };
+    });
 }
 
 /**
@@ -243,7 +388,7 @@ export function productsToCSV(products: Product[]): string {
   if (products.length === 0) return '';
 
   const headers = getCSVHeaders();
-  const csvRows = products.map(product => productToCSVRow(product));
+  const csvRows = products.flatMap(product => productToCSVRows(product));
   
   const csvLines = [
     headers.join(','),
@@ -256,17 +401,65 @@ export function productsToCSV(products: Product[]): string {
 }
 
 /**
+ * Parses CSV text into records, honoring quoted fields that contain
+ * commas, escaped quotes ("") and embedded newlines (CRLF or LF).
+ */
+function parseCSVRecords(text: string): string[][] {
+  const records: string[][] = [];
+  let record: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1); // strip BOM
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+
+    if (inQuotes) {
+      if (char === '"') {
+        if (text[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        current += char;
+      }
+    } else if (char === '"') {
+      inQuotes = true;
+    } else if (char === ',') {
+      record.push(current.trim());
+      current = '';
+    } else if (char === '\n' || char === '\r') {
+      if (char === '\r' && text[i + 1] === '\n') i++;
+      record.push(current.trim());
+      current = '';
+      if (record.some(v => v !== '')) records.push(record);
+      record = [];
+    } else {
+      current += char;
+    }
+  }
+
+  record.push(current.trim());
+  if (record.some(v => v !== '')) records.push(record);
+
+  return records;
+}
+
+/**
  * Parses CSV string to array of CSVProductRow objects
  */
 export function parseCSV(csvText: string): CSVProductRow[] {
-  const lines = csvText.split('\n').filter(line => line.trim());
-  if (lines.length < 2) return [];
+  const records = parseCSVRecords(csvText);
+  if (records.length < 2) return [];
 
-  const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+  const headers = records[0];
   const rows: CSVProductRow[] = [];
 
-  for (let i = 1; i < lines.length; i++) {
-    const values = parseCSVLine(lines[i]);
+  for (let i = 1; i < records.length; i++) {
+    const values = records[i];
     if (values.length !== headers.length) continue;
 
     const row: Partial<CSVProductRow> = {};
@@ -281,52 +474,41 @@ export function parseCSV(csvText: string): CSVProductRow[] {
 }
 
 /**
- * Parses a single CSV line handling quoted fields
- */
-function parseCSVLine(line: string): string[] {
-  const values: string[] = [];
-  let current = '';
-  let inQuotes = false;
-  let i = 0;
-
-  while (i < line.length) {
-    const char = line[i];
-    const nextChar = line[i + 1];
-
-    if (char === '"') {
-      if (inQuotes && nextChar === '"') {
-        // Escaped quote
-        current += '"';
-        i += 2;
-        continue;
-      } else {
-        // Toggle quote state
-        inQuotes = !inQuotes;
-      }
-    } else if (char === ',' && !inQuotes) {
-      // Field separator
-      values.push(current.trim());
-      current = '';
-    } else {
-      current += char;
-    }
-    i++;
-  }
-
-  // Add the last field
-  values.push(current.trim());
-
-  return values;
-}
-
-/**
  * Validates CSV data structure
  */
 export function validateCSVData(csvRows: CSVProductRow[]): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 
-  csvRows.forEach((row, index) => {
-    const rowNum = index + 2; // +2 because CSV has header and is 1-indexed
+  for (const group of groupCSVRows(csvRows)) {
+    group.rows.forEach((row, i) => {
+      const rowNum = group.rowNumbers[i];
+      for (const field of ['variant_price_amount', 'variant_sale_price_amount', 'variant_cost_price_amount'] as const) {
+        const value = row[field];
+        if (value && isNaN(parseFloat(value))) errors.push(`Row ${rowNum}: Invalid ${field.replace(/_/g, ' ')} "${value}"`);
+      }
+      OPTION_SLOTS.forEach(n => {
+        const name = (row[`option${n}_name` as keyof CSVProductRow] || '').trim();
+        const value = (row[`option${n}_value` as keyof CSVProductRow] || '').trim();
+        if (!!name !== !!value) errors.push(`Row ${rowNum}: option${n}_name and option${n}_value must both be filled in`);
+      });
+      if (row.variant_gtin && !/^\d{8,14}$/.test(row.variant_gtin.replace(/\D/g, ''))) {
+        errors.push(`Row ${rowNum}: Invalid variant GTIN format "${row.variant_gtin}"`);
+      }
+    });
+    const variantRows = group.rows.filter(rowHasVariant);
+    if (variantRows.length > 1) {
+      const seen = new Set<string>();
+      variantRows.forEach(row => {
+        const key = optionPairs(row).map(p => `${p.name}=${p.value}`).join('|');
+        if (key && seen.has(key)) errors.push(`Row ${group.rowNumbers[group.rows.indexOf(row)]}: Duplicate variant (${key.replace(/\|/g, ', ')}) for product "${row.id}"`);
+        seen.add(key);
+      });
+    }
+  }
+
+  // Product-level checks only apply to the first row of each product
+  const productRows = groupCSVRows(csvRows).map(g => ({ row: g.rows[0], rowNum: g.rowNumbers[0] }));
+  productRows.forEach(({ row, rowNum }) => {
 
     // Required fields validation
     if (!row.sku || row.sku.trim() === '') {
@@ -339,7 +521,7 @@ export function validateCSVData(csvRows: CSVProductRow[]): { valid: boolean; err
 
     // Status validation
     const validStatuses = ['active', 'development', 'inactive', 'discontinued'];
-    if (row.status && !validStatuses.includes(row.status)) {
+    if (row.status && !validStatuses.includes(normalizeStatus(row.status))) {
       errors.push(`Row ${rowNum}: Invalid status "${row.status}". Must be one of: ${validStatuses.join(', ')}`);
     }
 
@@ -375,6 +557,16 @@ export function validateCSVData(csvRows: CSVProductRow[]): { valid: boolean; err
     valid: errors.length === 0,
     errors,
   };
+}
+
+/**
+ * Maps external status values (e.g. Shopify "draft") to Pimify statuses
+ */
+function normalizeStatus(status: string | undefined): string {
+  const value = (status || '').trim().toLowerCase();
+  if (!value || value === 'draft') return 'development';
+  if (value === 'archived') return 'inactive';
+  return value;
 }
 
 /**

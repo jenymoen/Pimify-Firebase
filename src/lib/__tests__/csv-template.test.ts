@@ -51,7 +51,7 @@ describe('CSV Template', () => {
       const template = generateCSVTemplate();
       const lines = template.split('\n');
       
-      expect(lines).toHaveLength(2); // Header + sample row
+      expect(lines).toHaveLength(3); // Header + product row + extra variant row
       expect(lines[0]).toContain('id');
       expect(lines[0]).toContain('sku');
       expect(lines[0]).toContain('name_en');
@@ -97,7 +97,7 @@ describe('CSV Template', () => {
       const template = generateCSVTemplate();
       const csvRows = parseCSV(template);
       
-      expect(csvRows).toHaveLength(1); // One sample row
+      expect(csvRows).toHaveLength(2); // One product with two variant rows
       expect(csvRows[0].id).toBe('sample-product-1');
       expect(csvRows[0].sku).toBe('SAMPLE-001');
       expect(csvRows[0].name_en).toBe('Sample Product');

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { RolePermissions } from '@/lib/role-permissions';
 import { WorkflowAction, UserRole } from '@/types/workflow';
 import { authService } from '@/lib/auth-service';
@@ -69,6 +70,16 @@ export function withRoleBasedAccess(
           },
           { status: 401 }
         );
+      }
+
+      if (userName === 'Unknown User') {
+        try {
+          const { firestoreUserStore } = await import('@/lib/firestore-user-repository');
+          const dbUser = await firestoreUserStore.getById(userId);
+          if (dbUser) userName = dbUser.name || dbUser.email || userName;
+        } catch (e) {
+          console.error('[Middleware] Could not resolve user name:', e);
+        }
       }
 
       // Extract resource ID if needed
@@ -386,11 +397,24 @@ export function withValidation<T>(
 
     } catch (error) {
       console.error('Validation middleware error:', error);
+      let details = 'Unknown validation error';
+      let issues: any = undefined;
+
+      if (error instanceof z.ZodError) {
+        issues = error.errors;
+        details = error.errors
+          .map((e) => `${e.path.length > 0 ? e.path.join('.') : 'root'}: ${e.message}`)
+          .join(', ');
+      } else if (error instanceof Error) {
+        details = error.message;
+      }
+
       return NextResponse.json(
         {
           success: false,
           error: 'Invalid request data',
-          details: error instanceof Error ? error.message : 'Unknown validation error',
+          details,
+          issues,
         },
         { status: 400 }
       );

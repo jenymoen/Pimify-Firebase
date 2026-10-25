@@ -34,18 +34,23 @@ import { MultilingualInput } from "@/components/shared/multilingual-input";
 import type { Product, MultilingualString, KeyValueEntry, MediaEntry, ProductStatus, PriceEntry, ProductOption, ProductVariant } from "@/types/product";
 import { initialProductData, defaultMultilingualString } from "@/types/product";
 import { useProductStore } from "@/lib/product-store";
+import { useSkuSeriesStore } from "@/lib/sku-series-store";
+import { TagInput } from "@/components/products/tag-input";
+import { MetafieldFields } from "@/components/products/metafield-fields";
+import { CategoryPicker } from "@/components/products/category-picker";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { summarizeProductInformation } from "@/ai/flows/summarize-product-information";
 import { generateProductDescriptions } from "@/ai/flows/generate-product-descriptions";
-import { Info, Package, Tag, Image as ImageIconLucide, BarChart3, Brain, CalendarDays, CheckCircle, Save, Trash2, Sparkles, Languages, Edit, DollarSign, ListPlus, Cog, Settings2 } from "lucide-react";
+import { Info, Package, Tag, Image as ImageIconLucide, BarChart3, Brain, CalendarDays, CheckCircle, Save, Trash2, Sparkles, Languages, Edit, DollarSign, ListPlus, Cog, Settings2, Weight, ShieldCheck, Leaf, AlertTriangle } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
 import { v4 as uuidv4 } from 'uuid';
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -73,8 +78,11 @@ const baseMultilingualStringSchema = z.object({
 
 const keyValueEntrySchema = z.object({
   id: z.string(),
-  key: z.string().min(1, "Key cannot be empty"),
-  value: z.string().min(1, "Value cannot be empty"),
+  key: z.string(),
+  value: z.string(),
+}).refine(entry => entry.key.trim() !== "" || entry.value.trim() === "", {
+  message: "Key cannot be empty when a value is set",
+  path: ["key"],
 });
 
 const mediaEntrySchema = z.object({
@@ -97,12 +105,22 @@ const mediaEntrySchema = z.object({
   title: z.string().optional(),
 });
 
+const isBlankOption = (opt: { name?: string; values?: string }) =>
+  !(opt.name || '').trim() && !(opt.values || '').trim();
+
+// A completely empty option row is ignored (and dropped on save); a half-filled one is an error
 const productOptionSchema = z.object({
   id: z.string(),
-  name: z.string().min(1, "Option name is required."),
-  values: z.string()
-    .min(1, "Option values are required (comma-separated).")
-    .refine(val => val.split(',').map(v => v.trim()).filter(v => v).length > 0, { message: "Please provide at least one valid, non-empty option value (e.g., 'Red' or 'Red,Blue'). Values like ' , ' are not valid." })
+  name: z.string().default(''),
+  values: z.string().default(''),
+}).superRefine((opt, ctx) => {
+  if (isBlankOption(opt)) return;
+  if (!opt.name.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['name'], message: "Option name is required." });
+  }
+  if (opt.values.split(',').map(v => v.trim()).filter(v => v).length === 0) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['values'], message: "Please provide at least one option value (e.g., 'Red' or 'Red,Blue')." });
+  }
 });
 
 const productVariantSchema = z.object({
@@ -128,6 +146,9 @@ const productFormSchema = z.object({
     name: requiredMultilingualStringSchema,
     sku: z.string().min(1, "SKU is required"),
     gtin: z.string().optional(),
+    internalId: z.string().optional(),
+    manufacturer: z.string().optional(),
+    supplierArticleNumber: z.string().optional(),
     descriptionShort: requiredMultilingualStringSchema,
     descriptionLong: requiredMultilingualStringSchema,
     brand: z.string().min(1, "Brand is required"),
@@ -169,6 +190,45 @@ const productFormSchema = z.object({
   options: z.array(productOptionSchema).max(3, "Maximum of 3 options allowed.").optional(),
   variants: z.array(productVariantSchema).optional(),
   aiSummary: baseMultilingualStringSchema.optional(),
+  tags: z.array(z.string()).optional(),
+  shopifyMetafields: z.record(z.string()).optional(),
+  googleCategory: z.object({ id: z.number(), path: z.string(), pathNo: z.string().optional() }).optional(),
+  shopifyCategory: z.object({ id: z.string(), fullName: z.string() }).optional(),
+  logistics: z.object({
+    weightKg: z.preprocess(
+      (val) => (String(val).trim() === "" || val === null || val === undefined ? undefined : val),
+      z.coerce.number().min(0).optional()
+    ),
+    lengthCm: z.preprocess(
+      (val) => (String(val).trim() === "" || val === null || val === undefined ? undefined : val),
+      z.coerce.number().min(0).optional()
+    ),
+    widthCm: z.preprocess(
+      (val) => (String(val).trim() === "" || val === null || val === undefined ? undefined : val),
+      z.coerce.number().min(0).optional()
+    ),
+    heightCm: z.preprocess(
+      (val) => (String(val).trim() === "" || val === null || val === undefined ? undefined : val),
+      z.coerce.number().min(0).optional()
+    ),
+    packagingType: z.string().optional(),
+  }).optional(),
+  compliance: z.object({
+    isHazardousGoods: z.boolean().optional(),
+    hazardousGoodsUnCode: z.string().optional(),
+    certifications: z.array(z.string()).optional(),
+    ageRestriction: z.preprocess(
+      (val) => (String(val).trim() === "" || val === null || val === undefined ? undefined : val),
+      z.coerce.number().min(0).max(99).optional()
+    ),
+  }).optional(),
+  sustainability: z.object({
+    recyclingInfo: baseMultilingualStringSchema.optional(),
+    carbonFootprintKg: z.preprocess(
+      (val) => (String(val).trim() === "" || val === null || val === undefined ? undefined : val),
+      z.coerce.number().min(0).optional()
+    ),
+  }).optional(),
 });
 
 type ProductFormData = z.infer<typeof productFormSchema>;
@@ -223,10 +283,14 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       costPriceAmount: existingProduct.pricingAndStock?.costPrice?.[0]?.amount ?? undefined,
       costPriceCurrency: existingProduct.pricingAndStock?.costPrice?.[0]?.currency || "NOK",
     },
+    tags: existingProduct.tags || [],
+    shopifyMetafields: existingProduct.shopifyMetafields || {},
+    googleCategory: existingProduct.googleCategory,
+    shopifyCategory: existingProduct.shopifyCategory,
     options: (existingProduct.options || []).map(opt => ({
-      id: opt.id,
-      name: opt.name,
-      values: Array.isArray(opt.values) ? opt.values.join(',') : opt.values,
+      id: opt.id || uuidv4(),
+      name: opt.name || '',
+      values: Array.isArray(opt.values) ? opt.values.join(',') : (opt.values || ''),
     })),
     variants: (existingProduct.variants || []).map(v => {
       return {
@@ -241,6 +305,23 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       };
     }),
     aiSummary: existingProduct.aiSummary || { ...defaultMultilingualString },
+    logistics: {
+      weightKg: existingProduct.logistics?.weightKg ?? undefined,
+      lengthCm: existingProduct.logistics?.lengthCm ?? undefined,
+      widthCm: existingProduct.logistics?.widthCm ?? undefined,
+      heightCm: existingProduct.logistics?.heightCm ?? undefined,
+      packagingType: existingProduct.logistics?.packagingType || '',
+    },
+    compliance: {
+      isHazardousGoods: existingProduct.compliance?.isHazardousGoods ?? false,
+      hazardousGoodsUnCode: existingProduct.compliance?.hazardousGoodsUnCode || '',
+      certifications: existingProduct.compliance?.certifications || [],
+      ageRestriction: existingProduct.compliance?.ageRestriction ?? undefined,
+    },
+    sustainability: {
+      recyclingInfo: existingProduct.sustainability?.recyclingInfo || { ...defaultMultilingualString },
+      carbonFootprintKg: existingProduct.sustainability?.carbonFootprintKg ?? undefined,
+    },
   } : {
     basicInfo: {
       name: { ...defaultMultilingualString },
@@ -273,9 +354,28 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       costPriceAmount: undefined,
       costPriceCurrency: "NOK",
     },
+    tags: [],
+    shopifyMetafields: {},
     options: [],
     variants: [],
     aiSummary: { ...defaultMultilingualString },
+    logistics: {
+      weightKg: undefined,
+      lengthCm: undefined,
+      widthCm: undefined,
+      heightCm: undefined,
+      packagingType: '',
+    },
+    compliance: {
+      isHazardousGoods: false,
+      hazardousGoodsUnCode: '',
+      certifications: [],
+      ageRestriction: undefined,
+    },
+    sustainability: {
+      recyclingInfo: { ...defaultMultilingualString },
+      carbonFootprintKg: undefined,
+    },
   };
 
 
@@ -284,6 +384,19 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     defaultValues: defaultValues as any,
     mode: "onChange",
   });
+
+  // Pre-fill the SKU from the configured series when creating a new product
+  // The number is reserved on the server, so concurrent users never get the same SKU
+  const allocateSkus = useSkuSeriesStore(s => s.allocate);
+  const skuRequested = useRef(false);
+  useEffect(() => {
+    if (existingProduct || skuRequested.current || form.getValues("basicInfo.sku")) return;
+    skuRequested.current = true;
+    allocateSkus(1)
+      .then(([sku]) => { if (sku && !form.getValues("basicInfo.sku")) form.setValue("basicInfo.sku", sku, { shouldValidate: true }); })
+      .catch(err => console.error('Could not reserve SKU from series:', err));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingProduct]);
 
   const { fields: optionsFields, append: appendOption, remove: removeOption } = useFieldArray({
     control: form.control,
@@ -324,8 +437,9 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
         },
         attributesAndSpecs: {
           categories: data.attributesAndSpecs.categories || [],
-          properties: data.attributesAndSpecs.properties || [],
-          technicalSpecs: data.attributesAndSpecs.technicalSpecs || [],
+          // Drop rows where both key and value were left empty
+          properties: (data.attributesAndSpecs.properties || []).filter(e => e.key.trim() || e.value.trim()),
+          technicalSpecs: (data.attributesAndSpecs.technicalSpecs || []).filter(e => e.key.trim() || e.value.trim()),
           countryOfOrigin: data.attributesAndSpecs.countryOfOrigin,
         },
         media: {
@@ -363,12 +477,37 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
           en: data.aiSummary?.en || '',
           no: data.aiSummary?.no || ''
         },
+        logistics: data.logistics ? {
+          weightKg: data.logistics.weightKg,
+          lengthCm: data.logistics.lengthCm,
+          widthCm: data.logistics.widthCm,
+          heightCm: data.logistics.heightCm,
+          packagingType: data.logistics.packagingType || undefined,
+        } : undefined,
+        compliance: data.compliance ? {
+          isHazardousGoods: data.compliance.isHazardousGoods,
+          hazardousGoodsUnCode: data.compliance.hazardousGoodsUnCode || undefined,
+          certifications: data.compliance.certifications,
+          ageRestriction: data.compliance.ageRestriction,
+        } : undefined,
+        sustainability: data.sustainability ? {
+          recyclingInfo: {
+            en: data.sustainability.recyclingInfo?.en || '',
+            no: data.sustainability.recyclingInfo?.no || '',
+          },
+          carbonFootprintKg: data.sustainability.carbonFootprintKg,
+        } : undefined,
         pricingAndStock: {
           standardPrice: [],
           salePrice: [],
           costPrice: [],
         },
-        options: (data.options || []).map(opt => ({
+        tags: data.tags || [],
+        googleCategory: data.googleCategory,
+        shopifyCategory: data.shopifyCategory,
+        // Empty values are not stored, so clearing a field removes it
+        shopifyMetafields: Object.fromEntries(Object.entries(data.shopifyMetafields || {}).filter(([, v]) => v !== '' && v !== undefined)),
+        options: (data.options || []).filter(opt => !isBlankOption(opt)).map(opt => ({
           id: opt.id,
           name: opt.name,
           values: opt.values.split(',').map(v => v.trim()).filter(v => v),
@@ -442,12 +581,23 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     }
   }
 
+  // react-hook-form errors hold DOM refs and log as "{}", so flatten them to "path: message"
+  const flattenErrors = (node: any, path: string[] = []): string[] => {
+    if (!node || typeof node !== 'object') return [];
+    if (typeof node.message === 'string' && node.message) return [`${path.join('.')}: ${node.message}`];
+    return Object.entries(node)
+      .filter(([key]) => key !== 'ref')
+      .flatMap(([key, value]) => flattenErrors(value, [...path, key]));
+  };
+
   const onError = (errors: FieldErrors<ProductFormData>) => {
-    console.error("Form validation errors (raw object):", errors);
-    console.error("Form validation errors (JSON stringified):", JSON.stringify(errors, null, 2));
+    const messages = flattenErrors(errors);
+    console.error("Form validation errors:", messages);
     toast({
       title: "Validation Error",
-      description: "Please check the form for errors. Some required fields might be missing or invalid.",
+      description: messages.length > 0
+        ? messages.slice(0, 5).join(" | ") + (messages.length > 5 ? ` (+${messages.length - 5} more)` : "")
+        : "Please check the form for errors. Some required fields might be missing or invalid.",
       variant: "destructive",
     });
   };
@@ -555,6 +705,12 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
     form.setValue("attributesAndSpecs.categories", newCategories, { shouldValidate: true, shouldDirty: true });
   };
 
+  const certifications = form.watch("compliance.certifications") || [];
+  const handleCertificationsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newCerts = e.target.value.split(',').map(c => c.trim()).filter(c => c !== "");
+    form.setValue("compliance.certifications", newCerts, { shouldValidate: true, shouldDirty: true });
+  };
+
   const generateVariants = () => {
     const options = form.getValues("options");
     if (!options || options.length === 0) {
@@ -573,7 +729,8 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
       return hasName && hasValidValues;
     });
 
-    if (validOptions.length !== options.length || validOptions.length === 0) {
+    const filledOptions = options.filter(opt => !isBlankOption(opt));
+    if (validOptions.length !== filledOptions.length || validOptions.length === 0) {
       toast({ title: "Incomplete Options", description: "Ensure all defined options have a name and at least one value.", variant: "destructive" });
       replaceVariants([]);
       return;
@@ -653,7 +810,7 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
               
               <Tabs defaultValue="basic-info" className="flex flex-col gap-6 w-full font-sans">
                 <TabsList className="bg-transparent p-0 flex border-b border-[#eaf0f0] gap-8 rounded-none h-auto w-full justify-start overflow-x-auto">
-                  {['basic-info', 'media', 'variants', 'seo'].map((tab) => (
+                  {['basic-info', 'media', 'variants', 'logistics', 'compliance', 'seo'].map((tab) => (
                     <TabsTrigger
                       key={tab}
                       value={tab}
@@ -691,6 +848,30 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                           <FormItem>
                             <FormLabel className="text-[#111818] font-semibold">Base GTIN/EAN/UPC</FormLabel>
                             <FormControl><Input placeholder="Global Trade Item Number" className="border-[#eaf0f0] focus:ring-[#2f7979]/20" {...field} value={field.value || ''} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+
+                      <FormField control={form.control} name="basicInfo.internalId" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-[#111818] font-semibold">Internal ID</FormLabel>
+                            <FormControl><Input placeholder="Internal PIM reference number" className="border-[#eaf0f0]" {...field} value={field.value || ''} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+
+                      <FormField control={form.control} name="basicInfo.manufacturer" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-[#111818] font-semibold">Manufacturer</FormLabel>
+                            <FormControl><Input placeholder="Who manufactured the product" className="border-[#eaf0f0]" {...field} value={field.value || ''} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+
+                      <FormField control={form.control} name="basicInfo.supplierArticleNumber" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-[#111818] font-semibold">Supplier Article No.</FormLabel>
+                            <FormControl><Input placeholder="Supplier's own part/article number" className="border-[#eaf0f0]" {...field} value={field.value || ''} /></FormControl>
                             <FormMessage />
                           </FormItem>
                         )} />
@@ -786,6 +967,16 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                             <FormMessage />
                           </FormItem>
                         )} />
+                      <div className="border border-[#eaf0f0] rounded-xl p-4 bg-[#f9fbfb]">
+                        <CategoryPicker
+                          value={{ googleCategory: form.watch("googleCategory"), shopifyCategory: form.watch("shopifyCategory") }}
+                          onChange={v => {
+                            form.setValue("googleCategory", v.googleCategory, { shouldDirty: true });
+                            form.setValue("shopifyCategory", v.shopifyCategory, { shouldDirty: true });
+                          }}
+                          productId={existingProduct?.externalIds?.shopifyProductId ? existingProduct.id : undefined}
+                        />
+                      </div>
                       <Controller control={form.control} name="attributesAndSpecs.properties" render={({ field }) => (
                           <div className="border border-[#eaf0f0] rounded-xl p-4 bg-[#f9fbfb]">
                             <KeyValueEditor label="Properties (e.g. Material: Cotton)" entries={field.value || []} onChange={field.onChange} keyPlaceholder="e.g., Material" valuePlaceholder="e.g., Cotton" />
@@ -900,6 +1091,143 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                   </div>
                 </TabsContent>
 
+                {/* LOGISTICS TAB */}
+                <TabsContent value="logistics" className="focus-visible:outline-none focus-visible:ring-0 mt-2 space-y-6">
+                  <div className="bg-white border border-[#eaf0f0] rounded-xl p-8 shadow-sm">
+                    <h3 className="text-lg font-bold mb-6 text-[#111818] flex items-center gap-2">
+                      <Weight className="w-5 h-5 text-[#2f7979]" /> Physical & Shipping
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      <FormField control={form.control} name="logistics.weightKg" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-[#111818] font-semibold">Weight (kg)</FormLabel>
+                            <FormControl><Input type="number" step="0.001" placeholder="e.g. 0.250" className="border-[#eaf0f0]" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))} /></FormControl>
+                            <FormDescription className="text-xs text-[#5e8787]">Product weight in kilograms</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                      <FormField control={form.control} name="logistics.lengthCm" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-[#111818] font-semibold">Length (cm)</FormLabel>
+                            <FormControl><Input type="number" step="0.1" placeholder="e.g. 30.5" className="border-[#eaf0f0]" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                      <FormField control={form.control} name="logistics.widthCm" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-[#111818] font-semibold">Width (cm)</FormLabel>
+                            <FormControl><Input type="number" step="0.1" placeholder="e.g. 20.0" className="border-[#eaf0f0]" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                      <FormField control={form.control} name="logistics.heightCm" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-[#111818] font-semibold">Height (cm)</FormLabel>
+                            <FormControl><Input type="number" step="0.1" placeholder="e.g. 10.0" className="border-[#eaf0f0]" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                      <FormField control={form.control} name="logistics.packagingType" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-[#111818] font-semibold">Packaging Type</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value || ''}>
+                              <FormControl><SelectTrigger className="border-[#eaf0f0]"><SelectValue placeholder="Select type..." /></SelectTrigger></FormControl>
+                              <SelectContent>
+                                {['Box', 'Blister', 'Bag', 'Tube', 'Bottle', 'Can', 'Tray', 'Envelope', 'Pallet', 'Other'].map(t => (
+                                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                    </div>
+                  </div>
+                </TabsContent>
+
+                {/* COMPLIANCE TAB */}
+                <TabsContent value="compliance" className="focus-visible:outline-none focus-visible:ring-0 mt-2 space-y-6">
+                  <div className="bg-white border border-[#eaf0f0] rounded-xl p-8 shadow-sm">
+                    <h3 className="text-lg font-bold mb-6 text-[#111818] flex items-center gap-2">
+                      <ShieldCheck className="w-5 h-5 text-[#2f7979]" /> Safety & Compliance
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField control={form.control} name="compliance.isHazardousGoods" render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border border-[#eaf0f0] p-4 bg-[#f9fbfb]">
+                            <div>
+                              <FormLabel className="text-[#111818] font-semibold flex items-center gap-2">
+                                <AlertTriangle className="w-4 h-4 text-amber-500" /> Hazardous Goods
+                              </FormLabel>
+                              <FormDescription className="text-xs text-[#5e8787] mt-1">Mark if subject to ADR/IATA dangerous goods rules</FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+                            </FormControl>
+                          </FormItem>
+                        )} />
+                      <FormField control={form.control} name="compliance.hazardousGoodsUnCode" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-[#111818] font-semibold">UN / Hazmat Code</FormLabel>
+                            <FormControl><Input placeholder="e.g. UN1950" className="border-[#eaf0f0]" {...field} value={field.value || ''} /></FormControl>
+                            <FormDescription className="text-xs text-[#5e8787]">Required if product is hazardous goods</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                      <FormItem>
+                        <FormLabel className="text-[#111818] font-semibold">Certifications / Conformity Marks</FormLabel>
+                        <Input
+                          placeholder="e.g. CE, RoHS, FCC, IP67 (comma-separated)"
+                          className="border-[#eaf0f0]"
+                          value={certifications.join(', ')}
+                          onChange={handleCertificationsChange}
+                        />
+                        <FormDescription className="text-xs text-[#5e8787]">Enter certification marks separated by commas</FormDescription>
+                        {certifications.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {certifications.map(c => (
+                              <span key={c} className="bg-[#eaf0f0] text-[#2f7979] px-2 py-1 rounded-full text-xs font-semibold">{c}</span>
+                            ))}
+                          </div>
+                        )}
+                      </FormItem>
+                      <FormField control={form.control} name="compliance.ageRestriction" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-[#111818] font-semibold">Minimum Age Restriction</FormLabel>
+                            <FormControl><Input type="number" min="0" max="99" placeholder="e.g. 18" className="border-[#eaf0f0]" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? undefined : parseInt(e.target.value))} /></FormControl>
+                            <FormDescription className="text-xs text-[#5e8787]">Leave empty if no age restriction applies</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-[#eaf0f0] rounded-xl p-8 shadow-sm">
+                    <h3 className="text-lg font-bold mb-6 text-[#111818] flex items-center gap-2">
+                      <Leaf className="w-5 h-5 text-emerald-600" /> Sustainability
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField control={form.control} name="sustainability.carbonFootprintKg" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-[#111818] font-semibold">Carbon Footprint (kg CO₂e)</FormLabel>
+                            <FormControl><Input type="number" step="0.01" placeholder="e.g. 3.50" className="border-[#eaf0f0]" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))} /></FormControl>
+                            <FormDescription className="text-xs text-[#5e8787]">Total lifecycle CO₂-equivalent emissions</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                      <FormField control={form.control} name="sustainability.recyclingInfo" render={({ field }) => (
+                          <FormItem className="md:col-span-2">
+                            <FormLabel className="text-[#111818] font-semibold">Recycling / Disposal Information</FormLabel>
+                            <FormControl>
+                              <MultilingualInput id="recyclingInfo" label="" type="textarea" {...field} value={{ en: field.value?.en || '', no: field.value?.no || '' }} />
+                            </FormControl>
+                            <FormDescription className="text-xs text-[#5e8787]">Instructions for safe disposal or recycling of this product</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                    </div>
+                  </div>
+                </TabsContent>
+
                 {/* SEO TAB */}
                 <TabsContent value="seo" className="focus-visible:outline-none focus-visible:ring-0 mt-2 space-y-6">
                   <div className="bg-white border border-[#eaf0f0] rounded-xl p-8 shadow-sm">
@@ -921,12 +1249,30 @@ export function ProductFormClient({ product: existingProduct }: ProductFormClien
                         )} />
                       <FormField control={form.control} name="marketingSEO.keywords" render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-[#111818] font-semibold">Keywords/Tags</FormLabel>
+                            <FormLabel className="text-[#111818] font-semibold">SEO keywords</FormLabel>
                             <FormControl><Input placeholder="laptop, gaming (comma-separated)" className="border-[#eaf0f0]" value={keywords.join(', ')} onChange={handleKeywordsChange} /></FormControl>
                             <FormMessage />
                           </FormItem>
                         )} />
+                      <FormField control={form.control} name="tags" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-[#111818] font-semibold">Tags</FormLabel>
+                            <FormControl><TagInput value={field.value || []} onChange={field.onChange} placeholder="Type a tag or pick one you have used before" /></FormControl>
+                            <p className="text-xs text-[#5e8787]">Sent to Shopify as product tags (see Settings → Shopify Mapping). New tags are remembered for quick selection.</p>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
                     </div>
+                  </div>
+
+                  <div className="bg-white border border-[#eaf0f0] rounded-xl p-8 shadow-sm">
+                    <h3 className="text-lg font-bold mb-6 text-[#111818]"><Settings2 className="inline-block mr-2 w-5 h-5 text-[#2f7979]"/> Shopify metafields</h3>
+                    <FormField control={form.control} name="shopifyMetafields" render={({ field }) => (
+                        <FormItem>
+                          <FormControl><MetafieldFields value={field.value || {}} onChange={field.onChange} productId={existingProduct?.externalIds?.shopifyProductId ? existingProduct.id : undefined} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
                   </div>
 
                   <div className="bg-white border border-[#eaf0f0] rounded-xl p-8 shadow-sm">

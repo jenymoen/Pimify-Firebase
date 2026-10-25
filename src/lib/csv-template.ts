@@ -42,11 +42,37 @@ export function generateCSVTemplate(): string {
     quality_score: '95',
     created_at: '2024-01-01T10:00:00.000Z',
     updated_at: '2024-01-01T10:00:00.000Z',
+    variant_sku: 'SAMPLE-001-BLACK-M',
+    variant_gtin: '',
+    option1_name: 'Color',
+    option1_value: 'Black',
+    option2_name: 'Size',
+    option2_value: 'M',
+    option3_name: '',
+    option3_value: '',
+    variant_price_amount: '999.00',
+    variant_sale_price_amount: '',
+    variant_cost_price_amount: '',
   };
+
+  // Additional variants of the same product: same id, only variant columns needed
+  const variantRow: Record<string, string> = {
+    id: 'sample-product-1',
+    variant_sku: 'SAMPLE-001-BLACK-L',
+    option1_name: 'Color',
+    option1_value: 'Black',
+    option2_name: 'Size',
+    option2_value: 'L',
+    variant_price_amount: '1049.00',
+  };
+
+  const toLine = (row: Record<string, string>) =>
+    headers.map(header => escapeCSVField(String(row[header] || ''))).join(',');
 
   const csvLines = [
     headers.join(','),
-    headers.map(header => escapeCSVField(String(sampleRow[header as keyof typeof sampleRow] || ''))).join(',')
+    toLine(sampleRow),
+    toLine(variantRow),
   ];
 
   return csvLines.join('\n');

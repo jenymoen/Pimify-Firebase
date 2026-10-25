@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { PlusCircle, Search, Package, Filter, X, ListChecks } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   calculateQualityMetrics,
@@ -32,6 +33,10 @@ export default function ProductsPage() {
   const [mounted, setMounted] = useState(false);
   const [showBulkOps, setShowBulkOps] = useState(false);
   const [showWorkflowFilters, setShowWorkflowFilters] = useState(false);
+  // 'all' | 'published' | 'unpublished' | a specific WorkflowState
+  const [publicationFilter, setPublicationFilter] = useState<string>('all');
+  const [productStatusFilter, setProductStatusFilter] = useState<string>('all');
+  const [brandFilter, setBrandFilter] = useState<string>('all');
 
   // Mock current user role - in a real app, this would come from auth context
   const currentUserRole = UserRole.ADMIN;
@@ -61,6 +66,24 @@ export default function ProductsPage() {
       });
     }
 
+    // Apply publication / workflow filter (products without a workflow state count as draft)
+    if (publicationFilter !== 'all') {
+      filtered = filtered.filter(product => {
+        const state = product.workflowState || WorkflowState.DRAFT;
+        if (publicationFilter === 'published') return state === WorkflowState.PUBLISHED;
+        if (publicationFilter === 'unpublished') return state !== WorkflowState.PUBLISHED;
+        return state === publicationFilter;
+      });
+    }
+
+    if (productStatusFilter !== 'all') {
+      filtered = filtered.filter(product => product.basicInfo.status === productStatusFilter);
+    }
+
+    if (brandFilter !== 'all') {
+      filtered = filtered.filter(product => (product.basicInfo.brand || '') === brandFilter);
+    }
+
     // Apply status filter
     if (selectedStatuses.length > 0) {
       filtered = filtered.filter(product => selectedStatuses.includes(product.basicInfo.status));
@@ -88,7 +111,18 @@ export default function ProductsPage() {
     }
 
     return filtered;
-  }, [allProducts, searchTerm, selectedStatuses, qualityFilter]);
+  }, [allProducts, searchTerm, selectedStatuses, qualityFilter, publicationFilter, productStatusFilter, brandFilter]);
+
+  const brands = useMemo(
+    () => Array.from(new Set(allProducts.map(p => p.basicInfo.brand).filter(Boolean) as string[])).sort(),
+    [allProducts]
+  );
+  const hasCatalogFilters = publicationFilter !== 'all' || productStatusFilter !== 'all' || brandFilter !== 'all';
+  const resetCatalogFilters = () => {
+    setPublicationFilter('all');
+    setProductStatusFilter('all');
+    setBrandFilter('all');
+  };
 
   // Helper function to build URL with updated parameters
   const buildFilterUrl = (newQuality?: string | null, newStatus?: string | null) => {
@@ -144,6 +178,49 @@ export default function ProductsPage() {
             </Button>
           </Link>
         </div>
+      </div>
+
+      {/* Catalog filters */}
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        <Select value={publicationFilter} onValueChange={setPublicationFilter}>
+          <SelectTrigger className="w-[190px]"><SelectValue placeholder="Publication" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All publication states</SelectItem>
+            <SelectItem value="published">Published</SelectItem>
+            <SelectItem value="unpublished">Not published</SelectItem>
+            <SelectItem value={WorkflowState.DRAFT}>Draft</SelectItem>
+            <SelectItem value={WorkflowState.REVIEW}>In review</SelectItem>
+            <SelectItem value={WorkflowState.APPROVED}>Approved</SelectItem>
+            <SelectItem value={WorkflowState.REJECTED}>Rejected</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={productStatusFilter} onValueChange={setProductStatusFilter}>
+          <SelectTrigger className="w-[170px]"><SelectValue placeholder="Product status" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All product statuses</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="development">Development</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
+            <SelectItem value="discontinued">Discontinued</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={brandFilter} onValueChange={setBrandFilter}>
+          <SelectTrigger className="w-[170px]"><SelectValue placeholder="Brand" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All brands</SelectItem>
+            {brands.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        {hasCatalogFilters && (
+          <>
+            <Button variant="ghost" size="sm" onClick={resetCatalogFilters}>
+              <X className="mr-1 h-4 w-4" /> Reset filters
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Showing {filteredProducts.length} of {allProducts.length} products
+            </span>
+          </>
+        )}
       </div>
 
       {/* Workflow Filters Panel */}

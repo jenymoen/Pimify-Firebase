@@ -257,7 +257,12 @@ export const WorkflowProgressIndicator: React.FC<WorkflowProgressIndicatorProps>
    * Get step history entry
    */
   const getStepHistory = (state: WorkflowState) => {
-    return workflowHistory?.find(entry => entry.toState === state);
+    const entry = [...(workflowHistory || [])].reverse().find(e => e.toState === state);
+    // The review step belongs to the assigned reviewer, not to whoever moved it there
+    if (entry && state === WorkflowState.REVIEW && assignedReviewer?.userName) {
+      return { ...entry, userName: assignedReviewer.userName };
+    }
+    return entry;
   };
 
   /**
@@ -453,7 +458,12 @@ export const VerticalWorkflowProgressIndicator: React.FC<VerticalWorkflowProgres
    * Get step history entry
    */
   const getStepHistory = (state: WorkflowState) => {
-    return workflowHistory?.find(entry => entry.toState === state);
+    const entry = [...(workflowHistory || [])].reverse().find(e => e.toState === state);
+    // The review step belongs to the assigned reviewer, not to whoever moved it there
+    if (entry && state === WorkflowState.REVIEW && assignedReviewer?.userName) {
+      return { ...entry, userName: assignedReviewer.userName };
+    }
+    return entry;
   };
 
   const currentStepIndex = getCurrentStepIndex();

@@ -90,6 +90,9 @@ export function AppShell({ children }: AppShellProps) {
   if (isAdmin) {
     settingsNavItems.push({ href: '/users/invitations', label: 'Invitations', icon: Mail });
     settingsNavItems.push({ href: '/users/registration-requests', label: 'Registrations', icon: ListChecks });
+    settingsNavItems.push({ href: '/settings/sku-series', label: 'SKU Series', icon: ListChecks });
+    settingsNavItems.push({ href: '/settings/shopify-mapping', label: 'Shopify Mapping', icon: UploadCloud });
+    settingsNavItems.push({ href: '/settings/tags-metafields', label: 'Tags & Metafields', icon: ListChecks });
     settingsNavItems.push({ href: '/settings/security', label: 'Security', icon: Shield });
     settingsNavItems.push({ href: '/settings/sso', label: 'SSO Configuration', icon: Key });
     settingsNavItems.push({ href: '/settings/ldap', label: 'LDAP Configuration', icon: Network });

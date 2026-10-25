@@ -23,6 +23,9 @@ export class ProductService {
                 status: data.status as any,
                 launchDate: data.launch_date || undefined,
                 endDate: data.end_date || undefined,
+                internalId: data.internal_id || undefined,
+                manufacturer: data.manufacturer || undefined,
+                supplierArticleNumber: data.supplier_article_number || undefined,
             },
             attributesAndSpecs: {
                 categories: data.categories,
@@ -57,7 +60,16 @@ export class ProductService {
                 relatedProducts: data.related_products || undefined,
                 accessories: data.accessories || undefined,
                 replacementProducts: data.replacement_products || undefined,
+                upsellProducts: data.upsell_products || undefined,
             },
+            externalIds: data.shopify_product_id ? { shopifyProductId: data.shopify_product_id } : undefined,
+            tags: data.tags || [],
+            shopifyMetafields: data.shopify_metafields || undefined,
+            googleCategory: data.google_category || undefined,
+            shopifyCategory: data.shopify_category || undefined,
+            logistics: (data.logistics as Product['logistics']) || undefined,
+            compliance: (data.compliance as Product['compliance']) || undefined,
+            sustainability: (data.sustainability as Product['sustainability']) || undefined,
             localizationNorway: {
                 norwegianRegulations: data.norwegian_regulations || undefined,
             },
@@ -90,6 +102,9 @@ export class ProductService {
             status: product.basicInfo.status,
             launch_date: product.basicInfo.launchDate || null,
             end_date: product.basicInfo.endDate || null,
+            internal_id: product.basicInfo.internalId || null,
+            manufacturer: product.basicInfo.manufacturer || null,
+            supplier_article_number: product.basicInfo.supplierArticleNumber || null,
 
             categories: product.attributesAndSpecs.categories,
             properties: product.attributesAndSpecs.properties,
@@ -120,6 +135,16 @@ export class ProductService {
             related_products: product.relations?.relatedProducts || null,
             accessories: product.relations?.accessories || null,
             replacement_products: product.relations?.replacementProducts || null,
+            upsell_products: product.relations?.upsellProducts || null,
+            shopify_product_id: product.externalIds?.shopifyProductId || null,
+            tags: product.tags || [],
+            shopify_metafields: product.shopifyMetafields || null,
+            google_category: product.googleCategory || null,
+            shopify_category: product.shopifyCategory || null,
+
+            logistics: product.logistics || null,
+            compliance: product.compliance || null,
+            sustainability: product.sustainability || null,
 
             norwegian_regulations: product.localizationNorway?.norwegianRegulations || null,
 
@@ -145,6 +170,24 @@ export class ProductService {
         return this.mapToProduct(data);
     }
 
+    /** Entire catalog, most recently updated first */
+    async getAllProducts(): Promise<Product[]> {
+        const rows = await this.productRepo.getAll();
+        return rows
+            .map(row => this.mapToProduct(row))
+            .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+    }
+
+    async getProductsByWorkflowState(state: WorkflowState): Promise<Product[]> {
+        const rows = await this.productRepo.getByWorkflowState(state);
+        return rows.map(row => this.mapToProduct(row));
+    }
+
+    /** Records which Shopify product this product is linked to (does not touch updated_at) */
+    async setShopifyProductId(id: string, shopifyProductId: string): Promise<void> {
+        await this.productRepo.setFields(id, { shopify_product_id: shopifyProductId });
+    }
+
     async createProduct(product: Product): Promise<void> {
         const dbData = this.mapToDB(product);
         await this.productRepo.save(dbData);
@@ -164,7 +207,8 @@ export class ProductService {
         const existing = await this.getProductById(id);
         if (!existing) throw new Error('Product not found');
 
-        const merged = { ...existing, ...updates };
+        // Never let the payload redirect the write to another document
+        const merged = { ...existing, ...updates, id };
         // Merging nested objects need deep merge if partials are deep
         // For now, spread works for top level.
 

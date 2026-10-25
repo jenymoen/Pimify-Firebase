@@ -6,19 +6,22 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { WorkflowState } from '@/types/workflow';
 import { useProductStore } from '@/lib/product-store';
+import { useSkuSeriesStore } from '@/lib/sku-series-store';
 import type { Product } from '@/types/product';
 import { useToast } from '@/hooks/use-toast';
 import { UploadCloud, DownloadCloud, FileJson, AlertTriangle, ShoppingCart, Save, Settings, RefreshCw, FileText, Download } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useShopifyConfigStore } from '@/lib/shopify-config-store';
-import { productsToCSV, parseCSV, csvRowToProduct, validateCSVData } from '@/lib/csv-utils';
+import { productsToCSV, parseCSV, validateCSVData, groupCSVRows, csvGroupToProduct } from '@/lib/csv-utils';
 import { downloadCSVTemplate } from '@/lib/csv-template';
 
 import { useBusinessCentralConfigStore } from '@/lib/business-central-config-store';
 
 export default function ImportExportPage() {
   const { products, importProducts: storeImportProducts } = useProductStore();
+  const skuSeries = useSkuSeriesStore();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const csvFileInputRef = useRef<HTMLInputElement>(null);
@@ -136,11 +139,11 @@ export default function ImportExportPage() {
       const fileContent = await file.text();
       const importedData = JSON.parse(fileContent);
 
-      if (!Array.isArray(importedData) || !importedData.every(item => typeof item === 'object' && (item.id || (item.basicInfo && item.basicInfo.sku)))) {
+      if (!Array.isArray(importedData) || !importedData.every(item => typeof item === 'object' && item !== null && (item.id || (item.basicInfo && (item.basicInfo.sku || item.basicInfo.name)) || item.sku || item.name))) {
         throw new Error("Invalid JSON format. Expected an array of products.");
       }
 
-      storeImportProducts(importedData as Product[]);
+      await storeImportProducts(importedData as Product[]);
       toast({ title: 'JSON Import Successful', description: `${importedData.length} products imported.` });
 
     } catch (err: any) {
@@ -172,6 +175,14 @@ export default function ImportExportPage() {
         throw new Error("No valid data found in CSV file.");
       }
 
+      // Assign SKUs from the configured series to rows that have none
+      // Only the first row of each product carries the product SKU; variant rows don't need one
+      const missing = groupCSVRows(csvRows).map(g => g.rows[0]).filter(row => !row.sku || row.sku.trim() === '');
+      if (missing.length > 0) {
+        const generated = await skuSeries.allocate(missing.length);
+        missing.forEach((row, i) => { if (generated[i]) row.sku = generated[i]; });
+      }
+
       // Validate CSV data
       const validation = validateCSVData(csvRows);
       if (!validation.valid) {
@@ -179,13 +190,14 @@ export default function ImportExportPage() {
       }
 
       // Convert CSV rows to products
-      const products = csvRows.map(row => csvRowToProduct(row)).filter(Boolean) as Product[];
+      // Rows sharing an id are one product with several variants
+      const products = groupCSVRows(csvRows).map(g => csvGroupToProduct(g.rows)).filter(Boolean) as Product[];
 
       if (products.length === 0) {
         throw new Error("No valid products could be created from the CSV data.");
       }
 
-      storeImportProducts(products);
+      await storeImportProducts(products);
       toast({ title: 'CSV Import Successful', description: `${products.length} products imported from CSV.` });
 
     } catch (err: any) {
@@ -208,8 +220,30 @@ export default function ImportExportPage() {
   };
 
 
+  // Shopify credentials may be configured on the server (.env.local) instead of in the browser
+  const [shopifyServerConfig, setShopifyServerConfig] = useState<{ configured: boolean; storeDomain: string | null } | null>(null);
+  useEffect(() => {
+    fetch('/api/shopify/config')
+      .then(res => res.json())
+      .then(setShopifyServerConfig)
+      .catch(() => setShopifyServerConfig({ configured: false, storeDomain: null }));
+  }, []);
+  const shopifyReady = !!shopifyServerConfig?.configured || (!!localStoreUrl.trim() && !!localApiKey.trim());
+
+  // Use what is in the form fields right now (and save it), so an edited but
+  // unsaved Store URL / token is never silently ignored in favour of the old one
+  const getShopifyCredentials = () => {
+    // Credentials in the server environment win; don't send browser-stored ones at all
+    if (shopifyServerConfig?.configured) return {};
+    const url = localStoreUrl.trim();
+    const key = localApiKey.trim();
+    if (url !== storeUrl) setShopifyStoreUrl(url);
+    if (key !== apiKey) setShopifyApiKey(key);
+    return { storeUrl: url, apiKey: key };
+  };
+
   const handleImportFromShopify = async () => {
-    if (!clientShopifyReady) {
+    if (!shopifyReady) {
       toast({ title: 'Configuration Incomplete', description: 'Please configure Shopify Store URL and API Key.', variant: 'destructive' });
       return;
     }
@@ -218,7 +252,7 @@ export default function ImportExportPage() {
       const response = await fetch('/api/shopify/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storeUrl, apiKey, pageInfo: nextPageCursor }),
+        body: JSON.stringify({ ...getShopifyCredentials(), pageInfo: nextPageCursor }),
       });
 
       if (!response.ok) {
@@ -252,42 +286,52 @@ export default function ImportExportPage() {
   };
 
   const handleExportToShopify = async () => {
-    if (!clientShopifyReady) {
+    if (!shopifyReady) {
       toast({ title: 'Configuration Incomplete', description: 'Please configure Shopify Store URL and API Key.', variant: 'destructive' });
       return;
     }
-    if (products.length === 0) {
-      toast({ title: 'No Products to Export', description: 'Add some products before exporting.' });
-      return;
-    }
-
     setIsExportingToShopify(true);
     try {
-      const response = await fetch('/api/shopify/export', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storeUrl, apiKey, productsToExport: products }),
-      });
-
-      if (!response.ok) {
-        let errorBody = `API request failed: ${response.status} ${response.statusText}`;
-        try {
-          const text = await response.text();
-          try {
-            const errorData = JSON.parse(text);
-            errorBody = errorData.error || JSON.stringify(errorData);
-          } catch {
-            errorBody = text || errorBody;
-          }
-        } catch (e) {
-          // Fallback if text() fails
+      const callExport = async (dryRun: boolean) => {
+        const response = await fetch('/api/shopify/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          // No product list: the server exports every published product from the database
+          body: JSON.stringify({ ...getShopifyCredentials(), dryRun }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const details = Array.isArray(data.errors) ? `\n${data.errors.slice(0, 3).join('\n')}` : '';
+          throw new Error((data.error || data.message || `Request failed (${response.status})`) + details);
         }
-        throw new Error(errorBody);
+        return data;
+      };
+
+      // 1. Preview: what would be updated vs. created in Shopify
+      const preview = await callExport(true);
+      const createList = preview.create.slice(0, 10).map((p: any) => `  • ${p.name} (${p.sku})`).join('\n');
+      const confirmed = window.confirm(
+        `Export ${preview.update.length + preview.create.length} published products to Shopify?\n\n` +
+        `• ${preview.update.length} will UPDATE existing Shopify products ` +
+        `(matched by: linked ${preview.matchedBy.linked}, variant id ${preview.matchedBy.variantId}, SKU ${preview.matchedBy.sku}, title ${preview.matchedBy.title})\n` +
+        `• ${preview.create.length} will be CREATED as new products` +
+        (createList ? `:\n${createList}${preview.create.length > 10 ? `\n  …and ${preview.create.length - 10} more` : ''}` : '') +
+        (preview.warnings?.length ? `\n\nWarnings:\n${preview.warnings.slice(0, 5).join('\n')}` : '') +
+        `\n\nUpdates change title, description, vendor, type, tags, status and variant prices. Images and variants in Shopify are not removed.`
+      );
+      if (!confirmed) {
+        toast({ title: 'Export cancelled', description: 'Nothing was sent to Shopify.' });
+        return;
       }
 
-      const data = await response.json(); // Safe to parse as JSON if response.ok
-
-      toast({ title: 'Shopify Export Successful', description: data.message });
+      // 2. Run it
+      const data = await callExport(false);
+      if (data.warnings?.length) console.warn('Shopify export warnings:', data.warnings);
+      toast({
+        title: data.errors?.length ? 'Shopify Export Partly Failed' : 'Shopify Export Successful',
+        description: data.message + (data.warnings?.length ? ` (${data.warnings.length} warnings, see console)` : ''),
+        variant: data.errors?.length ? 'destructive' : undefined,
+      });
     } catch (error: any) {
       console.error('Shopify Export Error:', error);
       toast({ title: 'Shopify Export Failed', description: error.message || 'An error occurred.', variant: 'destructive' });
@@ -533,6 +577,16 @@ export default function ImportExportPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {shopifyServerConfig?.configured && (
+            <div className="p-3 rounded-md border border-emerald-200 bg-emerald-50 text-sm text-emerald-800">
+              Shopify is configured on the server for <strong>{shopifyServerConfig.storeDomain}</strong> (.env.local).
+              Those credentials are used for import and export; the fields below are ignored.
+            </div>
+          )}
+          <p className="text-sm text-muted-foreground">
+            Which Pimify fields are sent to which Shopify fields is set under{' '}
+            <a href="/settings/shopify-mapping" className="underline text-primary">Settings → Shopify Mapping</a>.
+          </p>
           <div className="space-y-4 p-4 border rounded-md bg-muted/20">
             <h3 className="font-medium text-foreground flex items-center gap-2">
               <Settings className="h-5 w-5" /> Store Configuration
@@ -576,7 +630,7 @@ export default function ImportExportPage() {
             <Button
               variant="outline"
               onClick={handleImportFromShopify}
-              disabled={!clientShopifyReady || isImportingFromShopify || isExportingToShopify}
+              disabled={!shopifyReady || isImportingFromShopify || isExportingToShopify}
             >
               {isImportingFromShopify ? <RefreshCw className="mr-2 h-5 w-5 animate-spin" /> : <DownloadCloud className="mr-2 h-5 w-5" />}
               {isImportingFromShopify
@@ -586,7 +640,7 @@ export default function ImportExportPage() {
             <Button
               variant="outline"
               onClick={handleExportToShopify}
-              disabled={!clientShopifyReady || isImportingFromShopify || isExportingToShopify || products.length === 0}
+              disabled={!shopifyReady || isImportingFromShopify || isExportingToShopify}
             >
               {isExportingToShopify ? <RefreshCw className="mr-2 h-5 w-5 animate-spin" /> : <UploadCloud className="mr-2 h-5 w-5" />}
               {isExportingToShopify ? 'Exporting...' : 'Export to Shopify'}

@@ -113,6 +113,9 @@ export interface ProductsTable {
   status: string; // 'active', 'inactive', 'development', 'discontinued'
   launch_date: string | null; // ISO Date
   end_date: string | null;    // ISO Date
+  internal_id?: string | null;
+  manufacturer?: string | null;
+  supplier_article_number?: string | null;
 
   // Attributes & Specs (Stored as JSON objects/arrays)
   categories: string[];
@@ -149,6 +152,23 @@ export interface ProductsTable {
   related_products: string[] | null;
   accessories: string[] | null;
   replacement_products: string[] | null;
+  upsell_products?: string[] | null;
+
+  // External system ids
+  shopify_product_id?: string | null;
+
+  // Categories: Google product taxonomy and Shopify taxonomy
+  google_category?: { id: number; path: string; pathNo?: string } | null;
+  shopify_category?: { id: string; fullName: string } | null;
+
+  // Shopify tags and metafield values ("namespace.key" → value)
+  tags?: string[] | null;
+  shopify_metafields?: Record<string, string> | null;
+
+  // Logistics, compliance & sustainability (JSON)
+  logistics?: Record<string, any> | null;
+  compliance?: Record<string, any> | null;
+  sustainability?: Record<string, any> | null;
 
   // Localization
   norwegian_regulations: string | null;

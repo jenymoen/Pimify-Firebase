@@ -10,7 +10,7 @@ interface ProductState {
 
   // Actions
   fetchProducts: () => Promise<void>;
-  addProduct: (productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'aiSummary'> & { id?: string }, aiSummary?: Product['aiSummary']) => Promise<Product | null>;
+  addProduct: (productData: (Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'aiSummary'> & { id?: string; createdAt?: string; updatedAt?: string; aiSummary?: Product['aiSummary'] }) | any, aiSummary?: Product['aiSummary']) => Promise<Product | null>;
   importProducts: (products: Product[]) => Promise<void>;
   updateProduct: (productId: string, productData: Partial<Product>) => Promise<void>;
   deleteProduct: (productId: string) => Promise<void>;
@@ -32,7 +32,7 @@ export const useProductStore = create<ProductState>((set, get) => ({
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const response = await fetch('/api/products?limit=100', { headers }); // Fetch reasonable batch
+      const response = await fetch('/api/products?all=true', { headers });
       if (!response.ok) {
         console.error(`Fetch failed: ${response.status} ${response.statusText}`);
         const text = await response.text();
@@ -56,21 +56,28 @@ export const useProductStore = create<ProductState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const { addProduct } = get();
-      const results = [];
+      const errors: string[] = [];
+      let successCount = 0;
 
-      // Process in parallel (or sequential if consistency matters more, but parallel is faster)
-      // Limit concurrency if needed, but for 50 items it's fine.
-      await Promise.all(products.map(async (prod) => {
-        // We assume imported products have IDs. We want to preserve them.
-        // addProduct calls the API which now respects ID.
-        const { id, createdAt, updatedAt, aiSummary, ...rest } = prod;
-        // Pass ID explicitly
-        await addProduct({ ...rest, id }, aiSummary);
-      }));
+      for (const prod of products) {
+        try {
+          const { id, createdAt, updatedAt, aiSummary, ...rest } = prod;
+          await addProduct({ ...rest, id, createdAt, updatedAt }, aiSummary);
+          successCount++;
+        } catch (err: any) {
+          const identifier = prod.basicInfo?.sku || (prod as any).sku || prod.basicInfo?.name?.en || (prod as any).name || prod.id || 'Unknown';
+          errors.push(`[${identifier}]: ${err.message || 'Validation failed'}`);
+        }
+      }
 
       // Refresh list
       await get().fetchProducts();
       set({ isLoading: false });
+
+      if (errors.length > 0) {
+        const summary = `${successCount} products imported, ${errors.length} failed:\n${errors.slice(0, 3).join('\n')}${errors.length > 3 ? `\n...and ${errors.length - 3} more` : ''}`;
+        throw new Error(summary);
+      }
     } catch (error) {
       console.error('Error importing products:', error);
       set({ error: (error as Error).message, isLoading: false });
@@ -81,21 +88,37 @@ export const useProductStore = create<ProductState>((set, get) => ({
   addProduct: async (productData, aiSummary) => {
     set({ isLoading: true, error: null });
     try {
-      // Prepare payload to match what API expects (validatedData)
-      // The API creates the ID and timestamps, so we just send the fields
-      // However, for imports, we might provide an ID, which the API should respect.
+      // Prepare payload and normalize fields if flat structure was provided
+      const rawBasic = productData.basicInfo || {};
+      const nameVal = rawBasic.name || (productData as any).name;
+      const name = typeof nameVal === 'string'
+        ? { en: nameVal, no: nameVal }
+        : (nameVal || { en: '', no: '' });
+
+      const descShortVal = rawBasic.descriptionShort || (productData as any).descriptionShort;
+      const descriptionShort = typeof descShortVal === 'string'
+        ? { en: descShortVal, no: descShortVal }
+        : (descShortVal || { en: '', no: '' });
+
+      const descLongVal = rawBasic.descriptionLong || (productData as any).descriptionLong;
+      const descriptionLong = typeof descLongVal === 'string'
+        ? { en: descLongVal, no: descLongVal }
+        : (descLongVal || { en: '', no: '' });
+
       const payload = {
-        id: (productData as any).id, // Pass ID if provided (for imports)
-        basicInfo: productData.basicInfo,
-        attributesAndSpecs: productData.attributesAndSpecs,
-        media: productData.media,
-        marketingSEO: productData.marketingSEO,
-        pricingAndStock: productData.pricingAndStock,
-        options: productData.options,
-        variants: productData.variants,
-        workflowState: productData.workflowState,
-        assignedReviewer: productData.assignedReviewer,
-        aiSummary: aiSummary,
+        ...productData,
+        id: (productData as any).id,
+        basicInfo: {
+          ...rawBasic,
+          name,
+          sku: rawBasic.sku ?? (productData as any).sku ?? '',
+          gtin: rawBasic.gtin ?? (productData as any).gtin ?? undefined,
+          brand: rawBasic.brand ?? (productData as any).brand ?? '',
+          status: rawBasic.status ?? (productData as any).status ?? 'development',
+          descriptionShort,
+          descriptionLong,
+        },
+        aiSummary: aiSummary || (productData as any).aiSummary,
       };
 
       const token = localStorage.getItem('accessToken');
@@ -111,8 +134,14 @@ export const useProductStore = create<ProductState>((set, get) => ({
       });
 
       if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || 'Failed to create product');
+        const errData = await response.json().catch(() => ({ error: 'Failed to create product' }));
+        const detailsStr = errData.details
+          ? (typeof errData.details === 'object' ? JSON.stringify(errData.details) : String(errData.details))
+          : '';
+        const errorMessage = errData.error
+          ? (detailsStr ? `${errData.error} (${detailsStr})` : errData.error)
+          : 'Failed to create product';
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -120,7 +149,8 @@ export const useProductStore = create<ProductState>((set, get) => ({
 
       // Optimistic update or Append result
       set(state => ({
-        products: [...state.products, newProduct],
+        // Upsert: re-importing an existing id overwrites it server-side, so replace instead of appending
+        products: [...state.products.filter(p => p.id !== newProduct.id), newProduct],
         isLoading: false
       }));
 
@@ -128,7 +158,7 @@ export const useProductStore = create<ProductState>((set, get) => ({
     } catch (error) {
       console.error('Error adding product:', error);
       set({ error: (error as Error).message, isLoading: false });
-      return null;
+      throw error;
     }
   },
 

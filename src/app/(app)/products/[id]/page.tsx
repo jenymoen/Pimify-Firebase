@@ -4,6 +4,12 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import type { Product, KeyValueEntry, MediaEntry, PriceEntry, ProductOption, ProductVariant } from '@/types/product';
 import { useProductStore } from '@/lib/product-store';
+import { useAuth } from '@/context/auth-context';
+import { useToast } from '@/hooks/use-toast';
+import { VariantEditDialog, VariantImagePickerDialog } from '@/components/products/variant-edit-dialog';
+import { MetafieldFields } from '@/components/products/metafield-fields';
+import { TagInput } from '@/components/products/tag-input';
+import { CategoryPicker, type CategoryValue } from '@/components/products/category-picker';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -23,7 +29,7 @@ import { WorkflowStateBadge } from '@/components/workflow/workflow-state-badge';
 import { StateTransitionButtons } from '@/components/workflow/state-transition-buttons';
 import { WorkflowProgressIndicator } from '@/components/workflow/workflow-progress-indicator';
 import { AuditTrailViewer } from '@/components/workflow/audit-trail-viewer';
-import { ReviewerAssignment } from '@/components/workflow/reviewer-assignment';
+import { ReviewerAssignment, type UserInfo, type AssignmentInfo } from '@/components/workflow/reviewer-assignment';
 import { WorkflowState, UserRole } from '@/types/workflow';
 import type { ProductWorkflow } from '@/types/workflow';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -103,16 +109,23 @@ function buildVariantName(productName: string, variant: ProductVariant): string 
   return optParts ? `${productName} - ${optParts}` : variant.sku;
 }
 
-// ─── Status badge mapping ──────────────────────────────────────────────────────
-function getStatusBadge(status: string) {
-  const map: Record<string, { label: string; className: string }> = {
-    active: { label: 'PUBLISHED', className: 'bg-emerald-600 hover:bg-emerald-700 text-white border-0' },
-    development: { label: 'DRAFT', className: 'bg-amber-100 text-amber-800 hover:bg-amber-200 border-0' },
-    inactive: { label: 'INACTIVE', className: 'bg-gray-200 text-gray-700 hover:bg-gray-300 border-0' },
-    discontinued: { label: 'DISCONTINUED', className: 'bg-red-100 text-red-800 hover:bg-red-200 border-0' },
-  };
-  const cfg = map[status] || map.development;
-  return <Badge className={`text-xs font-semibold px-2.5 py-0.5 ${cfg.className}`}>{cfg.label}</Badge>;
+// ─── Workflow badge (header) ───────────────────────────────────────────────────
+// Follows the product workflow; green is reserved for products that are actually published
+const WORKFLOW_BADGE: Record<WorkflowState, { label: string; className: string }> = {
+  [WorkflowState.DRAFT]: { label: 'Draft', className: 'bg-amber-100 text-amber-800' },
+  [WorkflowState.REVIEW]: { label: 'In review', className: 'bg-yellow-100 text-yellow-800' },
+  [WorkflowState.APPROVED]: { label: 'Approved', className: 'bg-blue-100 text-blue-800' },
+  [WorkflowState.PUBLISHED]: { label: 'Published', className: 'bg-emerald-100 text-emerald-700' },
+  [WorkflowState.REJECTED]: { label: 'Rejected', className: 'bg-red-100 text-red-800' },
+};
+
+function WorkflowBadge({ state }: { state: WorkflowState }) {
+  const cfg = WORKFLOW_BADGE[state] || WORKFLOW_BADGE[WorkflowState.DRAFT];
+  return (
+    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${cfg.className}`}>
+      {cfg.label}
+    </span>
+  );
 }
 
 
@@ -126,20 +139,41 @@ export default function ProductDetailsPage() {
   const [selectedVariants, setSelectedVariants] = useState<Set<string>>(new Set());
   const [globalPrice, setGlobalPrice] = useState('');
 
-  const currentUserRole = UserRole.ADMIN;
-  const currentUserId = 'user-1';
+  const { user: currentUser } = useAuth();
+  const { toast } = useToast();
+  const currentUserRole = (currentUser?.role as UserRole) || UserRole.VIEWER;
+  const currentUserId = currentUser?.id || '';
   const [reviewers, setReviewers] = useState<Array<{ id: string; name: string; role: UserRole }>>([]);
+  const [reviewerDetails, setReviewerDetails] = useState<UserInfo[]>([]);
 
   useEffect(() => {
+    // Users with the dedicated reviewer role, plus admins, can review products
+    const REVIEWER_ROLES = [UserRole.REVIEWER, UserRole.ADMIN];
     const fetchReviewers = async () => {
       try {
-        const res = await fetch('/api/users?role=reviewer');
-        if (res.ok) {
+        const responses = await Promise.all(
+          REVIEWER_ROLES.map(role => fetch(`/api/users?role=${role}&status=ACTIVE&limit=200`))
+        );
+        const users: any[] = [];
+        for (const res of responses) {
+          if (!res.ok) continue;
           const data = await res.json();
-          if (data.success && Array.isArray(data.data)) {
-            setReviewers(data.data.map((u: any) => ({ id: u.id, name: u.name, role: u.role })));
-          }
+          if (data.success && Array.isArray(data.data)) users.push(...data.data);
         }
+        const unique = Array.from(new Map(users.map(u => [u.id, u])).values())
+          .sort((a, b) => (a.name || a.email || '').localeCompare(b.name || b.email || ''));
+
+        setReviewers(unique.map(u => ({ id: u.id, name: u.name || u.email, role: u.role })));
+        setReviewerDetails(unique.map(u => ({
+          id: u.id,
+          name: u.name || u.email,
+          email: u.email || '',
+          role: u.role,
+          department: u.department || undefined,
+          isActive: true,
+          specialties: u.specialties || undefined,
+          availability: u.reviewer_availability || undefined,
+        })));
       } catch (error) {
         console.error('Failed to fetch reviewers', error);
       }
@@ -154,22 +188,48 @@ export default function ProductDetailsPage() {
     }
   }, [productId, findProductById]);
 
+  const authHeaders = (): Record<string, string> => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const token = localStorage.getItem('accessToken');
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return headers;
+  };
+
+  // Persisted audit trail for this product
+  // Server returns the viewer's shape (see AuditTrailViewEntry in lib/audit-trail-store)
+  const [auditEntries, setAuditEntries] = useState<any[]>([]);
+  const loadAuditTrail = async () => {
+    if (!productId) return;
+    try {
+      const res = await fetch(`/api/products/${productId}/audit-trail`, { headers: authHeaders() });
+      const data = await res.json();
+      if (res.ok && data.success) setAuditEntries(data.data.entries);
+    } catch (error) {
+      console.error('Failed to load audit trail', error);
+    }
+  };
+  useEffect(() => {
+    loadAuditTrail();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productId]);
+
   const handleWorkflowAction = async (action: string, newState: WorkflowState, reason?: string) => {
     if (!product) return;
     try {
       const res = await fetch(`/api/products/${product.id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': currentUserId,
-          'x-user-role': currentUserRole,
-          'x-user-name': 'Admin User'
-        },
-        body: JSON.stringify({ workflowState: newState }),
+        headers: authHeaders(),
+        body: JSON.stringify({ workflowState: newState, ...(reason ? { reason } : {}) }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) setProduct(data.data);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setProduct(data.data);
+        loadAuditTrail();
+        if (newState === WorkflowState.DRAFT && product.workflowState === WorkflowState.REVIEW) {
+          toast({ title: 'Product rejected', description: 'The product was sent back to Draft with your comment.' });
+        }
+      } else {
+        toast({ title: 'Action failed', description: data.error || `Request failed (${res.status})`, variant: 'destructive' });
       }
     } catch (error) {
       console.error('Error updating product state', error);
@@ -183,23 +243,103 @@ export default function ProductDetailsPage() {
     const updateData = {
       workflowState: WorkflowState.REVIEW,
       assignedReviewer: { userId: selectedReviewer.id, userName: selectedReviewer.name, userRole: selectedReviewer.role },
-      workflowHistory: [
-        ...(product.workflowHistory || []),
-        {
-          id: `history_${Date.now()}`,
-          action: 'ASSIGN_REVIEWER',
-          fromState: product.workflowState || WorkflowState.DRAFT,
-          toState: WorkflowState.REVIEW,
-          userId: currentUserId,
-          userName: 'Admin User',
-          timestamp: new Date().toISOString(),
-          reason: `Reviewer assigned: ${selectedReviewer.name}`,
-        }
-      ]
     };
     await storeUpdateProduct(product.id, updateData);
     const updatedProduct = findProductById(product.id);
     if (updatedProduct) setProduct(updatedProduct);
+    loadAuditTrail();
+  };
+
+  // ── Variant editing ──
+  const [editingVariant, setEditingVariant] = useState<ProductVariant | null>(null);
+  const [savingVariants, setSavingVariants] = useState(false);
+  const [bulkImageOpen, setBulkImageOpen] = useState(false);
+
+  const saveVariants = async (nextVariants: ProductVariant[], successMessage: string) => {
+    if (!product) return false;
+    setSavingVariants(true);
+    try {
+      await storeUpdateProduct(product.id, { variants: nextVariants });
+      const updated = findProductById(product.id);
+      if (updated) setProduct(updated);
+      toast({ title: successMessage });
+      return true;
+    } catch (error: any) {
+      toast({ title: 'Could not save variants', description: error?.message, variant: 'destructive' });
+      return false;
+    } finally {
+      setSavingVariants(false);
+    }
+  };
+
+  const handleVariantSave = async (updatedVariant: ProductVariant) => {
+    const next = (product?.variants || []).map(v => (v.id === updatedVariant.id ? updatedVariant : v));
+    if (await saveVariants(next, 'Variant saved')) setEditingVariant(null);
+  };
+
+  const handleVariantPriceBlur = (variant: ProductVariant, raw: string) => {
+    const amount = Number(raw.replace(',', '.'));
+    if (raw.trim() === '' || isNaN(amount) || amount < 0 || amount === variant.standardPrice?.[0]?.amount) return;
+    const currency = variant.standardPrice?.[0]?.currency || product?.pricingAndStock?.standardPrice?.[0]?.currency || 'NOK';
+    const next = (product?.variants || []).map(v => v.id === variant.id
+      ? { ...v, standardPrice: [{ id: v.standardPrice?.[0]?.id || `price-${Date.now()}`, amount, currency }] }
+      : v);
+    saveVariants(next, `Price updated for ${variant.sku}`);
+  };
+
+  const handleBulkImage = async (imageId: string | null) => {
+    if (!product?.variants?.length || selectedVariants.size === 0) return;
+    const next = product.variants.map(v => selectedVariants.has(v.id) ? { ...v, imageIds: imageId ? [imageId] : [] } : v);
+    const ok = await saveVariants(next, `Image ${imageId ? 'set' : 'reset to product image'} for ${selectedVariants.size} variant(s)`);
+    if (ok) setBulkImageOpen(false);
+  };
+
+  const handleApplyGlobalPrice = () => {
+    const amount = Number(globalPrice.replace(',', '.'));
+    if (!product?.variants?.length || globalPrice.trim() === '' || isNaN(amount) || amount < 0) {
+      toast({ title: 'Enter a valid price', variant: 'destructive' });
+      return;
+    }
+    // Applies to the selected variants, or to all when none are selected
+    const targets = selectedVariants.size > 0 ? selectedVariants : new Set(product.variants.map(v => v.id));
+    const currency = product.pricingAndStock?.standardPrice?.[0]?.currency || 'NOK';
+    const next = product.variants.map(v => targets.has(v.id)
+      ? { ...v, standardPrice: [{ id: v.standardPrice?.[0]?.id || `price-${Date.now()}-${v.id}`, amount, currency: v.standardPrice?.[0]?.currency || currency }] }
+      : v);
+    saveVariants(next, `Price set to ${amount.toFixed(2)} for ${targets.size} variant(s)`).then(ok => { if (ok) setGlobalPrice(''); });
+  };
+
+  // ── Shopify tags & metafields (edited directly on the product page) ──
+  const [shopifyDraft, setShopifyDraft] = useState<{ tags: string[]; metafields: Record<string, string>; categories: CategoryValue } | null>(null);
+  const [savingShopify, setSavingShopify] = useState(false);
+  useEffect(() => {
+    if (product) setShopifyDraft({
+      tags: product.tags || [],
+      metafields: product.shopifyMetafields || {},
+      categories: { googleCategory: product.googleCategory, shopifyCategory: product.shopifyCategory },
+    });
+  }, [product]);
+
+  const handleSaveShopifyFields = async () => {
+    if (!product || !shopifyDraft) return;
+    setSavingShopify(true);
+    try {
+      const metafields = Object.fromEntries(Object.entries(shopifyDraft.metafields).filter(([, v]) => v !== '' && v !== undefined));
+      await storeUpdateProduct(product.id, {
+        tags: shopifyDraft.tags,
+        shopifyMetafields: metafields,
+        // null clears a removed category (undefined would keep the old one)
+        googleCategory: (shopifyDraft.categories.googleCategory ?? null) as any,
+        shopifyCategory: (shopifyDraft.categories.shopifyCategory ?? null) as any,
+      });
+      const updated = findProductById(product.id);
+      if (updated) setProduct(updated);
+      toast({ title: 'Shopify fields saved', description: 'Sent to Shopify on the next export.' });
+    } catch (error: any) {
+      toast({ title: 'Could not save', description: error?.message, variant: 'destructive' });
+    } finally {
+      setSavingShopify(false);
+    }
   };
 
   // ── Variant selection helpers ──
@@ -256,6 +396,19 @@ export default function ProductDetailsPage() {
   const { basicInfo, attributesAndSpecs, media, marketingSEO, pricingAndStock, options, variants } = product;
   const workflowState = product.workflowState || WorkflowState.DRAFT;
   const productName = basicInfo.name.en || basicInfo.name.no || basicInfo.sku;
+  const reviewAssignment = product.assignedReviewer ? [...(product.workflowHistory || [])].reverse().find(h => h.toState === WorkflowState.REVIEW) : undefined;
+  const currentAssignments: AssignmentInfo[] = product.assignedReviewer ? [{
+    id: `assignment_${product.id}`,
+    productId: product.id,
+    productName,
+    productState: workflowState,
+    reviewerId: product.assignedReviewer.userId,
+    reviewerName: product.assignedReviewer.userName,
+    assignedBy: reviewAssignment?.userName || 'Unknown',
+    assignedAt: reviewAssignment?.timestamp || product.updatedAt,
+    priority: 'medium',
+    status: workflowState === WorkflowState.REVIEW ? 'in_progress' : 'completed',
+  }] : [];
   const variantCount = variants?.length || 0;
   const firstImage = media.images && media.images.length > 0 && media.images[0].url ? media.images[0] : null;
 
@@ -285,11 +438,7 @@ export default function ProductDetailsPage() {
           </div>
           <div className="flex items-center gap-3">
             <h2 className="text-[#111818] dark:text-white text-xl font-bold tracking-tight">{productName}</h2>
-            {basicInfo.status === 'active' ? (
-              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold uppercase tracking-wider">Published</span>
-            ) : (
-              <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold uppercase tracking-wider">Draft</span>
-            )}
+            <WorkflowBadge state={workflowState} />
           </div>
         </div>
         <div className="flex items-center gap-4">
@@ -298,9 +447,6 @@ export default function ProductDetailsPage() {
             <input className="w-full bg-[#f3f7f7] border-none rounded-lg pl-9 pr-4 py-2 text-sm focus:ring-2 focus:ring-[#2f7979]/20 placeholder:text-[#5e8787] outline-none" placeholder="Search attributes..." type="text" />
           </div>
           <div className="h-6 w-[1px] bg-[#eaf0f0] hidden md:block"></div>
-          <button className="flex items-center justify-center rounded-lg px-4 py-2 bg-[#eaf0f0] text-[#111818] text-sm font-bold hover:bg-[#dfe9e9] transition-colors">
-            Publish
-          </button>
           <Link href={`/products/${product.id}/edit`}>
             <button className="flex items-center justify-center gap-2 rounded-lg px-4 py-2 bg-[#2f7979] text-white text-sm font-bold hover:opacity-90 transition-opacity">
               <Edit className="w-4 h-4" />
@@ -309,6 +455,24 @@ export default function ProductDetailsPage() {
           </Link>
         </div>
       </header>
+
+      <VariantEditDialog
+        variant={editingVariant}
+        optionNames={optionNames}
+        images={media.images || []}
+        currency={pricingAndStock?.standardPrice?.[0]?.currency || 'NOK'}
+        saving={savingVariants}
+        onClose={() => setEditingVariant(null)}
+        onSave={handleVariantSave}
+      />
+      <VariantImagePickerDialog
+        open={bulkImageOpen}
+        count={selectedVariants.size}
+        images={media.images || []}
+        saving={savingVariants}
+        onClose={() => setBulkImageOpen(false)}
+        onApply={handleBulkImage}
+      />
 
       {/* Scrollable Product Content */}
       <div className="flex-1 overflow-y-auto bg-[#fafafa] dark:bg-[#1c1f22] p-8 custom-scrollbar w-full">
@@ -355,7 +519,7 @@ export default function ProductDetailsPage() {
           {/* TABS SECTION */}
           <Tabs defaultValue="variants" className="flex flex-col gap-6 w-full font-sans">
             <TabsList className="bg-transparent p-0 flex border-b border-[#eaf0f0] gap-8 rounded-none h-auto w-full justify-start overflow-x-auto">
-              {['basic-info', 'media', 'variants', 'seo'].map((tab) => (
+              {['basic-info', 'media', 'variants', 'seo', 'shopify'].map((tab) => (
                 <TabsTrigger
                   key={tab}
                   value={tab}
@@ -412,6 +576,7 @@ export default function ProductDetailsPage() {
                         const inv = getVariantInventory(variant);
                         const variantDisplayName = buildVariantName(productName.split(' ')[0] || 'Product', variant);
                         const stdPrice = variant.standardPrice?.[0];
+                        const variantImage = media.images?.find(img => img.id === variant.imageIds?.[0] && img.url) || firstImage;
 
                         return (
                           <tr key={variant.id} className="hover:bg-[#fcfdfd] transition-colors group">
@@ -423,15 +588,20 @@ export default function ProductDetailsPage() {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="flex items-center gap-3">
-                                <div className="relative w-8 h-8 rounded bg-cover bg-center border border-[#eaf0f0] overflow-hidden shrink-0">
-                                  {firstImage ? (
-                                    <Image src={firstImage.url} alt={variantDisplayName} fill className="object-cover" />
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingVariant(variant)}
+                                  title="Change variant image"
+                                  className="relative w-8 h-8 rounded bg-cover bg-center border border-[#eaf0f0] overflow-hidden shrink-0 hover:ring-2 hover:ring-[#2f7979]/40"
+                                >
+                                  {variantImage ? (
+                                    <Image src={variantImage.url} alt={variantDisplayName} fill className="object-cover" />
                                   ) : (
                                     <div className="flex items-center justify-center w-full h-full bg-gray-50">
                                       <Package className="h-4 w-4 text-muted-foreground" />
                                     </div>
                                   )}
-                                </div>
+                                </button>
                                 <span className="text-sm font-semibold text-[#111818] dark:text-white">{variantDisplayName}</span>
                               </div>
                             </td>
@@ -483,13 +653,16 @@ export default function ProductDetailsPage() {
                                 <span className="text-sm text-[#5e8787]">{stdPrice?.currency || '$'}</span>
                                 <input
                                   type="text"
+                                  key={`${variant.id}-${stdPrice?.amount ?? ''}`}
                                   defaultValue={stdPrice ? stdPrice.amount.toFixed(2) : '0.00'}
+                                  onBlur={e => handleVariantPriceBlur(variant, e.target.value)}
+                                  onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                                   className="w-24 text-right border-none bg-transparent hover:bg-[#f3f7f7] rounded px-2 py-1 text-sm font-bold focus:ring-[#2f7979]/20 outline-none"
                                 />
                               </div>
                             </td>
                             <td className="px-6 py-4 text-right">
-                              <button className="text-[#5e8787] hover:text-[#111818] p-1">
+                              <button className="text-[#5e8787] hover:text-[#111818] p-1" title="Edit variant" onClick={() => setEditingVariant(variant)}>
                                 <MoreVertical className="w-5 h-5" />
                               </button>
                             </td>
@@ -513,6 +686,7 @@ export default function ProductDetailsPage() {
                     <p className="text-xs text-[#5e8787] font-medium flex items-center">{selectedVariants.size > 0 ? `${selectedVariants.size} variants selected` : '0 variants selected'}</p>
                     {selectedVariants.size > 0 && (
                       <>
+                        <button onClick={() => setBulkImageOpen(true)} className="text-xs font-bold text-[#2f7979] hover:underline transition-colors">Set image</button>
                         <button className="text-xs font-bold text-[#2f7979] hover:underline transition-colors">Apply Price Adjustment</button>
                         <button className="text-xs font-bold text-[#2f7979] hover:underline transition-colors">Sync Inventory</button>
                       </>
@@ -573,8 +747,12 @@ export default function ProductDetailsPage() {
                         />
                       </div>
                     </div>
-                    <button className="self-end px-4 py-2 bg-[#eaf0f0] text-[#111818] text-sm font-bold rounded-lg hover:bg-[#dfe9e9] transition-colors h-[38px]">
-                      Apply All
+                    <button
+                      onClick={handleApplyGlobalPrice}
+                      disabled={savingVariants}
+                      className="self-end px-4 py-2 bg-[#eaf0f0] text-[#111818] text-sm font-bold rounded-lg hover:bg-[#dfe9e9] transition-colors h-[38px] disabled:opacity-50"
+                    >
+                      {selectedVariants.size > 0 ? `Apply to ${selectedVariants.size}` : 'Apply All'}
                     </button>
                   </div>
                 </div>
@@ -602,19 +780,21 @@ export default function ProductDetailsPage() {
                     <TabsTrigger value="reviewer" className="data-[state=active]:bg-white data-[state=active]:text-[#2f7979] text-[#5e8787] font-semibold"><UserPlus className="mr-2 h-4 w-4" /> Reviewer</TabsTrigger>
                   </TabsList>
                   <TabsContent value="workflow" className="mt-6 space-y-4">
-                    <WorkflowProgressIndicator currentState={workflowState} workflowHistory={product.workflowHistory} size="lg" />
+                    <WorkflowProgressIndicator currentState={workflowState} workflowHistory={product.workflowHistory} assignedReviewer={product.assignedReviewer} size="lg" />
                     <StateTransitionButtons
                       currentState={workflowState} userRole={currentUserRole} productId={product.id}
+                      isAssigned={!!currentUserId && product.assignedReviewer?.userId === currentUserId}
                       onStateTransition={handleWorkflowAction} onAssignReviewer={handleReviewerAssign}
                       availableReviewers={reviewers} size="md"
                     />
                   </TabsContent>
                   <TabsContent value="audit" className="mt-6">
-                    <AuditTrailViewer productId={product.id} userRole={currentUserRole} enableExport={true} />
+                    <AuditTrailViewer entries={auditEntries} productId={product.id} userRole={currentUserRole} enableExport={true} />
                   </TabsContent>
                   <TabsContent value="reviewer" className="mt-6">
                     <ReviewerAssignment
                       productId={product.id} productName={productName} userRole={currentUserRole}
+                      productState={workflowState} reviewers={reviewerDetails} assignments={currentAssignments}
                       onAssign={(a) => handleReviewerAssign(a.reviewerId)} showReviewerDetails={true}
                     />
                   </TabsContent>
@@ -649,6 +829,40 @@ export default function ProductDetailsPage() {
                   <MultilingualTextDisplay label="SEO Description" data={marketingSEO.seoDescription} />
                 </div>
               </div>
+            </TabsContent>
+
+            {/* SHOPIFY TAB: tags and metafield values, editable in place */}
+            <TabsContent value="shopify" className="mt-2 space-y-6">
+              {shopifyDraft && (
+                <>
+                  <div className="bg-white border border-[#eaf0f0] rounded-xl p-6 shadow-sm space-y-3">
+                    <h3 className="text-lg font-bold">Category</h3>
+                    <p className="text-xs text-[#5e8787]">The Google code is used by Google Shopping; the Shopify category is set on the product in Shopify. Both are sent on export.</p>
+                    <CategoryPicker
+                      value={shopifyDraft.categories}
+                      onChange={categories => setShopifyDraft(d => d && { ...d, categories })}
+                      productId={product.externalIds?.shopifyProductId ? product.id : undefined}
+                    />
+                  </div>
+                  <div className="bg-white border border-[#eaf0f0] rounded-xl p-6 shadow-sm space-y-3">
+                    <h3 className="text-lg font-bold">Tags</h3>
+                    <TagInput value={shopifyDraft.tags} onChange={tags => setShopifyDraft(d => d && { ...d, tags })} placeholder="Type a tag or pick one you have used before" />
+                  </div>
+                  <div className="bg-white border border-[#eaf0f0] rounded-xl p-6 shadow-sm space-y-3">
+                    <h3 className="text-lg font-bold">Shopify metafields</h3>
+                    <MetafieldFields
+                      value={shopifyDraft.metafields}
+                      onChange={metafields => setShopifyDraft(d => d && { ...d, metafields })}
+                      productId={product.externalIds?.shopifyProductId ? product.id : undefined}
+                    />
+                  </div>
+                  <div className="flex justify-end">
+                    <Button onClick={handleSaveShopifyFields} disabled={savingShopify} className="bg-[#2f7979] hover:bg-[#1a5b5b]">
+                      {savingShopify ? 'Saving…' : 'Save Shopify fields'}
+                    </Button>
+                  </div>
+                </>
+              )}
             </TabsContent>
 
           </Tabs>

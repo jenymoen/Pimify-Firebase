@@ -213,6 +213,8 @@ export interface AuditTrailExportOptions {
  */
 export class AuditTrailService {
   private auditEntries: EnhancedAuditTrailEntry[] = [];
+  /** Optional durable sink (registered server-side by audit-trail-store) */
+  private persister?: (entry: EnhancedAuditTrailEntry) => void;
   private maxEntries: number = 1000000; // Maximum number of entries to keep in memory
   private defaultRetentionDays: number = 730; // 2 years default retention
   private enableIntegrityChecking: boolean = true;
@@ -682,6 +684,10 @@ export class AuditTrailService {
   /**
    * Clear all audit entries (for testing)
    */
+  setPersister(persister: (entry: EnhancedAuditTrailEntry) => void): void {
+    this.persister = persister;
+  }
+
   clearAllEntries(): void {
     this.auditEntries = [];
   }
@@ -690,6 +696,7 @@ export class AuditTrailService {
 
   private addAuditEntry(entry: EnhancedAuditTrailEntry): void {
     this.auditEntries.push(entry);
+    this.persister?.(entry);
 
     // Check if we need to archive entries
     if (this.enableArchiving && this.auditEntries.length > this.archiveThreshold) {
@@ -831,7 +838,7 @@ export class AuditTrailService {
     };
     
     // Simple hash function (in production, use a proper cryptographic hash)
-    return btoa(JSON.stringify(data)).replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+    return Buffer.from(JSON.stringify(data), 'utf8').toString('base64').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
   }
 
   private startCleanupProcess(): void {

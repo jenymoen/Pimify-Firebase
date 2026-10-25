@@ -7,43 +7,97 @@ import { withRoleBasedAccess } from '@/lib/api-middleware';
 import { WorkflowState, WorkflowAction, UserRole } from '@/types/workflow';
 import { Product } from '@/types/product';
 import { productService } from '@/lib/product-service';
+import { claimSku, SkuConflictError } from '@/lib/sku-series-service';
+import '@/lib/audit-trail-store'; // persists audit entries to Firestore
+import { addToTagLibrary, cleanTags } from '@/lib/tag-library';
 
 // Validation schemas
 const ProductUpdateSchema = z.object({
+  id: z.string().nullable().optional(),
+  name: z.any().nullable().optional(),
+  sku: z.string().nullable().optional(),
+  gtin: z.string().nullable().optional(),
+  brand: z.string().nullable().optional(),
+  status: z.string().nullable().optional(),
+  descriptionShort: z.any().nullable().optional(),
+  descriptionLong: z.any().nullable().optional(),
   basicInfo: z.object({
-    name: z.any().optional(),
-    descriptionShort: z.any().optional(),
-    descriptionLong: z.any().optional(),
-    brand: z.string().optional(),
-    status: z.string().optional(),
-  }).optional(),
+    name: z.any().nullable().optional(),
+    sku: z.string().nullable().optional(),
+    gtin: z.string().nullable().optional(),
+    internalId: z.string().nullable().optional(),
+    manufacturer: z.string().nullable().optional(),
+    supplierArticleNumber: z.string().nullable().optional(),
+    descriptionShort: z.any().nullable().optional(),
+    descriptionLong: z.any().nullable().optional(),
+    brand: z.string().nullable().optional(),
+    status: z.string().nullable().optional(),
+    launchDate: z.string().nullable().optional(),
+    endDate: z.string().nullable().optional(),
+  }).passthrough().nullable().optional(),
   attributesAndSpecs: z.object({
-    categories: z.array(z.string()).optional(),
-    properties: z.array(z.any()).optional(),
-    technicalSpecs: z.array(z.any()).optional(),
-  }).optional(),
+    categories: z.array(z.any()).nullable().optional(),
+    properties: z.array(z.any()).nullable().optional(),
+    technicalSpecs: z.array(z.any()).nullable().optional(),
+    countryOfOrigin: z.string().nullable().optional(),
+    maintenanceInstructions: z.any().nullable().optional(),
+    warrantyInfo: z.any().nullable().optional(),
+  }).passthrough().nullable().optional(),
   media: z.object({
-    images: z.array(z.any()).optional(),
-  }).optional(),
+    images: z.array(z.any()).nullable().optional(),
+    videos: z.array(z.any()).nullable().optional(),
+    models3d: z.array(z.any()).nullable().optional(),
+    manuals: z.array(z.any()).nullable().optional(),
+    certificates: z.array(z.any()).nullable().optional(),
+  }).passthrough().nullable().optional(),
   marketingSEO: z.object({
-    seoTitle: z.any().optional(),
-    seoDescription: z.any().optional(),
-    keywords: z.array(z.string()).optional(),
-  }).optional(),
+    seoTitle: z.any().nullable().optional(),
+    seoDescription: z.any().nullable().optional(),
+    keywords: z.array(z.string()).nullable().optional(),
+    marketingTexts: z.array(z.any()).nullable().optional(),
+    campaignCodes: z.array(z.any()).nullable().optional(),
+  }).passthrough().nullable().optional(),
   pricingAndStock: z.object({
-    standardPrice: z.array(z.any()).optional(),
-    salePrice: z.array(z.any()).optional(),
-    costPrice: z.array(z.any()).optional(),
-  }).optional(),
-  options: z.array(z.any()).optional(),
-  variants: z.array(z.any()).optional(),
-  workflowState: z.nativeEnum(WorkflowState).optional(),
-  assignedReviewer: z.object({
-    userId: z.string(),
-    userName: z.string(),
-    userRole: z.string(), // Relaxed validation to avoid enum issues
-  }).optional(),
-});
+    standardPrice: z.array(z.any()).nullable().optional(),
+    salePrice: z.array(z.any()).nullable().optional(),
+    costPrice: z.array(z.any()).nullable().optional(),
+  }).passthrough().nullable().optional(),
+  logistics: z.object({
+    weightKg: z.number().nullable().optional(),
+    lengthCm: z.number().nullable().optional(),
+    widthCm: z.number().nullable().optional(),
+    heightCm: z.number().nullable().optional(),
+    packagingType: z.string().nullable().optional(),
+  }).passthrough().nullable().optional(),
+  compliance: z.object({
+    isHazardousGoods: z.boolean().nullable().optional(),
+    hazardousGoodsUnCode: z.string().nullable().optional(),
+    certifications: z.array(z.string()).nullable().optional(),
+    ageRestriction: z.number().nullable().optional(),
+  }).passthrough().nullable().optional(),
+  sustainability: z.object({
+    recyclingInfo: z.any().nullable().optional(),
+    carbonFootprintKg: z.number().nullable().optional(),
+  }).passthrough().nullable().optional(),
+  relations: z.any().nullable().optional(),
+  localizationNorway: z.any().nullable().optional(),
+  aiSummary: z.any().nullable().optional(),
+  qualityMetrics: z.any().nullable().optional(),
+  options: z.array(z.any()).nullable().optional(),
+  variants: z.array(z.any()).nullable().optional(),
+  workflowState: z.any().nullable().optional(),
+  assignedReviewer: z.union([
+    z.object({
+      userId: z.string().optional(),
+      userName: z.string().optional(),
+      userRole: z.any().optional(),
+    }).passthrough(),
+    z.string(),
+  ]).nullable().optional(),
+  workflowHistory: z.array(z.any()).nullable().optional(),
+  createdAt: z.string().nullable().optional(),
+  updatedAt: z.string().nullable().optional(),
+}).passthrough();
 
 // Initialize services
 const rolePermissions = new RolePermissions();
@@ -200,6 +254,30 @@ async function updateProduct(
       );
     }
 
+    // Review decisions: only the assigned reviewer (or an admin) may approve/reject,
+    // and rejecting (back to draft) requires a comment that ends up in the audit trail.
+    const fromState = existingProduct.workflowState || WorkflowState.DRAFT;
+    const isStateChange = !!validatedData.workflowState && validatedData.workflowState !== fromState;
+    const transitionComment = typeof (validatedData as any).reason === 'string' ? (validatedData as any).reason.trim() : '';
+    const isApproval = isStateChange && fromState === WorkflowState.REVIEW && validatedData.workflowState === WorkflowState.APPROVED;
+    const isRejection = isStateChange && fromState === WorkflowState.REVIEW && validatedData.workflowState === WorkflowState.DRAFT;
+    const userName = (request as any).user?.userName || 'Unknown User';
+
+    if ((isApproval || isRejection) && userRole !== UserRole.ADMIN && existingProduct.assignedReviewer?.userId !== userId) {
+      return NextResponse.json(
+        { success: false, error: 'Only the assigned reviewer or an admin can approve or reject this product' },
+        { status: 403 }
+      );
+    }
+    if (isRejection && !transitionComment) {
+      return NextResponse.json(
+        { success: false, error: 'A comment is required when rejecting a product' },
+        { status: 400 }
+      );
+    }
+    const historyAction = isApproval ? 'APPROVE' : isRejection ? 'REJECT' : 'UPDATE';
+    const historyReason = transitionComment || (isApproval ? 'Product approved' : 'Product updated');
+
     // Check if workflow state change is valid
     if (validatedData.workflowState && validatedData.workflowState !== existingProduct.workflowState) {
       const transitionRequest = {
@@ -208,7 +286,7 @@ async function updateProduct(
         toState: validatedData.workflowState,
         userId,
         userRole,
-        reason: 'Product updated',
+        reason: historyReason,
         assignedReviewer: validatedData.assignedReviewer?.userId,
       };
 
@@ -230,10 +308,24 @@ async function updateProduct(
       }
     }
 
+    // Server-owned fields must never come from the client: `id` would redirect the
+    // write to another product, and history/timestamps are part of the audit trail.
+    const {
+      id: _ignoredId,
+      workflowHistory: _ignoredHistory,
+      createdAt: _ignoredCreatedAt,
+      updatedAt: _ignoredUpdatedAt,
+      ...clientData
+    } = validatedData as typeof validatedData & Record<string, unknown>;
+
     // Update product object (merging logic)
     const updatedProduct: Product = {
       ...existingProduct,
-      ...validatedData,
+      ...clientData,
+      id,
+      createdAt: existingProduct.createdAt,
+      workflowHistory: existingProduct.workflowHistory || [],
+      tags: Array.isArray((clientData as any).tags) ? cleanTags((clientData as any).tags) : existingProduct.tags,
       basicInfo: {
         ...existingProduct.basicInfo,
         ...validatedData.basicInfo,
@@ -256,6 +348,18 @@ async function updateProduct(
         salePrice: (validatedData.pricingAndStock?.salePrice as any) || existingProduct.pricingAndStock?.salePrice || [],
         costPrice: (validatedData.pricingAndStock?.costPrice as any) || existingProduct.pricingAndStock?.costPrice || [],
       },
+      logistics: validatedData.logistics !== undefined
+        ? { ...existingProduct.logistics, ...validatedData.logistics }
+        : existingProduct.logistics,
+      compliance: validatedData.compliance !== undefined
+        ? { ...existingProduct.compliance, ...validatedData.compliance }
+        : existingProduct.compliance,
+      sustainability: validatedData.sustainability !== undefined
+        ? { ...existingProduct.sustainability, ...validatedData.sustainability }
+        : existingProduct.sustainability,
+      aiSummary: validatedData.aiSummary !== undefined
+        ? validatedData.aiSummary
+        : existingProduct.aiSummary,
       assignedReviewer: validatedData.assignedReviewer ? {
         userId: validatedData.assignedReviewer.userId,
         userName: validatedData.assignedReviewer.userName,
@@ -272,13 +376,13 @@ async function updateProduct(
         ...(existingProduct.workflowHistory || []),
         {
           id: `history_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          action: 'UPDATE',
+          action: historyAction,
           fromState: existingProduct.workflowState || WorkflowState.DRAFT,
           toState: validatedData.workflowState,
           userId,
-          userName: request.headers.get('x-user-name') || 'Unknown User',
+          userName: (request as any).user?.userName || 'Unknown User',
           timestamp: new Date().toISOString(),
-          reason: 'Product updated',
+          reason: historyReason,
         }
       ];
     }
@@ -287,7 +391,25 @@ async function updateProduct(
     // Note: We are passing the fully merged object as `updateProduct` currently overwrites/merges.
     // Ideally we'd use `updateProduct(id, validatedData)` but our service takes `Partial<Product>`.
     // Passing `updatedProduct` ensures all nested merges we did above are preserved.
+    if (updatedProduct.basicInfo.sku !== existingProduct.basicInfo.sku) {
+      await claimSku(updatedProduct.basicInfo.sku, id);
+    }
     await productService.updateProduct(id, updatedProduct);
+    await addToTagLibrary(updatedProduct.tags);
+
+    // Approve/reject decisions get their own audit entry, including the reviewer's comment
+    if (isStateChange) {
+      auditTrailIntegration.createStateTransitionAuditEntry(
+        userId,
+        userRole,
+        (request as any).user?.email || '',
+        id,
+        fromState,
+        validatedData.workflowState as WorkflowState,
+        isRejection ? `Rejected: ${transitionComment}` : historyReason,
+        { userName, decision: historyAction }
+      );
+    }
 
     // Create audit trail entry
     await auditTrailIntegration.createProductUpdateAuditEntry(
@@ -299,7 +421,7 @@ async function updateProduct(
       updatedProduct,
       'Product updated',
       {
-        userName: request.headers.get('x-user-name') || 'Unknown User',
+        userName: (request as any).user?.userName || 'Unknown User',
       }
     );
 
@@ -311,6 +433,10 @@ async function updateProduct(
 
   } catch (error) {
     console.error('Update product error:', error);
+
+    if (error instanceof SkuConflictError) {
+      return NextResponse.json({ success: false, error: error.message }, { status: 409 });
+    }
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -407,7 +533,7 @@ async function deleteProduct(
       product,
       'Product deleted',
       {
-        userName: request.headers.get('x-user-name') || 'Unknown User',
+        userName: (request as any).user?.userName || 'Unknown User',
       }
     );
 

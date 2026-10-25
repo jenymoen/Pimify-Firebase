@@ -67,6 +67,8 @@ export interface Product {
     sku: string; // Stock Keeping Unit - for products without variants or as a base SKU
     gtin?: string; // GTIN/EAN/UPC - for products without variants
     internalId?: string; // PIM-specific ID, could be same as id
+    manufacturer?: string; // Who made the product (can differ from brand/retailer)
+    supplierArticleNumber?: string; // Supplier's own article/part number
     descriptionShort: MultilingualString;
     descriptionLong: MultilingualString;
     brand: string;
@@ -82,6 +84,26 @@ export interface Product {
     maintenanceInstructions?: MultilingualString;
     warrantyInfo?: MultilingualString;
     countryOfOrigin?: string;
+  };
+
+  logistics?: {
+    weightKg?: number; // Product weight in kilograms
+    lengthCm?: number; // Product length in centimeters
+    widthCm?: number;  // Product width in centimeters
+    heightCm?: number; // Product height in centimeters
+    packagingType?: string; // e.g., Box, Blister, Bag, Tube
+  };
+
+  compliance?: {
+    isHazardousGoods?: boolean; // Whether product is dangerous goods (ADR/IATA)
+    hazardousGoodsUnCode?: string; // UN number if applicable, e.g. UN1950
+    certifications?: string[]; // e.g., CE, RoHS, FCC, IP67
+    ageRestriction?: number; // Minimum age in years (e.g., 18)
+  };
+
+  sustainability?: {
+    recyclingInfo?: MultilingualString; // How to recycle/dispose of the product
+    carbonFootprintKg?: number; // Carbon footprint in kg CO₂e
   };
 
   media: {
@@ -113,6 +135,31 @@ export interface Product {
     relatedProducts?: string[];
     accessories?: string[];
     replacementProducts?: string[];
+    upsellProducts?: string[]; // Upgrade/premium product suggestions
+  };
+
+  /** Google product category (Google product taxonomy id and path) */
+  googleCategory?: {
+    id: number;
+    path: string;
+    pathNo?: string;
+  };
+
+  /** Shopify Standard Product Taxonomy category (normally matched from the Google category) */
+  shopifyCategory?: {
+    id: string; // gid://shopify/TaxonomyCategory/…
+    fullName: string;
+  };
+
+  /** Shopify tags (separate from SEO keywords); every tag used is remembered in the tag library */
+  tags?: string[];
+
+  /** Values for the Shopify metafields chosen under Settings, keyed "namespace.key" */
+  shopifyMetafields?: Record<string, string>;
+
+  /** Ids of this product in external systems, set by imports/exports */
+  externalIds?: {
+    shopifyProductId?: string;
   };
 
   localizationNorway?: {

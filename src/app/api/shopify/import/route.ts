@@ -4,6 +4,8 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import type { Product, ProductStatus as PimStatus, MediaEntry, KeyValueEntry, PriceEntry, ProductOption as PimProductOption, ProductVariant as PimProductVariant } from '@/types/product';
 import { initialProductData, defaultMultilingualString } from '@/types/product';
+import { normalizeShopifyDomain } from '@/lib/shopify-url';
+import { resolveShopifyCredentials, ShopifyAuthError } from '@/lib/shopify-auth';
 import { WorkflowState } from '@/types/workflow';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -167,6 +169,8 @@ function mapShopifyToPimProduct(shopifyProduct: ShopifyProductShopify): Product 
   return {
     ...initialProductData,
     id: pimId,
+    externalIds: { shopifyProductId: String(shopifyProduct.id) },
+    tags: shopifyProduct.tags ? shopifyProduct.tags.split(',').map(tag => tag.trim()).filter(Boolean) : [],
     basicInfo: {
       name: { ...defaultMultilingualString, en: shopifyProduct.title },
       sku: firstVariant?.sku || `SKU-${shopifyProduct.id}`,
@@ -243,7 +247,18 @@ function parseLinkHeader(linkHeader: string | null): string | null {
 
 export async function POST(request: NextRequest) {
   try {
-    const { storeUrl, apiKey, pageInfo } = await request.json();
+    const body = await request.json();
+    const { pageInfo } = body;
+    let credentials: { storeUrl: string; apiKey: string };
+    try {
+      credentials = await resolveShopifyCredentials(body);
+    } catch (error) {
+      if (error instanceof ShopifyAuthError) {
+        return NextResponse.json({ error: error.message }, { status: 502 });
+      }
+      throw error;
+    }
+    const { storeUrl, apiKey } = credentials;
 
     if (!storeUrl) {
       return NextResponse.json({ error: 'Shopify store URL is required.' }, { status: 400 });
@@ -252,7 +267,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Shopify Admin API Access Token is required.' }, { status: 400 });
     }
 
-    let shopifyApiUrl = `https://${storeUrl.replace(/^https?:\/\//, '')}/admin/api/2024-04/products.json?limit=50`;
+    let shopifyApiUrl = `https://${normalizeShopifyDomain(storeUrl)}/admin/api/2024-04/products.json?limit=50`;
     if (pageInfo) {
       shopifyApiUrl += `&page_info=${pageInfo}`;
     }
